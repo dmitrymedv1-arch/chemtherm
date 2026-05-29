@@ -112,25 +112,35 @@ def load_data_from_text(therm_text, phase_text):
         df_therm = pd.read_csv(io.StringIO(therm_text), sep='\t', dtype=str)
         df_phase = pd.read_csv(io.StringIO(phase_text), sep='\t', dtype=str)
         
-        # Очистка колонок
+        # Очистка колонок от пробелов
         df_therm.columns = df_therm.columns.str.strip()
         df_phase.columns = df_phase.columns.str.strip()
         
-        # Замена пустых строк на NaN
+        # Замена пустых строк и 'nan' на NaN
         df_therm.replace(r'^\s*$', np.nan, regex=True, inplace=True)
         df_phase.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+        df_therm.replace('nan', np.nan, inplace=True)
+        df_phase.replace('nan', np.nan, inplace=True)
         
-        # Преобразование числовых колонок
-        numeric_cols_therm = ['№', '[A\']', '[B\']', '[D1]', '[D2]', 'δ', 'rA', 'rA\'', 'rB', 'rB\'', 'rD1', 'rD2', 't', 'β', 'pH2O', 'α·106 (K-1)', 'αav·106 (K-1)']
-        numeric_cols_phase = ['№', '[A]', '[B\']', '[D1]', '[D2]', 'δ', 'rA', 'rA\'', 'rB', 'rB\'', 'rD1', 'rD2', 't', 'pH2O']
+        # Список колонок, которые ДОЛЖНЫ остаться строковыми (категориальные)
+        string_cols = ['A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'method', 'Symmetry', 'Phase transitions (PT)', 'Ref', '№']
         
-        for col in numeric_cols_therm:
-            if col in df_therm.columns:
+        # ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ ВСЕХ ОСТАЛЬНЫХ КОЛОНОК В ЧИСЛОВЫЕ
+        for col in df_therm.columns:
+            if col not in string_cols:
                 df_therm[col] = pd.to_numeric(df_therm[col], errors='coerce')
         
-        for col in numeric_cols_phase:
-            if col in df_phase.columns:
+        for col in df_phase.columns:
+            if col not in string_cols:
                 df_phase[col] = pd.to_numeric(df_phase[col], errors='coerce')
+        
+        # Дополнительная очистка: удаляем строки, где все ключевые колонки пусты
+        key_cols = ['A', 'B']
+        for col in key_cols:
+            if col in df_therm.columns:
+                df_therm = df_therm[df_therm[col].notna()]
+            if col in df_phase.columns:
+                df_phase = df_phase[df_phase[col].notna()]
         
         return df_therm, df_phase
     except Exception as e:
@@ -154,7 +164,7 @@ def add_electronegativity_descriptors(df):
     }
     
     def get_chi(el):
-        if pd.isna(el) or el == '' or str(el).strip() == '':
+        if pd.isna(el) or el == '' or str(el).strip() == '' or str(el).strip().lower() == 'nan':
             return np.nan
         return chi_table.get(str(el).strip(), np.nan)
     
@@ -164,14 +174,20 @@ def add_electronegativity_descriptors(df):
     
     # A-позиция
     if all(col in df.columns for col in ['χA', 'χA\'', '[A\']']):
-        df['χAav'] = df['χA'] * (1 - df['[A\']'].fillna(0)) + df['χA\''] * df['[A\']'].fillna(0)
+        # Принудительное преобразование концентрации в число
+        conc_Ap = pd.to_numeric(df['[A\']'], errors='coerce').fillna(0)
+        df['χAav'] = df['χA'] * (1 - conc_Ap) + df['χA\''] * conc_Ap
     
-    # B-позиция
+    # B-позиция (учитывает B, B', D1, D2)
     if all(col in df.columns for col in ['χB', 'χB\'', 'χD1', 'χD2', '[B\']', '[D1]', '[D2]']):
-        df['χBav'] = (df['χB'] * (1 - df['[B\']'].fillna(0) - df['[D1]'].fillna(0) - df['[D2]'].fillna(0)) +
-                      df['χB\''] * df['[B\']'].fillna(0) +
-                      df['χD1'] * df['[D1]'].fillna(0) +
-                      df['χD2'] * df['[D2]'].fillna(0))
+        conc_Bp = pd.to_numeric(df['[B\']'], errors='coerce').fillna(0)
+        conc_D1 = pd.to_numeric(df['[D1]'], errors='coerce').fillna(0)
+        conc_D2 = pd.to_numeric(df['[D2]'], errors='coerce').fillna(0)
+        
+        df['χBav'] = (df['χB'] * (1 - conc_Bp - conc_D1 - conc_D2) +
+                      df['χB\''] * conc_Bp +
+                      df['χD1'] * conc_D1 +
+                      df['χD2'] * conc_D2)
     
     if 'χAav' in df.columns and 'χBav' in df.columns:
         df['Δχ_AB'] = np.abs(df['χAav'] - df['χBav'])
@@ -184,60 +200,94 @@ def add_electronegativity_descriptors(df):
     return df
 
 def add_geometric_descriptors(df):
-    """Геометрические дескрипторы"""
-    r_O = 1.4
+    """Геометрические дескрипторы: октаэдрический фактор, свободный объём, нестабильность"""
+    
+    r_O = 1.4  # ионный радиус кислорода O2-
+    
+    # ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ rBav В ЧИСЛО (КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ)
     if 'rBav' in df.columns:
+        if df['rBav'].dtype == 'object':
+            df['rBav'] = pd.to_numeric(df['rBav'], errors='coerce')
         df['octahedral_factor'] = df['rBav'] / r_O
+    
+    # ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ t В ЧИСЛО
     if 't' in df.columns:
+        if df['t'].dtype == 'object':
+            df['t'] = pd.to_numeric(df['t'], errors='coerce')
         df['D_t'] = np.abs(1 - df['t'])
+    
+    # ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ rAav В ЧИСЛО
     if 'rAav' in df.columns and 'rBav' in df.columns:
+        if df['rAav'].dtype == 'object':
+            df['rAav'] = pd.to_numeric(df['rAav'], errors='coerce')
+        if df['rBav'].dtype == 'object':
+            df['rBav'] = pd.to_numeric(df['rBav'], errors='coerce')
+        
         df['Δr_AB'] = np.abs(df['rAav'] - df['rBav'])
         df['Δr_AB_norm'] = df['Δr_AB'] / r_O
         df['t_alt'] = (df['rAav'] + r_O) / (np.sqrt(2) * (df['rBav'] + r_O))
     
-    # Дисперсия радиусов
+    # Дисперсия ионных радиусов (беспорядок подрешётки B)
     if all(col in df.columns for col in ['rB', 'rB\'', 'rD1', 'rD2', '[B\']', '[D1]', '[D2]']):
-        rad_B = df['rB'].fillna(0).values
-        rad_Bp = df['rB\''].fillna(0).values
-        rad_D1 = df['rD1'].fillna(0).values
-        rad_D2 = df['rD2'].fillna(0).values
-        conc_Bp = df['[B\']'].fillna(0).values
-        conc_D1 = df['[D1]'].fillna(0).values
-        conc_D2 = df['[D2]'].fillna(0).values
-        rBav = df['rBav'].values if 'rBav' in df.columns else np.zeros_like(rad_B)
+        # Принудительное преобразование всех радиусов в числа
+        rad_B = pd.to_numeric(df['rB'], errors='coerce').fillna(0).values
+        rad_Bp = pd.to_numeric(df['rB\''], errors='coerce').fillna(0).values
+        rad_D1 = pd.to_numeric(df['rD1'], errors='coerce').fillna(0).values
+        rad_D2 = pd.to_numeric(df['rD2'], errors='coerce').fillna(0).values
+        conc_Bp = pd.to_numeric(df['[B\']'], errors='coerce').fillna(0).values
+        conc_D1 = pd.to_numeric(df['[D1]'], errors='coerce').fillna(0).values
+        conc_D2 = pd.to_numeric(df['[D2]'], errors='coerce').fillna(0).values
+        
+        rBav_values = df['rBav'].values if 'rBav' in df.columns else np.zeros_like(rad_B)
+        if isinstance(rBav_values, np.ndarray) and rBav_values.dtype == 'object':
+            rBav_values = pd.to_numeric(rBav_values, errors='coerce').fillna(0).values
+        
         sum_sq = (rad_B**2 * (1 - conc_Bp - conc_D1 - conc_D2) +
                   rad_Bp**2 * conc_Bp +
                   rad_D1**2 * conc_D1 +
                   rad_D2**2 * conc_D2)
-        df['σ²_rB'] = sum_sq - rBav**2
+        df['σ²_rB'] = sum_sq - rBav_values**2
     
+    # Дисперсия для A-позиции
     if all(col in df.columns for col in ['rA', 'rA\'', '[A\']']):
-        rad_A = df['rA'].fillna(0).values
-        rad_Ap = df['rA\''].fillna(0).values
-        conc_Ap = df['[A\']'].fillna(0).values
-        rAav = df['rAav'].values if 'rAav' in df.columns else np.zeros_like(rad_A)
+        rad_A = pd.to_numeric(df['rA'], errors='coerce').fillna(0).values
+        rad_Ap = pd.to_numeric(df['rA\''], errors='coerce').fillna(0).values
+        conc_Ap = pd.to_numeric(df['[A\']'], errors='coerce').fillna(0).values
+        rAav_values = df['rAav'].values if 'rAav' in df.columns else np.zeros_like(rad_A)
+        if isinstance(rAav_values, np.ndarray) and rAav_values.dtype == 'object':
+            rAav_values = pd.to_numeric(rAav_values, errors='coerce').fillna(0).values
+        
         sum_sq_A = (rad_A**2 * (1 - conc_Ap) + rad_Ap**2 * conc_Ap)
-        df['σ²_rA'] = sum_sq_A - rAav**2
+        df['σ²_rA'] = sum_sq_A - rAav_values**2
     
     return df
 
 def add_thermodynamic_descriptors(df):
-    """Энтропия, валентность"""
-    R_gas = 8.314
+    """Энтропия, валентность, жёсткость"""
     
+    R_gas = 8.314  # J/(mol·K)
+    
+    # Конфигурационная энтропия для A-позиции
     if all(col in df.columns for col in ['[A\']']):
-        x_A = 1 - df['[A\']'].fillna(0)
-        x_Ap = df['[A\']'].fillna(0)
+        conc_Ap = pd.to_numeric(df['[A\']'], errors='coerce').fillna(0)
+        x_A = 1 - conc_Ap
+        x_Ap = conc_Ap
         entropy_A = np.zeros(len(df))
         mask = (x_A > 0) & (x_Ap > 0)
         entropy_A[mask] = -R_gas * (x_A[mask] * np.log(x_A[mask]) + x_Ap[mask] * np.log(x_Ap[mask]))
         df['S_config_A'] = entropy_A
     
+    # Энтропия для B-позиции
     if all(col in df.columns for col in ['[B\']', '[D1]', '[D2]']):
-        x_B = 1 - df['[B\']'].fillna(0) - df['[D1]'].fillna(0) - df['[D2]'].fillna(0)
-        x_Bp = df['[B\']'].fillna(0)
-        x_D1 = df['[D1]'].fillna(0)
-        x_D2 = df['[D2]'].fillna(0)
+        conc_Bp = pd.to_numeric(df['[B\']'], errors='coerce').fillna(0)
+        conc_D1 = pd.to_numeric(df['[D1]'], errors='coerce').fillna(0)
+        conc_D2 = pd.to_numeric(df['[D2]'], errors='coerce').fillna(0)
+        
+        x_B = 1 - conc_Bp - conc_D1 - conc_D2
+        x_Bp = conc_Bp
+        x_D1 = conc_D1
+        x_D2 = conc_D2
+        
         entropy_B = np.zeros(len(df))
         for i, (xb, xbp, xd1, xd2) in enumerate(zip(x_B, x_Bp, x_D1, x_D2)):
             probs = [p for p in [xb, xbp, xd1, xd2] if p > 0]
@@ -245,6 +295,7 @@ def add_thermodynamic_descriptors(df):
                 entropy_B[i] = -R_gas * sum(p * np.log(p) for p in probs)
         df['S_config_B'] = entropy_B
     
+    # Валентности
     valence_table = {'Ba':2, 'Sr':2, 'Ca':2, 'La':3, 'Ce':4, 'Zr':4, 'Y':3, 'Yb':3,
                      'Sc':3, 'In':3, 'Fe':3, 'Zn':2, 'Sn':4, 'Ti':4, 'Gd':3, 'Sm':3,
                      'Nd':3, 'Eu':3, 'Dy':3, 'Pr':3, 'Ho':3, 'Tm':3, 'Tb':3, 'Hf':4}
@@ -258,39 +309,67 @@ def add_thermodynamic_descriptors(df):
         if pos in df.columns:
             df[f'V{pos}'] = df[pos].apply(get_valence)
     
+    # Средняя валентность B-подрешётки
     if all(col in df.columns for col in ['VB', 'VB\'', 'VD1', 'VD2', '[B\']', '[D1]', '[D2]']):
-        df['V_Bav'] = (df['VB'] * (1 - df['[B\']'].fillna(0) - df['[D1]'].fillna(0) - df['[D2]'].fillna(0)) +
-                       df['VB\''] * df['[B\']'].fillna(0) +
-                       df['VD1'] * df['[D1]'].fillna(0) +
-                       df['VD2'] * df['[D2]'].fillna(0))
+        conc_Bp = pd.to_numeric(df['[B\']'], errors='coerce').fillna(0)
+        conc_D1 = pd.to_numeric(df['[D1]'], errors='coerce').fillna(0)
+        conc_D2 = pd.to_numeric(df['[D2]'], errors='coerce').fillna(0)
+        
+        df['V_Bav'] = (df['VB'] * (1 - conc_Bp - conc_D1 - conc_D2) +
+                       df['VB\''] * conc_Bp +
+                       df['VD1'] * conc_D1 +
+                       df['VD2'] * conc_D2)
         df['Vo_proxy'] = (4 - df['V_Bav']) / 2
     
     return df
 
 def add_physics_inspired_descriptors(df):
-    """Комбинированные дескрипторы"""
+    """Физически мотивированные комбинированные дескрипторы"""
+    
+    # Принудительное преобразование всех используемых колонок
+    for col in ['Δχ_AB', 't', 'σ²_rB', 'D_t', 'ionicity_BO', 'octahedral_factor', 'χ_ratio_AB', 'rBav', 'χBav']:
+        if col in df.columns and df[col].dtype == 'object':
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    
     if 'Δχ_AB' in df.columns and 't' in df.columns:
         df['Δχ_div_t'] = df['Δχ_AB'] / df['t']
         df['Δχ_mul_t'] = df['Δχ_AB'] * df['t']
+    
     if 'σ²_rB' in df.columns and 'D_t' in df.columns:
         df['disorder_over_distortion'] = df['σ²_rB'] / (df['D_t'] + 1e-6)
+    
     if 'ionicity_BO' in df.columns and 'octahedral_factor' in df.columns:
         df['ionic_x_octa'] = df['ionicity_BO'] * df['octahedral_factor']
+    
     if 'χ_ratio_AB' in df.columns and 't' in df.columns:
         df['chi_ratio_t'] = df['χ_ratio_AB'] * df['t']
+    
     if 'rBav' in df.columns and 'χBav' in df.columns:
         df['rBav_x_χBav'] = df['rBav'] * df['χBav']
     
     return df
 
 def add_all_descriptors(df):
-    """Запуск всех функций дескрипторов"""
+    """Запуск всех функций дескрипторов с предварительной очисткой"""
     if df is None:
         return df
+    
+    # Ключевое исправление: принудительная очистка ВСЕХ потенциально числовых колонок
+    # перед вызовом функций дескрипторов
+    string_cols = ['A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'method', 'Symmetry', 'Phase transitions (PT)', 'Ref']
+    
+    for col in df.columns:
+        if col not in string_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # Замена бесконечных значений на NaN
+    df = df.replace([np.inf, -np.inf], np.nan)
+    
     df = add_electronegativity_descriptors(df)
     df = add_geometric_descriptors(df)
     df = add_thermodynamic_descriptors(df)
     df = add_physics_inspired_descriptors(df)
+    
     return df
 
 # ============================================================================
@@ -312,8 +391,12 @@ def create_filters(df):
         help="Выберите один или несколько катионов в A-позиции"
     )
     
-    # Фильтр по B-катиону
-    available_b = sorted(df['B'].dropna().unique())
+    # Фильтр по B-катиону (с очисткой от nan)
+    if 'B' in df.columns:
+        available_b_raw = df['B'].dropna().unique()
+        available_b = sorted([str(x).strip() for x in available_b_raw if str(x).strip() not in ['', 'nan', 'None']])
+    else:
+        available_b = []
     selected_b = st.sidebar.multiselect(
         "B-site cations (B⁴⁺/B³⁺)",
         options=available_b,
@@ -322,7 +405,11 @@ def create_filters(df):
     )
     
     # Фильтр по допанту D1
-    available_d1 = sorted(df['D1'].dropna().unique())
+    if 'D1' in df.columns:
+        available_d1_raw = df['D1'].dropna().unique()
+        available_d1 = sorted([str(x).strip() for x in available_d1_raw if str(x).strip() not in ['', 'nan', 'None']])
+    else:
+        available_d1 = []
     selected_d1 = st.sidebar.multiselect(
         "Dopant D1 (optional)",
         options=available_d1,
@@ -331,7 +418,11 @@ def create_filters(df):
     )
     
     # Фильтр по допанту D2
-    available_d2 = sorted(df['D2'].dropna().unique())
+    if 'D2' in df.columns:
+        available_d2_raw = df['D2'].dropna().unique()
+        available_d2 = sorted([str(x).strip() for x in available_d2_raw if str(x).strip() not in ['', 'nan', 'None']])
+    else:
+        available_d2 = []
     selected_d2 = st.sidebar.multiselect(
         "Dopant D2 (optional)",
         options=available_d2,
@@ -341,7 +432,8 @@ def create_filters(df):
     
     # Фильтр по методу измерения
     if 'method' in df.columns:
-        available_methods = sorted(df['method'].dropna().unique())
+        available_methods_raw = df['method'].dropna().unique()
+        available_methods = sorted([str(x).strip() for x in available_methods_raw if str(x).strip() not in ['', 'nan', 'None']])
         selected_methods = st.sidebar.multiselect(
             "Measurement method",
             options=available_methods,
@@ -351,9 +443,10 @@ def create_filters(df):
     else:
         selected_methods = []
     
-    # Фильтр по симметрии (из листа phase)
+    # Фильтр по симметрии
     if 'Symmetry' in df.columns:
-        available_sym = sorted(df['Symmetry'].dropna().unique())
+        available_sym_raw = df['Symmetry'].dropna().unique()
+        available_sym = sorted([str(x).strip() for x in available_sym_raw if str(x).strip() not in ['', 'nan', 'None']])
         selected_sym = st.sidebar.multiselect(
             "Crystal symmetry",
             options=available_sym,
@@ -364,17 +457,17 @@ def create_filters(df):
         selected_sym = []
     
     # Фильтр по температуре
+    temp_range = (0, 1000)
     if '∆T, °C' in df.columns:
-        temp_range = st.sidebar.slider(
-            "Temperature range (°C)",
-            min_value=float(df['∆T, °C'].dropna().min()) if not df['∆T, °C'].dropna().empty else 0,
-            max_value=float(df['∆T, °C'].dropna().max()) if not df['∆T, °C'].dropna().empty else 1000,
-            value=(float(df['∆T, °C'].dropna().min()) if not df['∆T, °C'].dropna().empty else 0,
-                   float(df['∆T, °C'].dropna().max()) if not df['∆T, °C'].dropna().empty else 1000),
-            step=50
-        )
-    else:
-        temp_range = (0, 1000)
+        temp_vals = pd.to_numeric(df['∆T, °C'], errors='coerce').dropna()
+        if len(temp_vals) > 0:
+            temp_range = st.sidebar.slider(
+                "Temperature range (°C)",
+                min_value=float(temp_vals.min()),
+                max_value=float(temp_vals.max()),
+                value=(float(temp_vals.min()), float(temp_vals.max())),
+                step=50
+            )
     
     return {
         'A': selected_a,

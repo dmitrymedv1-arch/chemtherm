@@ -1,0 +1,16 @@
+streamlit
+pandas
+numpy
+matplotlib
+seaborn
+plotly
+scikit-learn
+umap-learn
+shap
+pingouin
+openpyxl
+xlrd
+mendeleev
+scipy
+statsmodels
+plotly-express

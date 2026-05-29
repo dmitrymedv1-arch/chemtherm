@@ -116,6 +116,13 @@ def load_and_merge_data():
             if col not in df_alpha_beta.columns:
                 df_alpha_beta[col] = np.nan
         
+        # ПРЕОБРАЗОВАНИЕ ТИПОВ: приводим все ключевые колонки к строковому типу для корректного merge
+        for col in merge_cols:
+            if col in df_alpha_beta.columns:
+                df_alpha_beta[col] = df_alpha_beta[col].astype(str)
+            if col in df_phase.columns:
+                df_phase[col] = df_phase[col].astype(str)
+        
         # Объединение
         df = pd.merge(df_alpha_beta, df_phase, on=merge_cols, how='left', suffixes=('', '_phase'))
         

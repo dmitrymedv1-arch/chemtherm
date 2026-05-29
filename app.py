@@ -237,7 +237,7 @@ def load_data_from_text(therm_text, phase_text, expand_bends=True):
         df_phase = df_phase.replace('NaN', np.nan)
         
         # Создание колонки [A] из [A'] если её нет (A + A' = 1)
-        if '[A']' in df_phase.columns and '[A]' not in df_phase.columns:
+        if "[A']" in df_phase.columns and '[A]' not in df_phase.columns:
             conc_Ap = pd.to_numeric(df_phase['[A']'], errors='coerce')
             df_phase['[A]'] = 1 - conc_Ap
         

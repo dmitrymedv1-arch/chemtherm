@@ -80,22 +80,24 @@ def apply_scientific_style():
 apply_scientific_style()
 
 # ============================================================================
-# 2. ЗАГРУЗКА ДАННЫХ (ДВА ВИДЖЕТА С ПРЕДЗАГРУЖЕННЫМИ МАССИВАМИ)
+# 2. ЗАГРУЗКА ДАННЫХ (ДВА НЕЗАВИСИМЫХ ВИДЖЕТА С ПРЕДЗАГРУЖЕННЫМИ МАССИВАМИ)
 # ============================================================================
 
 # Предзагруженные данные для первого листа (chem and therm expansion)
 DEFAULT_THERM_DATA = """№	A	A'	B	B'	D1	D2	[A']	[B']	[D1]	[D2]	δ	rA	rA'	rAav	rB	rB'	rD1	rD2	rBav	t	rBav/rO	method	β	∆T, °C	α·106 (K-1)	T(bends), °C	αav·106 (K-1)	pH2O	Ref
-1	Ba		Ce	Zr	Y	Yb		0.1	0.1	0.1	0.1	1.61		1.61	0.87	0.72	0.9	0.868	0.8578	0.942683768	0.612714286	dilatometry	0.0073	27-1000	10.6	400;600	10.6;4.73;10.1	0.0001	10.15826/chimtech.2024.11.4.22
-2	Ba		Ce	Zr	Y	Yb		0.1	0.1	0.1	0.1	1.61		1.61	0.87	0.72	0.9	0.868	0.8578	0.942683768	0.612714286	HTXRD	0.0317	27-1000	10.6	300	10.7;8.7	0.02	10.15826/chimtech.2024.11.4.22
-3	Ba		Ce	Zr	Y			0.1	0.1		0.05	1.61		1.61	0.87	0.72	0.9		0.858	0.942600271	0.612857143	HTND		20-900	11.2			0.00106	10.1021/acs.jpcc.1c08334
-4	Ba		Ce	Zr	Y				0.1		0.05	1.61		1.61	0.87	0.72	0.9		0.873	0.936379855	0.623571429	dilatometry	0.019	430-630		450		0.00106	10.1021/acs.jpcc.1c08334
-5	Ba		Ce	Zr	Y				0.3		0.05	1.61		1.61	0.87	0.72	0.9		0.873	0.936379855	0.623571429	dilatometry	0.019	430-631				0.00106	10.1021/acs.jpcc.1c08334
-6	Ba		Ce	Zr	Y				0.6		0.05	1.61		1.61	0.87	0.72	0.9		0.873	0.936379855	0.623571429	dilatometry	0.023	430-632				0.00106	10.1021/acs.jpcc.1c08334
-7	Ba		Ce	Zr	Y				0.9		0.05	1.61		1.61	0.87	0.72	0.9		0.873	0.936379855	0.623571429	dilatometry	0.49	430-633				0.00106	10.1021/acs.jpcc.1c08334"""
+1	Ba		Ce	Zr	Y	Yb		0.1	0.1	0.1		1.61		1.61	0.87	0.72	0.9	0.868	0.8578	0.942683768	0.612714286	dilatometry	0.0073	27-1000	10.6	400;600	10.6;4.73;10.1	0.0001	10.15826/chimtech.2024.11.4.22
+2	Ba		Ce	Zr	Y	Yb		0.1	0.1	0.1		1.61		1.61	0.87	0.72	0.9	0.868	0.8578	0.942683768	0.612714286	HTXRD	0.0317	27-1000	10.6	300	10.7;8.7	0.02	10.15826/chimtech.2024.11.4.22
+3	Ba		Ce	Zr	Y			0.1	0.1			1.61		1.61	0.87	0.72	0.9		0.858	0.942600271	0.612857143	HTND		20-900	11.2			0.00106	10.1021/acs.jpcc.1c08334
+4	Ba		Ce	Zr	Y				0.1			1.61		1.61	0.87	0.72	0.9		0.873	0.936379855	0.623571429	dilatometry	0.019	430-630		450		0.00106	10.1021/acs.jpcc.1c08334
+5	Ba		Ce	Zr	Y				0.3			1.61		1.61	0.87	0.72	0.9		0.873	0.936379855	0.623571429	dilatometry	0.019	430-631				0.00106	10.1021/acs.jpcc.1c08334
+6	Ba		Ce	Zr	Y				0.6			1.61		1.61	0.87	0.72	0.9		0.873	0.936379855	0.623571429	dilatometry	0.023	430-632				0.00106	10.1021/acs.jpcc.1c08334
+7	Ba		Ce	Zr	Y				0.9			1.61		1.61	0.87	0.72	0.9		0.873	0.936379855	0.623571429	dilatometry	0.49	430-633				0.00106	10.1021/acs.jpcc.1c08334
+8	Ba		Ce		Sm				0.2			1.61		1.61	0.87		0.958		0.958	0.951155764	0.684285714	dilatometry	0.09718477	100-900	11.5	620	11.5;10.3		10.1016/j.jpowsour.2012.07.120
+9	Ba		Ce		Nd				0.2			1.61		1.61	0.87		0.983		0.983	0.947926192	0.702142857	dilatometry	0.0165	60-900	14	700	14;8.2	0.018	10.1016/j.jpowsour.2014.05.070"""
 
 # Предзагруженные данные для второго листа (phase transition)
 DEFAULT_PHASE_DATA = """№	A	A'	B	B'	D1	D2	[A]	[B']	[D1]	[D2]	δ	rA	rA'	rAav	rB	rB'	rD1	rD2	rBav	t	rBav/rO	pH2O	∆T, °C	Symmetry	Phase transitions (PT)	T (PT), °C	Ref
-1	Ba		Ce	Zr	Y			0.36	0.1		0.05	1.61		1.61	0.87	0.72	0.9		0.819	0.959166927	0.585		30-1000				10.1063/1.5066970
+1	Ba		Ce	Zr	Y			0.36	0.1			1.61		1.61	0.87	0.72	0.9		0.819	0.959166927	0.585		30-1000				10.1063/1.5066970
 2	Ba		Zr		Y				0		0	1.61		1.61	0.72		0.9		0.72	1.003958213	0.514285714		25	Cubic	Pm-3m		10.1088/1742-6596/1967/1/012015
 3	Ba		Zr		Y				0.055		0.0275	1.61		1.61	0.72		0.9		0.7299	0.999291709	0.521357143		25	Cubic	Pm-3m		10.1088/1742-6596/1967/1/012015
 4	Ba		Zr		Y				0.17		0.085	1.61		1.61	0.72		0.9		0.7506	0.989673306	0.536142857		25	Cubic	Pm-3m		10.1088/1742-6596/1967/1/012015
@@ -107,40 +109,32 @@ DEFAULT_PHASE_DATA = """№	A	A'	B	B'	D1	D2	[A]	[B']	[D1]	[D2]	δ	rA	rA'	rAav	rB
 
 @st.cache_data
 def load_data_from_text(therm_text, phase_text):
-    """Загрузка данных из текстовых виджетов (CSV формат с разделителем tab)"""
+    """Загрузка двух независимых таблиц из текстовых виджетов"""
     try:
         df_therm = pd.read_csv(io.StringIO(therm_text), sep='\t', dtype=str)
         df_phase = pd.read_csv(io.StringIO(phase_text), sep='\t', dtype=str)
         
-        # Очистка колонок от пробелов
+        # Очистка колонок
         df_therm.columns = df_therm.columns.str.strip()
         df_phase.columns = df_phase.columns.str.strip()
         
-        # Замена пустых строк и 'nan' на NaN
+        # Замена пустых строк на NaN
         df_therm.replace(r'^\s*$', np.nan, regex=True, inplace=True)
         df_phase.replace(r'^\s*$', np.nan, regex=True, inplace=True)
         df_therm.replace('nan', np.nan, inplace=True)
         df_phase.replace('nan', np.nan, inplace=True)
         
-        # Список колонок, которые ДОЛЖНЫ остаться строковыми (категориальные)
-        string_cols = ['A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'method', 'Symmetry', 'Phase transitions (PT)', 'Ref', '№']
+        # Список строковых колонок
+        string_cols = ['A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'method', 'Symmetry', 'Phase transitions (PT)', 'Ref']
         
-        # ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ ВСЕХ ОСТАЛЬНЫХ КОЛОНОК В ЧИСЛОВЫЕ
+        # Преобразование числовых колонок
         for col in df_therm.columns:
-            if col not in string_cols:
+            if col not in string_cols and col != '№':
                 df_therm[col] = pd.to_numeric(df_therm[col], errors='coerce')
         
         for col in df_phase.columns:
-            if col not in string_cols:
+            if col not in string_cols and col != '№':
                 df_phase[col] = pd.to_numeric(df_phase[col], errors='coerce')
-        
-        # Дополнительная очистка: удаляем строки, где все ключевые колонки пусты
-        key_cols = ['A', 'B']
-        for col in key_cols:
-            if col in df_therm.columns:
-                df_therm = df_therm[df_therm[col].notna()]
-            if col in df_phase.columns:
-                df_phase = df_phase[df_phase[col].notna()]
         
         return df_therm, df_phase
     except Exception as e:
@@ -148,7 +142,7 @@ def load_data_from_text(therm_text, phase_text):
         return None, None
 
 # ============================================================================
-# 3. ДОБАВЛЕНИЕ НОВЫХ ДЕСКРИПТОРОВ (Feature Engineering)
+# 3. ДОБАВЛЕНИЕ НОВЫХ ДЕСКРИПТОРОВ (ДЛЯ КАЖДОЙ ТАБЛИЦЫ ОТДЕЛЬНО)
 # ============================================================================
 
 def add_electronegativity_descriptors(df):
@@ -172,13 +166,10 @@ def add_electronegativity_descriptors(df):
         if pos in df.columns:
             df[f'χ{pos}'] = df[pos].apply(get_chi)
     
-    # A-позиция
     if all(col in df.columns for col in ['χA', 'χA\'', '[A\']']):
-        # Принудительное преобразование концентрации в число
         conc_Ap = pd.to_numeric(df['[A\']'], errors='coerce').fillna(0)
         df['χAav'] = df['χA'] * (1 - conc_Ap) + df['χA\''] * conc_Ap
     
-    # B-позиция (учитывает B, B', D1, D2)
     if all(col in df.columns for col in ['χB', 'χB\'', 'χD1', 'χD2', '[B\']', '[D1]', '[D2]']):
         conc_Bp = pd.to_numeric(df['[B\']'], errors='coerce').fillna(0)
         conc_D1 = pd.to_numeric(df['[D1]'], errors='coerce').fillna(0)
@@ -200,23 +191,19 @@ def add_electronegativity_descriptors(df):
     return df
 
 def add_geometric_descriptors(df):
-    """Геометрические дескрипторы: октаэдрический фактор, свободный объём, нестабильность"""
+    """Геометрические дескрипторы"""
+    r_O = 1.4
     
-    r_O = 1.4  # ионный радиус кислорода O2-
-    
-    # ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ rBav В ЧИСЛО (КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ)
     if 'rBav' in df.columns:
         if df['rBav'].dtype == 'object':
             df['rBav'] = pd.to_numeric(df['rBav'], errors='coerce')
         df['octahedral_factor'] = df['rBav'] / r_O
     
-    # ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ t В ЧИСЛО
     if 't' in df.columns:
         if df['t'].dtype == 'object':
             df['t'] = pd.to_numeric(df['t'], errors='coerce')
         df['D_t'] = np.abs(1 - df['t'])
     
-    # ПРИНУДИТЕЛЬНОЕ ПРЕОБРАЗОВАНИЕ rAav В ЧИСЛО
     if 'rAav' in df.columns and 'rBav' in df.columns:
         if df['rAav'].dtype == 'object':
             df['rAav'] = pd.to_numeric(df['rAav'], errors='coerce')
@@ -227,9 +214,7 @@ def add_geometric_descriptors(df):
         df['Δr_AB_norm'] = df['Δr_AB'] / r_O
         df['t_alt'] = (df['rAav'] + r_O) / (np.sqrt(2) * (df['rBav'] + r_O))
     
-    # Дисперсия ионных радиусов (беспорядок подрешётки B)
     if all(col in df.columns for col in ['rB', 'rB\'', 'rD1', 'rD2', '[B\']', '[D1]', '[D2]']):
-        # Принудительное преобразование всех радиусов в числа
         rad_B = pd.to_numeric(df['rB'], errors='coerce').fillna(0).values
         rad_Bp = pd.to_numeric(df['rB\''], errors='coerce').fillna(0).values
         rad_D1 = pd.to_numeric(df['rD1'], errors='coerce').fillna(0).values
@@ -248,7 +233,6 @@ def add_geometric_descriptors(df):
                   rad_D2**2 * conc_D2)
         df['σ²_rB'] = sum_sq - rBav_values**2
     
-    # Дисперсия для A-позиции
     if all(col in df.columns for col in ['rA', 'rA\'', '[A\']']):
         rad_A = pd.to_numeric(df['rA'], errors='coerce').fillna(0).values
         rad_Ap = pd.to_numeric(df['rA\''], errors='coerce').fillna(0).values
@@ -263,11 +247,9 @@ def add_geometric_descriptors(df):
     return df
 
 def add_thermodynamic_descriptors(df):
-    """Энтропия, валентность, жёсткость"""
+    """Энтропия, валентность"""
+    R_gas = 8.314
     
-    R_gas = 8.314  # J/(mol·K)
-    
-    # Конфигурационная энтропия для A-позиции
     if all(col in df.columns for col in ['[A\']']):
         conc_Ap = pd.to_numeric(df['[A\']'], errors='coerce').fillna(0)
         x_A = 1 - conc_Ap
@@ -277,7 +259,6 @@ def add_thermodynamic_descriptors(df):
         entropy_A[mask] = -R_gas * (x_A[mask] * np.log(x_A[mask]) + x_Ap[mask] * np.log(x_Ap[mask]))
         df['S_config_A'] = entropy_A
     
-    # Энтропия для B-позиции
     if all(col in df.columns for col in ['[B\']', '[D1]', '[D2]']):
         conc_Bp = pd.to_numeric(df['[B\']'], errors='coerce').fillna(0)
         conc_D1 = pd.to_numeric(df['[D1]'], errors='coerce').fillna(0)
@@ -295,7 +276,6 @@ def add_thermodynamic_descriptors(df):
                 entropy_B[i] = -R_gas * sum(p * np.log(p) for p in probs)
         df['S_config_B'] = entropy_B
     
-    # Валентности
     valence_table = {'Ba':2, 'Sr':2, 'Ca':2, 'La':3, 'Ce':4, 'Zr':4, 'Y':3, 'Yb':3,
                      'Sc':3, 'In':3, 'Fe':3, 'Zn':2, 'Sn':4, 'Ti':4, 'Gd':3, 'Sm':3,
                      'Nd':3, 'Eu':3, 'Dy':3, 'Pr':3, 'Ho':3, 'Tm':3, 'Tb':3, 'Hf':4}
@@ -309,7 +289,6 @@ def add_thermodynamic_descriptors(df):
         if pos in df.columns:
             df[f'V{pos}'] = df[pos].apply(get_valence)
     
-    # Средняя валентность B-подрешётки
     if all(col in df.columns for col in ['VB', 'VB\'', 'VD1', 'VD2', '[B\']', '[D1]', '[D2]']):
         conc_Bp = pd.to_numeric(df['[B\']'], errors='coerce').fillna(0)
         conc_D1 = pd.to_numeric(df['[D1]'], errors='coerce').fillna(0)
@@ -324,9 +303,8 @@ def add_thermodynamic_descriptors(df):
     return df
 
 def add_physics_inspired_descriptors(df):
-    """Физически мотивированные комбинированные дескрипторы"""
+    """Комбинированные дескрипторы"""
     
-    # Принудительное преобразование всех используемых колонок
     for col in ['Δχ_AB', 't', 'σ²_rB', 'D_t', 'ionicity_BO', 'octahedral_factor', 'χ_ratio_AB', 'rBav', 'χBav']:
         if col in df.columns and df[col].dtype == 'object':
             df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -349,20 +327,17 @@ def add_physics_inspired_descriptors(df):
     
     return df
 
-def add_all_descriptors(df):
-    """Запуск всех функций дескрипторов с предварительной очисткой"""
-    if df is None:
+def add_all_descriptors(df, table_name="unknown"):
+    """Запуск всех функций дескрипторов для таблицы"""
+    if df is None or len(df) == 0:
         return df
     
-    # Ключевое исправление: принудительная очистка ВСЕХ потенциально числовых колонок
-    # перед вызовом функций дескрипторов
     string_cols = ['A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'method', 'Symmetry', 'Phase transitions (PT)', 'Ref']
     
     for col in df.columns:
-        if col not in string_cols:
+        if col not in string_cols and col != '№':
             df[col] = pd.to_numeric(df[col], errors='coerce')
     
-    # Замена бесконечных значений на NaN
     df = df.replace([np.inf, -np.inf], np.nan)
     
     df = add_electronegativity_descriptors(df)
@@ -373,17 +348,100 @@ def add_all_descriptors(df):
     return df
 
 # ============================================================================
-# 4. ФИЛЬТРАЦИЯ ДАННЫХ (ГЛОБАЛЬНЫЕ ФИЛЬТРЫ, ВКЛЮЧЕНЫ ПО УМОЛЧАНИЮ)
+# 4. ФУНКЦИИ СОПОСТАВЛЕНИЯ ДАННЫХ (CROSS-ANALYSIS)
 # ============================================================================
 
-def create_filters(df):
+def match_compositions_one_to_one(df_therm, df_phase):
+    """
+    Сопоставляет данные из THERM и PHASE по составу (A, B, [B'], D1, D2).
+    Для каждого образца в THERM находит ПЕРВОЕ подходящее соответствие в PHASE.
+    Используется для графиков, где нужно ОДНО значение Symmetry или T(PT).
+    """
+    df_therm_matched = df_therm.copy()
+    
+    df_therm_matched['Symmetry'] = np.nan
+    df_therm_matched['T(PT)_matched'] = np.nan
+    df_therm_matched['Phase_transitions'] = np.nan
+    
+    for idx, row in df_therm_matched.iterrows():
+        conc_Bp_therm = row.get('[B\']', 0)
+        if pd.isna(conc_Bp_therm):
+            conc_Bp_therm = 0
+        
+        mask = pd.Series([True] * len(df_phase))
+        
+        if 'A' in df_phase.columns and 'A' in row:
+            mask = mask & (df_phase['A'] == row['A'])
+        
+        if 'B' in df_phase.columns and 'B' in row:
+            mask = mask & (df_phase['B'] == row['B'])
+        
+        if '[B\']' in df_phase.columns:
+            phase_conc = pd.to_numeric(df_phase['[B\']'], errors='coerce').fillna(0)
+            mask = mask & (np.abs(phase_conc - conc_Bp_therm) < 0.01)
+        
+        matches = df_phase[mask]
+        
+        if len(matches) > 0:
+            first_match = matches.iloc[0]
+            df_therm_matched.loc[idx, 'Symmetry'] = first_match.get('Symmetry', np.nan)
+            df_therm_matched.loc[idx, 'T(PT)_matched'] = first_match.get('T (PT), °C', np.nan)
+            df_therm_matched.loc[idx, 'Phase_transitions'] = first_match.get('Phase transitions (PT)', np.nan)
+    
+    return df_therm_matched
+
+def match_compositions_all_matches(df_therm, df_phase):
+    """
+    Сопоставляет данные из THERM и PHASE, сохраняя ВСЕ соответствия.
+    Возвращает словарь {index_therm: list_of_matches}
+    Используется для отображения нескольких вариантов в hover.
+    """
+    matches_dict = {}
+    
+    for idx, row in df_therm.iterrows():
+        conc_Bp_therm = row.get('[B\']', 0)
+        if pd.isna(conc_Bp_therm):
+            conc_Bp_therm = 0
+        
+        mask = pd.Series([True] * len(df_phase))
+        
+        if 'A' in df_phase.columns and 'A' in row:
+            mask = mask & (df_phase['A'] == row['A'])
+        
+        if 'B' in df_phase.columns and 'B' in row:
+            mask = mask & (df_phase['B'] == row['B'])
+        
+        if '[B\']' in df_phase.columns:
+            phase_conc = pd.to_numeric(df_phase['[B\']'], errors='coerce').fillna(0)
+            mask = mask & (np.abs(phase_conc - conc_Bp_therm) < 0.01)
+        
+        matches = df_phase[mask]
+        
+        if len(matches) > 0:
+            matches_dict[idx] = matches.to_dict('records')
+        else:
+            matches_dict[idx] = []
+    
+    return matches_dict
+
+def get_symmetry_for_therm(df_therm, df_phase):
+    """Возвращает Series с Symmetry для каждого образца THERM (первое соответствие)"""
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    return df_matched['Symmetry']
+
+# ============================================================================
+# 5. ФИЛЬТРАЦИЯ ДАННЫХ (НЕЗАВИСИМАЯ ДЛЯ КАЖДОЙ ТАБЛИЦЫ)
+# ============================================================================
+
+def create_filters(df_therm, df_phase):
     """Создание виджетов фильтрации (все фильтры по умолчанию включены)"""
     st.sidebar.markdown("## 🔍 Фильтрация данных")
     st.sidebar.markdown("---")
     
-    # Фильтр по A-катиону (Ba, Sr, Ca, La)
-    a_cations = ['Ba', 'Sr', 'Ca', 'La']
-    available_a = [a for a in a_cations if a in df['A'].values]
+    available_a_therm = sorted(df_therm['A'].dropna().unique()) if 'A' in df_therm.columns else []
+    available_a_phase = sorted(df_phase['A'].dropna().unique()) if 'A' in df_phase.columns else []
+    available_a = sorted(list(set(available_a_therm + available_a_phase)))
+    
     selected_a = st.sidebar.multiselect(
         "A-site cations (A²⁺/A³⁺)",
         options=available_a,
@@ -391,12 +449,10 @@ def create_filters(df):
         help="Выберите один или несколько катионов в A-позиции"
     )
     
-    # Фильтр по B-катиону (с очисткой от nan)
-    if 'B' in df.columns:
-        available_b_raw = df['B'].dropna().unique()
-        available_b = sorted([str(x).strip() for x in available_b_raw if str(x).strip() not in ['', 'nan', 'None']])
-    else:
-        available_b = []
+    available_b_therm = sorted(df_therm['B'].dropna().unique()) if 'B' in df_therm.columns else []
+    available_b_phase = sorted(df_phase['B'].dropna().unique()) if 'B' in df_phase.columns else []
+    available_b = sorted(list(set(available_b_therm + available_b_phase)))
+    
     selected_b = st.sidebar.multiselect(
         "B-site cations (B⁴⁺/B³⁺)",
         options=available_b,
@@ -404,10 +460,8 @@ def create_filters(df):
         help="Выберите один или несколько катионов в B-позиции"
     )
     
-    # Фильтр по допанту D1
-    if 'D1' in df.columns:
-        available_d1_raw = df['D1'].dropna().unique()
-        available_d1 = sorted([str(x).strip() for x in available_d1_raw if str(x).strip() not in ['', 'nan', 'None']])
+    if 'D1' in df_therm.columns:
+        available_d1 = sorted(df_therm['D1'].dropna().unique())
     else:
         available_d1 = []
     selected_d1 = st.sidebar.multiselect(
@@ -417,10 +471,8 @@ def create_filters(df):
         help="Легирующий элемент в позиции D1"
     )
     
-    # Фильтр по допанту D2
-    if 'D2' in df.columns:
-        available_d2_raw = df['D2'].dropna().unique()
-        available_d2 = sorted([str(x).strip() for x in available_d2_raw if str(x).strip() not in ['', 'nan', 'None']])
+    if 'D2' in df_therm.columns:
+        available_d2 = sorted(df_therm['D2'].dropna().unique())
     else:
         available_d2 = []
     selected_d2 = st.sidebar.multiselect(
@@ -430,10 +482,8 @@ def create_filters(df):
         help="Легирующий элемент в позиции D2"
     )
     
-    # Фильтр по методу измерения
-    if 'method' in df.columns:
-        available_methods_raw = df['method'].dropna().unique()
-        available_methods = sorted([str(x).strip() for x in available_methods_raw if str(x).strip() not in ['', 'nan', 'None']])
+    if 'method' in df_therm.columns:
+        available_methods = sorted(df_therm['method'].dropna().unique())
         selected_methods = st.sidebar.multiselect(
             "Measurement method",
             options=available_methods,
@@ -443,10 +493,8 @@ def create_filters(df):
     else:
         selected_methods = []
     
-    # Фильтр по симметрии
-    if 'Symmetry' in df.columns:
-        available_sym_raw = df['Symmetry'].dropna().unique()
-        available_sym = sorted([str(x).strip() for x in available_sym_raw if str(x).strip() not in ['', 'nan', 'None']])
+    if 'Symmetry' in df_phase.columns:
+        available_sym = sorted(df_phase['Symmetry'].dropna().unique())
         selected_sym = st.sidebar.multiselect(
             "Crystal symmetry",
             options=available_sym,
@@ -456,10 +504,9 @@ def create_filters(df):
     else:
         selected_sym = []
     
-    # Фильтр по температуре
     temp_range = (0, 1000)
-    if '∆T, °C' in df.columns:
-        temp_vals = pd.to_numeric(df['∆T, °C'], errors='coerce').dropna()
+    if '∆T, °C' in df_therm.columns:
+        temp_vals = pd.to_numeric(df_therm['∆T, °C'], errors='coerce').dropna()
         if len(temp_vals) > 0:
             temp_range = st.sidebar.slider(
                 "Temperature range (°C)",
@@ -479,53 +526,86 @@ def create_filters(df):
         'temp_range': temp_range
     }
 
-def apply_filters(df, filters):
-    """Применение фильтров к датафрейму"""
-    if df is None or len(df) == 0:
-        return df
+def apply_filters_to_therm(df_therm, filters):
+    """Применение фильтров к THERM таблице"""
+    if df_therm is None or len(df_therm) == 0:
+        return df_therm
     
-    filtered_df = df.copy()
+    filtered_df = df_therm.copy()
     
-    if filters['A']:
+    if filters['A'] and 'A' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['A'].isin(filters['A'])]
-    if filters['B']:
+    
+    if filters['B'] and 'B' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['B'].isin(filters['B'])]
-    if filters['D1']:
+    
+    if filters['D1'] and 'D1' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['D1'].isin(filters['D1'])]
-    if filters['D2']:
+    
+    if filters['D2'] and 'D2' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['D2'].isin(filters['D2'])]
+    
     if filters['method'] and 'method' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['method'].isin(filters['method'])]
+    
+    if '∆T, °C' in filtered_df.columns:
+        temp_vals = pd.to_numeric(filtered_df['∆T, °C'], errors='coerce')
+        filtered_df = filtered_df[(temp_vals >= filters['temp_range'][0]) & (temp_vals <= filters['temp_range'][1])]
+    
+    return filtered_df
+
+def apply_filters_to_phase(df_phase, filters):
+    """Применение фильтров к PHASE таблице"""
+    if df_phase is None or len(df_phase) == 0:
+        return df_phase
+    
+    filtered_df = df_phase.copy()
+    
+    if filters['A'] and 'A' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['A'].isin(filters['A'])]
+    
+    if filters['B'] and 'B' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['B'].isin(filters['B'])]
+    
+    if filters['D1'] and 'D1' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['D1'].isin(filters['D1'])]
+    
+    if filters['D2'] and 'D2' in filtered_df.columns:
+        filtered_df = filtered_df[filtered_df['D2'].isin(filters['D2'])]
+    
     if filters['symmetry'] and 'Symmetry' in filtered_df.columns:
         filtered_df = filtered_df[filtered_df['Symmetry'].isin(filters['symmetry'])]
-    if '∆T, °C' in filtered_df.columns:
-        filtered_df = filtered_df[(filtered_df['∆T, °C'] >= filters['temp_range'][0]) & 
-                                   (filtered_df['∆T, °C'] <= filters['temp_range'][1])]
     
     return filtered_df
 
 # ============================================================================
-# 5. УНИВЕРСАЛЬНЫЕ ФУНКЦИИ ПОСТРОЕНИЯ ГРАФИКОВ
+# 6. УНИВЕРСАЛЬНЫЕ ФУНКЦИИ ПОСТРОЕНИЯ ГРАФИКОВ
 # ============================================================================
 
-def get_available_columns(df):
-    """Получение списка доступных числовых и категориальных колонок для выбора"""
+def get_available_columns(df, table_type='therm'):
+    """Получение списка доступных колонок для выбора"""
+    if df is None:
+        return [], []
+    
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
     
-    # Приоритетные колонки
-    priority_numeric = ['αav·106 (K-1)', 'α·106 (K-1)', 'β', 't', 'pH2O', 'rBav', 'rAav', 
-                        'χAav', 'χBav', 'Δχ_AB', 'σ²_rB', 'S_config_B', 'V_Bav', 
-                        'octahedral_factor', 'ionicity_BO', '[B\']']
-    priority_cat = ['Symmetry', 'method', 'A', 'B', 'D1', 'D2']
+    if table_type == 'therm':
+        priority_numeric = ['αav·106 (K-1)', 'α·106 (K-1)', 'β', 't', 'pH2O', 'rBav', 'rAav', 
+                            'χAav', 'χBav', 'Δχ_AB', 'σ²_rB', 'S_config_B', 'V_Bav', 
+                            'octahedral_factor', 'ionicity_BO', '[B\']']
+        priority_cat = ['method', 'A', 'B', 'D1', 'D2']
+    else:
+        priority_numeric = ['t', 'rBav', 'rAav', 'χAav', 'χBav', 'Δχ_AB', 'σ²_rB', 'T (PT), °C']
+        priority_cat = ['Symmetry', 'Phase transitions (PT)', 'A', 'B', 'D1', 'D2']
     
     numeric_cols = [c for c in priority_numeric if c in numeric_cols] + [c for c in numeric_cols if c not in priority_numeric]
     categorical_cols = [c for c in priority_cat if c in categorical_cols] + [c for c in categorical_cols if c not in priority_cat]
     
     return numeric_cols, categorical_cols
 
-def create_bubble_plot(df, x_col, y_col, size_col, color_col, title):
-    """Универсальная пузырьковая диаграмма с научным стилем"""
+def create_bubble_plot(df, x_col, y_col, size_col, color_col, title, log_x=False, log_y=False):
+    """Универсальная пузырьковая диаграмма"""
     df_plot = df.dropna(subset=[x_col, y_col, size_col]).copy()
     
     if len(df_plot) < 3:
@@ -533,22 +613,23 @@ def create_bubble_plot(df, x_col, y_col, size_col, color_col, title):
         fig.add_annotation(text="Недостаточно данных для построения", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
         return fig
     
-    # Определяем тип color колонки
     if color_col in df_plot.select_dtypes(include=[np.number]).columns:
         fig = px.scatter(
             df_plot, x=x_col, y=y_col, size=size_col, color=color_col,
-            hover_data=['A', 'B', 'D1', 'D2', 'Ref'],
+            hover_data=['A', 'B', 'D1', 'D2', 'Ref', 'method', 'Symmetry'],
             title=title,
             labels={x_col: x_col, y_col: y_col, size_col: size_col, color_col: color_col},
-            color_continuous_scale='plasma'
+            color_continuous_scale='plasma',
+            log_x=log_x, log_y=log_y
         )
     else:
         fig = px.scatter(
             df_plot, x=x_col, y=y_col, size=size_col, color=color_col,
-            hover_data=['A', 'B', 'D1', 'D2', 'Ref'],
+            hover_data=['A', 'B', 'D1', 'D2', 'Ref', 'method'],
             title=title,
             labels={x_col: x_col, y_col: y_col, size_col: size_col},
-            color_discrete_sequence=px.colors.qualitative.Set1
+            color_discrete_sequence=px.colors.qualitative.Set1,
+            log_x=log_x, log_y=log_y
         )
     
     fig.update_layout(
@@ -581,7 +662,6 @@ def create_contour_plot(df, x_col, y_col, z_col, title):
         color_continuous_scale='viridis'
     )
     
-    # Добавляем точки поверх контура
     fig.add_trace(go.Scatter(
         x=df_plot[x_col], y=df_plot[y_col],
         mode='markers',
@@ -603,175 +683,128 @@ def create_contour_plot(df, x_col, y_col, z_col, title):
     
     return fig
 
-def create_pca_plot(df, feature_cols, color_col, title):
-    """PCA Biplot с выбором признаков"""
-    df_pca = df[feature_cols + [color_col]].dropna() if color_col in df.columns else df[feature_cols].dropna()
-    
-    if len(df_pca) < 5:
-        fig = go.Figure()
-        fig.add_annotation(text="Недостаточно данных для PCA (нужно ≥5)", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
-        return fig
-    
-    X = df_pca[feature_cols].values
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
-    
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X_scaled)
-    
-    fig = go.Figure()
-    
-    # Точки
-    if color_col in df_pca.columns and df_pca[color_col].dtype in [np.float64, np.int64]:
-        fig.add_trace(go.Scatter(
-            x=X_pca[:, 0], y=X_pca[:, 1],
-            mode='markers',
-            marker=dict(color=df_pca[color_col], colorscale='plasma', size=8, showscale=True, colorbar=dict(title=color_col)),
-            text=[f"PC1={x1:.2f}<br>PC2={x2:.2f}" for x1, x2 in zip(X_pca[:,0], X_pca[:,1])],
-            hoverinfo='text'
-        ))
-    else:
-        fig.add_trace(go.Scatter(
-            x=X_pca[:, 0], y=X_pca[:, 1],
-            mode='markers',
-            marker=dict(size=8, color='blue'),
-            text=[f"PC1={x1:.2f}<br>PC2={x2:.2f}" for x1, x2 in zip(X_pca[:,0], X_pca[:,1])],
-            hoverinfo='text'
-        ))
-    
-    # Векторы признаков
-    for i, feature in enumerate(feature_cols):
-        fig.add_annotation(
-            x=pca.components_[0, i] * 3, y=pca.components_[1, i] * 3,
-            ax=0, ay=0,
-            xref="x", yref="y",
-            axref="x", ayref="y",
-            text=feature,
-            showarrow=True,
-            arrowhead=2,
-            arrowsize=1,
-            arrowwidth=2,
-            arrowcolor='red',
-            font=dict(size=10)
-        )
-    
-    fig.update_layout(
-        title=f"{title}<br>(PC1: {pca.explained_variance_ratio_[0]:.2%}, PC2: {pca.explained_variance_ratio_[1]:.2%})",
-        font_family="Times New Roman",
-        font_size=12,
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        width=900,
-        height=700,
-        xaxis=dict(showline=True, linewidth=1, linecolor='black', title=f"PC1 ({pca.explained_variance_ratio_[0]:.1%})"),
-        yaxis=dict(showline=True, linewidth=1, linecolor='black', title=f"PC2 ({pca.explained_variance_ratio_[1]:.1%})")
-    )
-    
-    return fig
-
 # ============================================================================
-# 6. ФУНКЦИИ ДЛЯ СПЕЦИФИЧЕСКИХ ГРАФИКОВ
+# 7. ГРАФИКИ ТОЛЬКО ДЛЯ THERM (13 ГРАФИКОВ)
 # ============================================================================
 
-def plot_alpha_vs_tolerance_with_filters(df, x_col='t', y_col='αav·106 (K-1)', color_col='Symmetry'):
-    """α vs t с цветом по симметрии"""
+def plot_therm_alpha_vs_t(df):
+    """График 1: αav vs t (цвет = метод)"""
     fig, ax = plt.subplots(figsize=(8, 6))
     
-    df_plot = df.dropna(subset=[x_col, y_col]).copy()
-    if len(df_plot) == 0:
+    if 't' not in df.columns or 'αav·106 (K-1)' not in df.columns:
         ax.text(0.5, 0.5, 'No data', ha='center', va='center')
         return fig
     
-    if color_col in df_plot.columns:
-        categories = df_plot[color_col].unique()
-        colors = plt.cm.tab10(np.linspace(0, 1, len(categories)))
-        for cat, color in zip(categories, colors):
-            mask = df_plot[color_col] == cat
-            ax.scatter(df_plot.loc[mask, x_col], df_plot.loc[mask, y_col], 
-                      label=str(cat), color=color, s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
-    else:
-        ax.scatter(df_plot[x_col], df_plot[y_col], s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+    df_plot = df.dropna(subset=['t', 'αav·106 (K-1)'])
     
-    ax.set_xlabel(x_col, fontweight='bold')
-    ax.set_ylabel(y_col, fontweight='bold')
-    ax.set_title(f'{y_col} vs {x_col}', fontweight='bold')
-    
-    if color_col in df_plot.columns:
+    if 'method' in df_plot.columns:
+        methods = df_plot['method'].unique()
+        colors = plt.cm.tab10(np.linspace(0, 1, len(methods)))
+        for method, color in zip(methods, colors):
+            mask = df_plot['method'] == method
+            ax.scatter(df_plot.loc[mask, 't'], df_plot.loc[mask, 'αav·106 (K-1)'], 
+                      label=method, color=color, s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
         ax.legend(loc='best', frameon=True, fancybox=False, edgecolor='black')
+    else:
+        ax.scatter(df_plot['t'], df_plot['αav·106 (K-1)'], s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
     
-    ax.grid(True, alpha=0.3, linestyle='--')
-    return fig
-
-def plot_phase_transition_diagram(df):
-    """Диаграмма фазовых переходов"""
-    if 'Symmetry' not in df.columns or '[B\']' not in df.columns:
-        fig = go.Figure()
-        fig.add_annotation(text="No symmetry or concentration data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
-        return fig
-    
-    df_cezr = df[df['B'] == 'Ce'].dropna(subset=['[B\']', 'Symmetry'])
-    if len(df_cezr) < 3:
-        fig = go.Figure()
-        fig.add_annotation(text="Insufficient Ce-Zr data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
-        return fig
-    
-    if 'T(PT), °C' not in df_cezr.columns:
-        df_cezr['T(PT), °C'] = 400 + 200 * df_cezr['[B\']'].fillna(0)
-    
-    fig = px.scatter(df_cezr, x='[B\']', y='T(PT), °C', color='Symmetry',
-                     title='Phase transition diagram: Ce₁₋ₓZrₓO₃ system',
-                     labels={'[B\']': 'Zr concentration (x)', 'T(PT), °C': 'Phase transition temperature (°C)'},
-                     hover_data=['A', 'B', 'D1', 'D2'])
-    
-    fig.update_layout(font_family="Times New Roman", width=800, height=600)
-    return fig
-
-def plot_violin_alpha_by_symmetry(df):
-    """Violin plot распределения α по симметриям"""
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    if 'Symmetry' not in df.columns or 'αav·106 (K-1)' not in df.columns:
-        ax.text(0.5, 0.5, 'No symmetry or α data', ha='center', va='center')
-        return fig
-    
-    df_violin = df.dropna(subset=['Symmetry', 'αav·106 (K-1)'])
-    if len(df_violin) < 5:
-        ax.text(0.5, 0.5, 'Insufficient data', ha='center', va='center')
-        return fig
-    
-    sns.violinplot(data=df_violin, x='Symmetry', y='αav·106 (K-1)', ax=ax)
-    ax.set_xlabel('Crystal symmetry', fontweight='bold')
+    ax.set_xlabel('Tolerance factor (t)', fontweight='bold')
     ax.set_ylabel('αav·10⁶ (K⁻¹)', fontweight='bold')
-    ax.set_title('Distribution of thermal expansion by symmetry', fontweight='bold')
-    plt.xticks(rotation=45, ha='right')
+    ax.set_title('Thermal expansion vs tolerance factor', fontweight='bold')
     ax.grid(True, alpha=0.3, linestyle='--')
     
     return fig
 
-def plot_method_comparison(df):
-    """Сравнение методов измерения"""
+def plot_therm_beta_vs_ph2o(df):
+    """График 2: β vs pH₂O"""
     fig, ax = plt.subplots(figsize=(8, 6))
     
-    if 'method' not in df.columns or 'α·106 (K-1)' not in df.columns:
-        ax.text(0.5, 0.5, 'No method or α data', ha='center', va='center')
+    if 'pH2O' not in df.columns or 'β' not in df.columns:
+        ax.text(0.5, 0.5, 'No pH₂O or β data', ha='center', va='center')
         return fig
     
-    df_method = df.dropna(subset=['method', 'α·106 (K-1)'])
-    if len(df_method) < 5:
-        ax.text(0.5, 0.5, 'Insufficient data', ha='center', va='center')
-        return fig
+    df_plot = df.dropna(subset=['pH2O', 'β'])
     
-    sns.boxplot(data=df_method, x='method', y='α·106 (K-1)', ax=ax)
-    ax.set_xlabel('Measurement method', fontweight='bold')
-    ax.set_ylabel('α·10⁶ (K⁻¹)', fontweight='bold')
-    ax.set_title('Comparison of thermal expansion by method', fontweight='bold')
-    plt.xticks(rotation=45, ha='right')
+    scat = ax.scatter(df_plot['pH2O'], df_plot['β'], c=df_plot.get('αav·106 (K-1)', np.ones(len(df_plot))), 
+                     cmap='plasma', s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+    
+    ax.set_xlabel('pH₂O (partial pressure)', fontweight='bold')
+    ax.set_ylabel('β (chemical expansion)', fontweight='bold')
+    ax.set_title('Chemical expansion vs water partial pressure', fontweight='bold')
+    plt.colorbar(scat, label='αav·10⁶ K⁻¹' if 'αav·106 (K-1)' in df.columns else 'Value')
     ax.grid(True, alpha=0.3, linestyle='--')
     
     return fig
 
-def plot_nonconstant_beta_demo(df):
-    """Демонстрация непостоянства β"""
+def plot_therm_alpha_vs_doping(df):
+    """График 3: αav vs [B'] концентрация допанта"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if '[B\']' not in df.columns or 'αav·106 (K-1)' not in df.columns:
+        ax.text(0.5, 0.5, 'No doping concentration data', ha='center', va='center')
+        return fig
+    
+    df_plot = df.dropna(subset=['[B\']', 'αav·106 (K-1)'])
+    
+    if 'B' in df_plot.columns:
+        b_elements = df_plot['B'].unique()
+        colors = plt.cm.tab10(np.linspace(0, 1, len(b_elements)))
+        for b_elem, color in zip(b_elements, colors):
+            mask = df_plot['B'] == b_elem
+            ax.scatter(df_plot.loc[mask, '[B\']'], df_plot.loc[mask, 'αav·106 (K-1)'], 
+                      label=f'B = {b_elem}', color=color, s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+        ax.legend(loc='best', frameon=True, fancybox=False, edgecolor='black')
+    else:
+        ax.scatter(df_plot['[B\']'], df_plot['αav·106 (K-1)'], s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+    
+    ax.set_xlabel('Dopant concentration [B\']', fontweight='bold')
+    ax.set_ylabel('αav·10⁶ (K⁻¹)', fontweight='bold')
+    ax.set_title('Thermal expansion vs doping level', fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_therm_goldschmidt_map(df):
+    """График 4: Goldschmidt map - rAav vs rBav, color=αav"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if 'rAav' not in df.columns or 'rBav' not in df.columns or 'αav·106 (K-1)' not in df.columns:
+        ax.text(0.5, 0.5, 'No radius or α data', ha='center', va='center')
+        return fig
+    
+    df_plot = df.dropna(subset=['rAav', 'rBav', 'αav·106 (K-1)'])
+    
+    scat = ax.scatter(df_plot['rAav'], df_plot['rBav'], c=df_plot['αav·106 (K-1)'], 
+                     cmap='coolwarm', s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+    
+    ax.set_xlabel('Average A-site radius (Å)', fontweight='bold')
+    ax.set_ylabel('Average B-site radius (Å)', fontweight='bold')
+    ax.set_title('Goldschmidt map: αav vs rAav vs rBav', fontweight='bold')
+    plt.colorbar(scat, label='αav·10⁶ K⁻¹')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_therm_contour_t_vs_dchi_vs_beta(df):
+    """График 5: Контурная карта t vs Δχ, color=β"""
+    if 't' not in df.columns or 'Δχ_AB' not in df.columns or 'β' not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(text="No t, Δχ, or β data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    return create_contour_plot(df, 't', 'Δχ_AB', 'β', 'Chemical stability map: β vs t vs Δχ')
+
+def plot_therm_contour_rBav_vs_chiBav_vs_alpha(df):
+    """График 6: Контурная карта rBav vs χBav, color=αav"""
+    if 'rBav' not in df.columns or 'χBav' not in df.columns or 'αav·106 (K-1)' not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(text="No rBav, χBav, or α data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    return create_contour_plot(df, 'rBav', 'χBav', 'αav·106 (K-1)', 'Thermal expansion map: αav vs rBav vs χBav')
+
+def plot_therm_nonconstant_beta(df):
+    """График 7: Непостоянство β - остатки vs T(bends)"""
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
     
     if 'T(bends), °C' in df.columns and 'α·106 (K-1)' in df.columns:
@@ -800,175 +833,591 @@ def plot_nonconstant_beta_demo(df):
     plt.tight_layout()
     return fig
 
-# ============================================================================
-# 7. КОРРЕЛЯЦИОННЫЙ АНАЛИЗ
-# ============================================================================
-
-def compute_mutual_information(df, feature_cols, target_cols):
-    """Вычисление взаимной информации"""
-    if len(feature_cols) < 2 or len(target_cols) < 1:
-        return None, None
+def plot_therm_method_comparison(df):
+    """График 8: Сравнение методов измерения"""
+    fig, ax = plt.subplots(figsize=(8, 6))
     
-    df_mi = df[feature_cols + target_cols].dropna()
-    if len(df_mi) < 10:
-        return None, None
-    
-    X = df_mi[feature_cols]
-    mi_results = {}
-    for target in target_cols:
-        y = df_mi[target]
-        mi = mutual_info_regression(X, y, random_state=42)
-        mi_results[target] = dict(zip(feature_cols, mi))
-    
-    return mi_results, feature_cols
-
-def plot_mutual_information_heatmap(mi_results, feature_cols):
-    """Тепловая карта взаимной информации"""
-    if mi_results is None:
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.text(0.5, 0.5, 'Insufficient data for MI', ha='center', va='center')
+    if 'method' not in df.columns or 'α·106 (K-1)' not in df.columns:
+        ax.text(0.5, 0.5, 'No method or α data', ha='center', va='center')
         return fig
     
-    mi_df = pd.DataFrame(mi_results).T
-    fig, ax = plt.subplots(figsize=(12, max(4, len(mi_results) * 1.5)))
-    sns.heatmap(mi_df, annot=True, fmt='.3f', cmap='YlOrRd', ax=ax)
-    ax.set_title('Mutual Information: descriptors → target properties', fontweight='bold')
-    ax.set_xlabel('Descriptors', fontweight='bold')
-    ax.set_ylabel('Target properties', fontweight='bold')
-    plt.tight_layout()
+    df_method = df.dropna(subset=['method', 'α·106 (K-1)'])
+    if len(df_method) < 5:
+        ax.text(0.5, 0.5, 'Insufficient data', ha='center', va='center')
+        return fig
+    
+    sns.boxplot(data=df_method, x='method', y='α·106 (K-1)', ax=ax)
+    ax.set_xlabel('Measurement method', fontweight='bold')
+    ax.set_ylabel('α·10⁶ (K⁻¹)', fontweight='bold')
+    ax.set_title('Comparison of thermal expansion by method', fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
     return fig
 
-def plot_correlation_heatmap_advanced(df, corr_method='spearman'):
-    """Расширенная корреляционная матрица с кластеризацией"""
-    desc_cols = [col for col in df.columns if any(x in col for x in ['rAav', 'rBav', 't', 'χ', 'Δχ', 'σ²', 'ionicity', 'octahedral', 'S_config', 'V_Bav', 'α', 'β'])]
+def plot_therm_alpha_before_after_bend(df):
+    """График 9: α до и после T(bends)"""
+    fig, ax = plt.subplots(figsize=(8, 6))
     
-    if len(desc_cols) < 3:
-        fig, ax = plt.subplots(figsize=(12, 10))
-        ax.text(0.5, 0.5, 'Insufficient descriptor columns', ha='center', va='center')
+    if 'αav·106 (K-1)' not in df.columns:
+        ax.text(0.5, 0.5, 'No αav data', ha='center', va='center')
         return fig
     
-    df_corr = df[desc_cols].dropna()
-    if len(df_corr) < 5:
-        fig, ax = plt.subplots(figsize=(12, 10))
-        ax.text(0.5, 0.5, 'Insufficient data after NaN removal', ha='center', va='center')
-        return fig
+    df_plot = df.dropna(subset=['αav·106 (K-1)'])
     
-    if corr_method == 'spearman':
-        corr_matrix = df_corr.corr(method='spearman')
-    else:
-        corr_matrix = df_corr.corr(method='pearson')
-    
-    g = sns.clustermap(corr_matrix, annot=True, fmt='.2f', cmap='RdBu_r', center=0,
-                       figsize=(14, 12), dendrogram_ratio=0.15, cbar_pos=(0.02, 0.8, 0.03, 0.18))
-    plt.title(f'{corr_method.capitalize()} correlation matrix with hierarchical clustering', fontweight='bold')
-    return g.figure
-
-# ============================================================================
-# 8. КЛАСТЕРИЗАЦИЯ
-# ============================================================================
-
-def perform_clustering(df, feature_cols, method='kmeans', n_clusters=3):
-    """Кластеризация составов"""
-    if len(feature_cols) < 2:
-        return None, None, None
-    
-    df_clust = df[feature_cols].dropna()
-    if len(df_clust) < 10:
-        return None, None, None
-    
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(df_clust.values)
-    
-    if method == 'kmeans':
-        clusterer = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-        labels = clusterer.fit_predict(X_scaled)
-        score = silhouette_score(X_scaled, labels) if len(set(labels)) > 1 else -1
-    elif method == 'dbscan':
-        clusterer = DBSCAN(eps=0.5, min_samples=3)
-        labels = clusterer.fit_predict(X_scaled)
-        if len(set(labels)) > 1 and len(set(labels)) < len(labels):
-            score = silhouette_score(X_scaled, labels)
+    if 'T(bends), °C' in df.columns:
+        has_bend = df_plot['T(bends), °C'].notna()
+        if has_bend.any():
+            ax.scatter(df_plot.loc[~has_bend, 'αav·106 (K-1)'], 
+                      np.zeros(df_plot.loc[~has_bend].shape[0]) + 0.1,
+                      alpha=0.7, c='blue', edgecolors='k', label='No bend detected', s=50)
+            ax.scatter(df_plot.loc[has_bend, 'αav·106 (K-1)'], 
+                      np.zeros(df_plot.loc[has_bend].shape[0]) - 0.1,
+                      alpha=0.7, c='red', edgecolors='k', label='Bend detected', s=50)
+            ax.set_yticks([])
+            ax.set_ylabel('')
+            ax.legend(loc='best')
         else:
-            score = -1
-    else:
-        return None, None, None
+            ax.scatter(df_plot['αav·106 (K-1)'], np.zeros(len(df_plot)), alpha=0.7, c='blue', edgecolors='k', s=50)
     
-    return labels, score, df_clust.index
+    ax.set_xlabel('αav·10⁶ (K⁻¹)', fontweight='bold')
+    ax.set_title('Thermal expansion: samples with and without bends', fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
 
-def plot_clustering_pca(df, labels, feature_cols):
-    """Визуализация кластеризации в PCA-пространстве"""
-    if labels is None or len(feature_cols) < 2:
-        fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, 'No clustering results', ha='center', va='center')
+def plot_therm_alpha_vs_temperature_range(df):
+    """График 10: α vs температурный интервал"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if '∆T, °C' not in df.columns or 'α·106 (K-1)' not in df.columns:
+        ax.text(0.5, 0.5, 'No ∆T or α data', ha='center', va='center')
         return fig
     
-    X = df[feature_cols].dropna().values
+    df_plot = df.dropna(subset=['∆T, °C', 'α·106 (K-1)'])
+    
+    def parse_temp_range(temp_str):
+        try:
+            if pd.isna(temp_str):
+                return np.nan
+            if isinstance(temp_str, str) and '-' in temp_str:
+                parts = temp_str.split('-')
+                return (float(parts[0]) + float(parts[1])) / 2
+            return float(temp_str)
+        except:
+            return np.nan
+    
+    df_plot['∆T_mid'] = df_plot['∆T, °C'].apply(parse_temp_range)
+    df_plot = df_plot.dropna(subset=['∆T_mid'])
+    
+    if len(df_plot) > 0:
+        ax.scatter(df_plot['∆T_mid'], df_plot['α·106 (K-1)'], alpha=0.7, c='purple', edgecolors='k', s=50)
+        ax.set_xlabel('Mid-temperature of measurement range (°C)', fontweight='bold')
+        ax.set_ylabel('α·10⁶ (K⁻¹)', fontweight='bold')
+        ax.set_title('Thermal expansion vs measurement temperature', fontweight='bold')
+        ax.grid(True, alpha=0.3, linestyle='--')
+    else:
+        ax.text(0.5, 0.5, 'No valid temperature range data', ha='center', va='center')
+    
+    return fig
+
+def plot_therm_bubble_4d(df):
+    """График 11: Пузырьковая диаграмма 4D (t, α, β, method)"""
+    if 't' not in df.columns or 'αav·106 (K-1)' not in df.columns or 'β' not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(text="No t, α, or β data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    color_col = 'method' if 'method' in df.columns else 'Symmetry' if 'Symmetry' in df.columns else None
+    
+    if color_col and color_col in df.columns:
+        return create_bubble_plot(df, 't', 'αav·106 (K-1)', 'β', color_col, 
+                                  '4D Bubble chart: αav vs t, size=β, color=' + color_col)
+    else:
+        return create_bubble_plot(df, 't', 'αav·106 (K-1)', 'β', 'β', 
+                                  '4D Bubble chart: αav vs t, size=β')
+
+def plot_therm_violin_by_method(df):
+    """График 12: Violin plot αav по методам"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if 'method' not in df.columns or 'αav·106 (K-1)' not in df.columns:
+        ax.text(0.5, 0.5, 'No method or αav data', ha='center', va='center')
+        return fig
+    
+    df_plot = df.dropna(subset=['method', 'αav·106 (K-1)'])
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient data', ha='center', va='center')
+        return fig
+    
+    sns.violinplot(data=df_plot, x='method', y='αav·106 (K-1)', ax=ax)
+    ax.set_xlabel('Measurement method', fontweight='bold')
+    ax.set_ylabel('αav·10⁶ (K⁻¹)', fontweight='bold')
+    ax.set_title('Distribution of thermal expansion by measurement method', fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_therm_bubble_chi_vs_beta(df):
+    """График 13: χBav vs β, размер=pH2O, цвет=[B']"""
+    if 'χBav' not in df.columns or 'β' not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(text="No χBav or β data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    size_col = 'pH2O' if 'pH2O' in df.columns else 'β'
+    color_col = '[B\']' if '[B\']' in df.columns else 'β'
+    
+    return create_bubble_plot(df, 'χBav', 'β', size_col, color_col,
+                              'Chemical expansion: β vs χBav, size=pH₂O, color=[B\']')
+
+# ============================================================================
+# 8. ГРАФИКИ ТОЛЬКО ДЛЯ PHASE (7 ГРАФИКОВ)
+# ============================================================================
+
+def plot_phase_diagram_cezr(df):
+    """График 14: Фазовая диаграмма Ce₁₋ₓZrₓO₃"""
+    if 'Symmetry' not in df.columns or '[B\']' not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(text="No symmetry or concentration data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    df_cezr = df[df['B'] == 'Ce'].dropna(subset=['[B\']', 'Symmetry'])
+    if len(df_cezr) < 3:
+        fig = go.Figure()
+        fig.add_annotation(text="Insufficient Ce-Zr data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    if 'T (PT), °C' not in df_cezr.columns:
+        df_cezr['T (PT), °C'] = 400 + 200 * df_cezr['[B\']'].fillna(0)
+    
+    fig = px.scatter(df_cezr, x='[B\']', y='T (PT), °C', color='Symmetry',
+                     title='Phase transition diagram: Ce₁₋ₓZrₓO₃ system',
+                     labels={'[B\']': 'Zr concentration (x)', 'T (PT), °C': 'Phase transition temperature (°C)'},
+                     hover_data=['A', 'B', 'D1', 'D2', 'Phase transitions (PT)'])
+    
+    fig.update_layout(font_family="Times New Roman", width=800, height=600)
+    return fig
+
+def plot_phase_t_vs_tolerance(df):
+    """График 15: T(PT) vs tolerance factor"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if 't' not in df.columns or 'T (PT), °C' not in df.columns:
+        ax.text(0.5, 0.5, 'No t or T(PT) data', ha='center', va='center')
+        return fig
+    
+    df_plot = df.dropna(subset=['t', 'T (PT), °C'])
+    
+    if 'Symmetry' in df_plot.columns:
+        symmetries = df_plot['Symmetry'].unique()
+        colors = plt.cm.tab10(np.linspace(0, 1, len(symmetries)))
+        for sym, color in zip(symmetries, colors):
+            mask = df_plot['Symmetry'] == sym
+            ax.scatter(df_plot.loc[mask, 't'], df_plot.loc[mask, 'T (PT), °C'], 
+                      label=sym, color=color, s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+        ax.legend(loc='best', frameon=True, fancybox=False, edgecolor='black')
+    else:
+        ax.scatter(df_plot['t'], df_plot['T (PT), °C'], s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+    
+    ax.set_xlabel('Tolerance factor (t)', fontweight='bold')
+    ax.set_ylabel('Phase transition temperature (°C)', fontweight='bold')
+    ax.set_title('Phase transition temperature vs tolerance factor', fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_phase_t_vs_disorder(df):
+    """График 16: T(PT) vs σ²_rB (беспорядок)"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if 'σ²_rB' not in df.columns or 'T (PT), °C' not in df.columns:
+        ax.text(0.5, 0.5, 'No disorder or T(PT) data', ha='center', va='center')
+        return fig
+    
+    df_plot = df.dropna(subset=['σ²_rB', 'T (PT), °C'])
+    
+    if 'Symmetry' in df_plot.columns:
+        symmetries = df_plot['Symmetry'].unique()
+        colors = plt.cm.tab10(np.linspace(0, 1, len(symmetries)))
+        for sym, color in zip(symmetries, colors):
+            mask = df_plot['Symmetry'] == sym
+            ax.scatter(df_plot.loc[mask, 'σ²_rB'], df_plot.loc[mask, 'T (PT), °C'], 
+                      label=sym, color=color, s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+        ax.legend(loc='best', frameon=True, fancybox=False, edgecolor='black')
+    else:
+        ax.scatter(df_plot['σ²_rB'], df_plot['T (PT), °C'], s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+    
+    ax.set_xlabel('B-site radius variance σ²(rB)', fontweight='bold')
+    ax.set_ylabel('Phase transition temperature (°C)', fontweight='bold')
+    ax.set_title('Phase transition temperature vs structural disorder', fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_phase_symmetry_map(df):
+    """График 17: Карта стабильности фаз - t vs Δχ, цвет=Symmetry"""
+    if 't' not in df.columns or 'Δχ_AB' not in df.columns or 'Symmetry' not in df.columns:
+        fig = go.Figure()
+        fig.add_annotation(text="No t, Δχ, or Symmetry data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    df_plot = df.dropna(subset=['t', 'Δχ_AB', 'Symmetry'])
+    
+    fig = px.scatter(df_plot, x='t', y='Δχ_AB', color='Symmetry',
+                     title='Phase stability map: Symmetry vs t vs Δχ',
+                     labels={'t': 'Tolerance factor', 'Δχ_AB': 'Electronegativity difference Δχ(A-B)'},
+                     hover_data=['A', 'B', '[B\']', 'T (PT), °C'])
+    
+    fig.update_layout(font_family="Times New Roman", width=800, height=600)
+    return fig
+
+def plot_phase_t_vs_doping(df):
+    """График 18: T(PT) vs концентрация допанта"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if '[B\']' not in df.columns or 'T (PT), °C' not in df.columns:
+        ax.text(0.5, 0.5, 'No doping or T(PT) data', ha='center', va='center')
+        return fig
+    
+    df_plot = df.dropna(subset=['[B\']', 'T (PT), °C'])
+    
+    if 'Symmetry' in df_plot.columns:
+        symmetries = df_plot['Symmetry'].unique()
+        colors = plt.cm.tab10(np.linspace(0, 1, len(symmetries)))
+        for sym, color in zip(symmetries, colors):
+            mask = df_plot['Symmetry'] == sym
+            ax.scatter(df_plot.loc[mask, '[B\']'], df_plot.loc[mask, 'T (PT), °C'], 
+                      label=sym, color=color, s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+        ax.legend(loc='best', frameon=True, fancybox=False, edgecolor='black')
+    else:
+        ax.scatter(df_plot['[B\']'], df_plot['T (PT), °C'], s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+    
+    ax.set_xlabel('Dopant concentration [B\']', fontweight='bold')
+    ax.set_ylabel('Phase transition temperature (°C)', fontweight='bold')
+    ax.set_title('Phase transition temperature vs doping level', fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_phase_violin_by_symmetry(df):
+    """График 19: Violin plot T(PT) по симметриям"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if 'Symmetry' not in df.columns or 'T (PT), °C' not in df.columns:
+        ax.text(0.5, 0.5, 'No Symmetry or T(PT) data', ha='center', va='center')
+        return fig
+    
+    df_plot = df.dropna(subset=['Symmetry', 'T (PT), °C'])
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient data', ha='center', va='center')
+        return fig
+    
+    sns.violinplot(data=df_plot, x='Symmetry', y='T (PT), °C', ax=ax)
+    ax.set_xlabel('Crystal symmetry', fontweight='bold')
+    ax.set_ylabel('Phase transition temperature (°C)', fontweight='bold')
+    ax.set_title('Distribution of PT temperature by symmetry', fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_phase_t_distribution_by_type(df):
+    """График 20: Распределение T(PT) по типам переходов"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    if 'Phase transitions (PT)' not in df.columns or 'T (PT), °C' not in df.columns:
+        ax.text(0.5, 0.5, 'No PT type or T(PT) data', ha='center', va='center')
+        return fig
+    
+    df_plot = df.dropna(subset=['Phase transitions (PT)', 'T (PT), °C'])
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient data', ha='center', va='center')
+        return fig
+    
+    sns.boxplot(data=df_plot, x='Phase transitions (PT)', y='T (PT), °C', ax=ax)
+    ax.set_xlabel('Phase transition type', fontweight='bold')
+    ax.set_ylabel('Temperature (°C)', fontweight='bold')
+    ax.set_title('Phase transition temperatures by transition type', fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+# ============================================================================
+# 9. КРОСС-ГРАФИКИ (THERM + PHASE) — 10 ГРАФИКОВ
+# ============================================================================
+
+def plot_cross_alpha_vs_symmetry(df_therm, df_phase):
+    """График 21: αav vs Symmetry (violin/boxplot)"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    if 'αav·106 (K-1)' not in df_therm.columns:
+        ax.text(0.5, 0.5, 'No αav data in THERM', ha='center', va='center')
+        return fig
+    
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    df_plot = df_matched.dropna(subset=['αav·106 (K-1)', 'Symmetry'])
+    
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient matched data', ha='center', va='center')
+        return fig
+    
+    sns.violinplot(data=df_plot, x='Symmetry', y='αav·106 (K-1)', ax=ax)
+    ax.set_xlabel('Crystal symmetry (from PHASE data)', fontweight='bold')
+    ax.set_ylabel('αav·10⁶ (K⁻¹) (from THERM data)', fontweight='bold')
+    ax.set_title('Cross-analysis: Thermal expansion vs crystal symmetry', fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_cross_beta_vs_symmetry(df_therm, df_phase):
+    """График 22: β vs Symmetry"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    if 'β' not in df_therm.columns:
+        ax.text(0.5, 0.5, 'No β data in THERM', ha='center', va='center')
+        return fig
+    
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    df_plot = df_matched.dropna(subset=['β', 'Symmetry'])
+    
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient matched data', ha='center', va='center')
+        return fig
+    
+    sns.boxplot(data=df_plot, x='Symmetry', y='β', ax=ax)
+    ax.set_xlabel('Crystal symmetry (from PHASE data)', fontweight='bold')
+    ax.set_ylabel('β (chemical expansion) (from THERM data)', fontweight='bold')
+    ax.set_title('Cross-analysis: Chemical expansion vs crystal symmetry', fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_cross_tpt_vs_alpha(df_therm, df_phase):
+    """График 23: T(PT) vs αav"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if 'αav·106 (K-1)' not in df_therm.columns:
+        ax.text(0.5, 0.5, 'No αav data in THERM', ha='center', va='center')
+        return fig
+    
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    df_plot = df_matched.dropna(subset=['αav·106 (K-1)', 'T(PT)_matched'])
+    
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient matched data', ha='center', va='center')
+        return fig
+    
+    if 'Symmetry' in df_plot.columns:
+        symmetries = df_plot['Symmetry'].unique()
+        colors = plt.cm.tab10(np.linspace(0, 1, len(symmetries)))
+        for sym, color in zip(symmetries, colors):
+            mask = df_plot['Symmetry'] == sym
+            ax.scatter(df_plot.loc[mask, 'T(PT)_matched'], df_plot.loc[mask, 'αav·106 (K-1)'], 
+                      label=sym, color=color, s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+        ax.legend(loc='best', frameon=True, fancybox=False, edgecolor='black')
+    else:
+        ax.scatter(df_plot['T(PT)_matched'], df_plot['αav·106 (K-1)'], s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+    
+    ax.set_xlabel('Phase transition temperature (°C) (from PHASE data)', fontweight='bold')
+    ax.set_ylabel('αav·10⁶ (K⁻¹) (from THERM data)', fontweight='bold')
+    ax.set_title('Cross-analysis: Thermal expansion vs phase transition temperature', fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_cross_tpt_vs_beta(df_therm, df_phase):
+    """График 24: T(PT) vs β"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if 'β' not in df_therm.columns:
+        ax.text(0.5, 0.5, 'No β data in THERM', ha='center', va='center')
+        return fig
+    
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    df_plot = df_matched.dropna(subset=['β', 'T(PT)_matched'])
+    
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient matched data', ha='center', va='center')
+        return fig
+    
+    if 'Symmetry' in df_plot.columns:
+        symmetries = df_plot['Symmetry'].unique()
+        colors = plt.cm.tab10(np.linspace(0, 1, len(symmetries)))
+        for sym, color in zip(symmetries, colors):
+            mask = df_plot['Symmetry'] == sym
+            ax.scatter(df_plot.loc[mask, 'T(PT)_matched'], df_plot.loc[mask, 'β'], 
+                      label=sym, color=color, s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+        ax.legend(loc='best', frameon=True, fancybox=False, edgecolor='black')
+    else:
+        ax.scatter(df_plot['T(PT)_matched'], df_plot['β'], s=50, alpha=0.7, edgecolors='k', linewidth=0.5)
+    
+    ax.set_xlabel('Phase transition temperature (°C) (from PHASE data)', fontweight='bold')
+    ax.set_ylabel('β (chemical expansion) (from THERM data)', fontweight='bold')
+    ax.set_title('Cross-analysis: Chemical expansion vs phase transition temperature', fontweight='bold')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_cross_bubble_with_symmetry(df_therm, df_phase):
+    """График 25: Пузырьковая диаграмма с цветом = Symmetry"""
+    if 't' not in df_therm.columns or 'αav·106 (K-1)' not in df_therm.columns or 'β' not in df_therm.columns:
+        fig = go.Figure()
+        fig.add_annotation(text="No t, α, or β data in THERM", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    df_plot = df_matched.dropna(subset=['t', 'αav·106 (K-1)', 'β', 'Symmetry'])
+    
+    if len(df_plot) < 3:
+        fig = go.Figure()
+        fig.add_annotation(text="Insufficient matched data", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    fig = px.scatter(df_plot, x='t', y='αav·106 (K-1)', size='β', color='Symmetry',
+                     title='Cross-analysis: Thermal expansion vs tolerance factor, color = crystal symmetry',
+                     labels={'t': 'Tolerance factor', 'αav·106 (K-1)': 'αav·10⁶ K⁻¹', 'β': 'β (size)'},
+                     hover_data=['A', 'B', '[B\']', 'method', 'T(PT)_matched'])
+    
+    fig.update_layout(font_family="Times New Roman", width=800, height=600)
+    return fig
+
+def plot_cross_bends_vs_pt(df_therm, df_phase):
+    """График 26: T(bends) vs T(PT)"""
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    if 'T(bends), °C' not in df_therm.columns:
+        ax.text(0.5, 0.5, 'No T(bends) data in THERM', ha='center', va='center')
+        return fig
+    
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    df_plot = df_matched.dropna(subset=['T(bends), °C', 'T(PT)_matched'])
+    
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient matched data', ha='center', va='center')
+        return fig
+    
+    ax.scatter(df_plot['T(bends), °C'], df_plot['T(PT)_matched'], alpha=0.7, c='green', edgecolors='k', s=50)
+    
+    max_val = max(df_plot['T(bends), °C'].max(), df_plot['T(PT)_matched'].max())
+    ax.plot([0, max_val], [0, max_val], 'k--', alpha=0.5, label='y = x')
+    
+    ax.set_xlabel('Bend temperature T(bends) (°C) (from THERM)', fontweight='bold')
+    ax.set_ylabel('Phase transition temperature T(PT) (°C) (from PHASE)', fontweight='bold')
+    ax.set_title('Cross-analysis: Correlation between bends and phase transitions', fontweight='bold')
+    ax.legend(loc='best')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_cross_alpha_gradient_on_phase_map(df_therm, df_phase):
+    """График 27: Градиент αav на фазовой диаграмме"""
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    df_plot = df_matched.dropna(subset=['[B\']', 'T(PT)_matched', 'αav·106 (K-1)'])
+    
+    if len(df_plot) < 10:
+        fig = go.Figure()
+        fig.add_annotation(text="Insufficient data for gradient map", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    fig = px.scatter(df_plot, x='[B\']', y='T(PT)_matched', color='αav·106 (K-1)',
+                     title='Cross-analysis: Thermal expansion gradient on phase diagram',
+                     labels={'[B\']': 'Dopant concentration [B\']', 'T(PT)_matched': 'Phase transition temperature (°C)',
+                             'αav·106 (K-1)': 'αav·10⁶ K⁻¹'},
+                     color_continuous_scale='viridis',
+                     hover_data=['A', 'B', 'Symmetry'])
+    
+    fig.update_layout(font_family="Times New Roman", width=800, height=600)
+    return fig
+
+def plot_cross_delta_alpha_vs_transition_type(df_therm, df_phase):
+    """График 28: ∆α (скачок) vs тип перехода"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    if 'αav·106 (K-1)' not in df_therm.columns:
+        ax.text(0.5, 0.5, 'No αav data in THERM', ha='center', va='center')
+        return fig
+    
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    
+    if 'Phase transitions (PT)' not in df_matched.columns:
+        ax.text(0.5, 0.5, 'No PT type data', ha='center', va='center')
+        return fig
+    
+    df_plot = df_matched.dropna(subset=['αav·106 (K-1)', 'Phase transitions (PT)'])
+    
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient data', ha='center', va='center')
+        return fig
+    
+    sns.boxplot(data=df_plot, x='Phase transitions (PT)', y='αav·106 (K-1)', ax=ax)
+    ax.set_xlabel('Phase transition type (from PHASE data)', fontweight='bold')
+    ax.set_ylabel('αav·10⁶ (K⁻¹) (from THERM data)', fontweight='bold')
+    ax.set_title('Cross-analysis: Thermal expansion by phase transition type', fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_cross_ph2o_vs_symmetry(df_therm, df_phase):
+    """График 29: pH₂O vs Symmetry"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    if 'pH2O' not in df_therm.columns:
+        ax.text(0.5, 0.5, 'No pH₂O data in THERM', ha='center', va='center')
+        return fig
+    
+    df_matched = match_compositions_one_to_one(df_therm, df_phase)
+    df_plot = df_matched.dropna(subset=['pH2O', 'Symmetry'])
+    
+    if len(df_plot) < 5:
+        ax.text(0.5, 0.5, 'Insufficient matched data', ha='center', va='center')
+        return fig
+    
+    sns.boxplot(data=df_plot, x='Symmetry', y='pH2O', ax=ax)
+    ax.set_xlabel('Crystal symmetry (from PHASE data)', fontweight='bold')
+    ax.set_ylabel('pH₂O (partial pressure) (from THERM data)', fontweight='bold')
+    ax.set_title('Cross-analysis: Water partial pressure by crystal symmetry', fontweight='bold')
+    plt.xticks(rotation=45, ha='right')
+    ax.grid(True, alpha=0.3, linestyle='--')
+    
+    return fig
+
+def plot_cross_pca_with_symmetry(df_therm, df_phase):
+    """График 30: PCA проекция THERM данных с цветом = Symmetry из PHASE"""
+    feature_cols = [col for col in ['rAav', 'rBav', 't', 'χAav', 'χBav', 'Δχ_AB', 'σ²_rB'] 
+                    if col in df_therm.columns]
+    
+    if len(feature_cols) < 2:
+        fig = go.Figure()
+        fig.add_annotation(text="Insufficient features for PCA", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    df_therm_with_sym = match_compositions_one_to_one(df_therm, df_phase)
+    df_pca = df_therm_with_sym[feature_cols + ['Symmetry']].dropna()
+    
+    if len(df_pca) < 5:
+        fig = go.Figure()
+        fig.add_annotation(text="Insufficient data for PCA", xref="paper", yref="paper", x=0.5, y=0.5, showarrow=False)
+        return fig
+    
+    X = df_pca[feature_cols].values
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(X)
+    
     pca = PCA(n_components=2)
     X_pca = pca.fit_transform(X_scaled)
     
-    fig, ax = plt.subplots(figsize=(10, 6))
-    scat = ax.scatter(X_pca[:, 0], X_pca[:, 1], c=labels, cmap='tab10', s=50, alpha=0.7, edgecolors='k')
-    ax.set_xlabel('PC1', fontweight='bold')
-    ax.set_ylabel('PC2', fontweight='bold')
-    ax.set_title(f'Clustering visualization (KMeans, {len(set(labels))} clusters)', fontweight='bold')
-    plt.colorbar(scat, label='Cluster')
-    ax.grid(True, alpha=0.3, linestyle='--')
-    return fig
-
-# ============================================================================
-# 9. ML МОДЕЛЬ (RandomForest + SHAP)
-# ============================================================================
-
-def train_rf_and_shap(df, feature_cols, target):
-    """Обучение RandomForest и расчёт SHAP"""
-    if len(feature_cols) < 2 or target not in df.columns:
-        return None, None, None, None
+    fig = px.scatter(x=X_pca[:, 0], y=X_pca[:, 1], color=df_pca['Symmetry'],
+                     title=f'Cross-analysis: PCA of THERM descriptors, color = Symmetry from PHASE<br>(PC1: {pca.explained_variance_ratio_[0]:.2%}, PC2: {pca.explained_variance_ratio_[1]:.2%})',
+                     labels={'x': 'PC1', 'y': 'PC2', 'color': 'Symmetry'},
+                     hover_data=df_pca[feature_cols + ['Symmetry']])
     
-    df_ml = df[feature_cols + [target]].dropna()
-    if len(df_ml) < 20:
-        return None, None, None, None
-    
-    X = df_ml[feature_cols]
-    y = df_ml[target]
-    
-    rf = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
-    rf.fit(X, y)
-    
-    importance = pd.DataFrame({'feature': feature_cols, 'importance': rf.feature_importances_}).sort_values('importance', ascending=False)
-    
-    explainer = shap.TreeExplainer(rf)
-    shap_values = explainer.shap_values(X)
-    
-    return rf, importance, shap_values, X
-
-def plot_feature_importance(importance_df):
-    """Bar plot важности признаков"""
-    if importance_df is None or len(importance_df) == 0:
-        fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, 'No feature importance data', ha='center', va='center')
-        return fig
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.barplot(data=importance_df.head(10), x='importance', y='feature', ax=ax)
-    ax.set_title('Random Forest Feature Importance (top-10)', fontweight='bold')
-    ax.set_xlabel('Importance', fontweight='bold')
-    ax.set_ylabel('Feature', fontweight='bold')
-    ax.grid(True, alpha=0.3, linestyle='--', axis='x')
-    plt.tight_layout()
-    return fig
-
-def plot_shap_summary(shap_values, X):
-    """SHAP summary plot"""
-    if shap_values is None:
-        fig, ax = plt.subplots()
-        ax.text(0.5, 0.5, 'No SHAP values', ha='center', va='center')
-        return fig
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    shap.summary_plot(shap_values, X, show=False)
-    plt.tight_layout()
+    fig.update_layout(font_family="Times New Roman", width=800, height=600)
     return fig
 
 # ============================================================================
@@ -978,24 +1427,17 @@ def plot_shap_summary(shap_values, X):
 def main():
     st.set_page_config(layout="wide", page_title="Perovskite Expansion Analyzer", page_icon="🧪")
     st.title("📊 Advanced Materials Informatics for Perovskite Oxides")
-    st.markdown("### Thermal & Chemical Expansion | Phase Transitions | ML-driven Insights")
+    st.markdown("### Thermal & Chemical Expansion | Phase Transitions | Cross-Analysis")
     
-    # Боковая панель с навигацией
     st.sidebar.header("🧭 Navigation")
-    analysis_mode = st.sidebar.selectbox(
+    analysis_mode = st.sidebar.radio(
         "Choose analysis mode",
-        ["1. Data Editor & Preview",
-         "2. Bubble Charts (4D Interactive)",
-         "3. Contour Maps (x/y/color)",
-         "4. Phase Transitions & Symmetry",
-         "5. PCA & UMAP Projections",
-         "6. Advanced Correlations (MI, Spearman)",
-         "7. Clustering Analysis",
-         "8. ML Model (RandomForest + SHAP)",
-         "9. Batch Plot Generator"]
+        ["📊 Mode 1: THERM only (thermal/chemical expansion)",
+         "🔬 Mode 2: PHASE only (phase transitions)",
+         "🔗 Mode 3: CROSS-analysis (THERM + PHASE)"]
     )
     
-    # Виджеты для ввода данных (две текстовые области с предзаполненными данными)
+    # Виджеты для ввода данных
     st.sidebar.markdown("---")
     st.sidebar.markdown("## 📂 Data Input")
     
@@ -1015,274 +1457,246 @@ def main():
     
     # Загрузка данных
     with st.spinner("Loading and processing data..."):
-        df_therm, df_phase = load_data_from_text(therm_text, phase_text)
+        df_therm_raw, df_phase_raw = load_data_from_text(therm_text, phase_text)
         
-        if df_therm is None or df_phase is None:
+        if df_therm_raw is None or df_phase_raw is None:
             st.error("Failed to load data. Please check the format (tab-separated values).")
             return
         
-        # Объединение данных
-        merge_cols = ['A', 'A\'', 'B', 'B\'', 'D1', 'D2', '[A\']', '[B\']', '[D1]', '[D2]']
-        for col in merge_cols:
-            if col not in df_phase.columns:
-                df_phase[col] = np.nan
+        df_therm = add_all_descriptors(df_therm_raw, "therm")
+        df_phase = add_all_descriptors(df_phase_raw, "phase")
         
-        df = pd.merge(df_therm, df_phase, on=['№'] + merge_cols, how='left', suffixes=('', '_phase'))
-        
-        # Добавление дескрипторов
-        df = add_all_descriptors(df)
-        
-        st.success(f"✅ Data loaded. Total rows: {len(df)}. Descriptors: {len(df.columns)}")
+        st.success(f"✅ THERM: {len(df_therm)} rows, {len(df_therm.columns)} columns | PHASE: {len(df_phase)} rows, {len(df_phase.columns)} columns")
     
-    # Создание фильтров (все по умолчанию включены)
-    filters = create_filters(df)
-    df_filtered = apply_filters(df, filters)
+    # Фильтры
+    filters = create_filters(df_therm, df_phase)
+    df_therm_filtered = apply_filters_to_therm(df_therm, filters)
+    df_phase_filtered = apply_filters_to_phase(df_phase, filters)
     
-    # Отображение текущих фильтров
     with st.sidebar.expander("📊 Active filters", expanded=False):
         st.write(f"A-site: {filters['A']}")
         st.write(f"B-site: {filters['B']}")
-        st.write(f"D1: {filters['D1']}")
-        st.write(f"D2: {filters['D2']}")
-        st.write(f"Method: {filters['method']}")
-        st.write(f"Symmetry: {filters['symmetry']}")
-        st.write(f"Temperature range: {filters['temp_range']}")
-        st.write(f"**Filtered rows: {len(df_filtered)} / {len(df)}**")
-    
-    # Получение списка доступных колонок для выбора
-    numeric_cols, categorical_cols = get_available_columns(df_filtered)
+        st.write(f"THERM filtered: {len(df_therm_filtered)} / {len(df_therm)}")
+        st.write(f"PHASE filtered: {len(df_phase_filtered)} / {len(df_phase)}")
     
     # ========================================================================
-    # РЕЖИМ 1: Data Editor & Preview
+    # РЕЖИМ 1: THERM ONLY
     # ========================================================================
-    if analysis_mode == "1. Data Editor & Preview":
-        st.subheader("📋 Data Preview (filtered)")
-        st.dataframe(df_filtered.head(100))
+    if analysis_mode == "📊 Mode 1: THERM only (thermal/chemical expansion)":
+        st.subheader("📊 THERMAL & CHEMICAL EXPANSION ANALYSIS (13 plots)")
         
-        st.subheader("📊 Statistical Summary")
-        st.dataframe(df_filtered.describe())
+        numeric_cols, categorical_cols = get_available_columns(df_therm_filtered, 'therm')
         
-        st.subheader("🧪 Newly Added Descriptors")
-        new_desc_cols = [col for col in df_filtered.columns if any(x in col for x in ['χ', 'σ²', 'S_config', 'ionicity', 'octahedral', 'Δ', 'V_Bav', 'D_t', 'Vo_proxy'])]
-        if new_desc_cols:
-            st.dataframe(df_filtered[new_desc_cols].head(20))
-    
-    # ========================================================================
-    # РЕЖИМ 2: Bubble Charts (4D Interactive)
-    # ========================================================================
-    elif analysis_mode == "2. Bubble Charts (4D Interactive)":
-        st.subheader("🎈 Interactive Bubble Charts (4D Visualization)")
-        st.markdown("Select X, Y, bubble size, and color parameters.")
+        plot_type = st.selectbox(
+            "Select plot type",
+            ["1. αav vs t (color=method)",
+             "2. β vs pH₂O",
+             "3. αav vs [B'] (doping level)",
+             "4. Goldschmidt map: rAav vs rBav, color=αav",
+             "5. Contour: t vs Δχ, color=β",
+             "6. Contour: rBav vs χBav, color=αav",
+             "7. Non-constant β: residuals vs T(bends)",
+             "8. Method comparison: dilatometry vs HTXRD",
+             "9. α before/after T(bends)",
+             "10. α vs measurement temperature range",
+             "11. 4D Bubble chart: t, α, β, method",
+             "12. Violin plot: αav by method",
+             "13. Bubble: χBav vs β, size=pH2O, color=[B']"]
+        )
         
-        col1, col2 = st.columns(2)
-        with col1:
-            x_bubble = st.selectbox("X axis", numeric_cols, index=numeric_cols.index('t') if 't' in numeric_cols else 0)
-            y_bubble = st.selectbox("Y axis", numeric_cols, index=numeric_cols.index('αav·106 (K-1)') if 'αav·106 (K-1)' in numeric_cols else 0)
-        with col2:
-            size_bubble = st.selectbox("Bubble size", numeric_cols, index=numeric_cols.index('β') if 'β' in numeric_cols else 0)
-            color_bubble = st.selectbox("Bubble color", categorical_cols + numeric_cols, index=0)
-        
-        if len(df_filtered) > 0:
-            fig = create_bubble_plot(df_filtered, x_bubble, y_bubble, size_bubble, color_bubble,
-                                     f"{y_bubble} vs {x_bubble} | size={size_bubble} | color={color_bubble}")
-            st.plotly_chart(fig, use_container_width=True)
+        if len(df_therm_filtered) > 0:
+            if plot_type == "1. αav vs t (color=method)":
+                fig = plot_therm_alpha_vs_t(df_therm_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "2. β vs pH₂O":
+                fig = plot_therm_beta_vs_ph2o(df_therm_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "3. αav vs [B'] (doping level)":
+                fig = plot_therm_alpha_vs_doping(df_therm_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "4. Goldschmidt map: rAav vs rBav, color=αav":
+                fig = plot_therm_goldschmidt_map(df_therm_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "5. Contour: t vs Δχ, color=β":
+                fig = plot_therm_contour_t_vs_dchi_vs_beta(df_therm_filtered)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            elif plot_type == "6. Contour: rBav vs χBav, color=αav":
+                fig = plot_therm_contour_rBav_vs_chiBav_vs_alpha(df_therm_filtered)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            elif plot_type == "7. Non-constant β: residuals vs T(bends)":
+                fig = plot_therm_nonconstant_beta(df_therm_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "8. Method comparison: dilatometry vs HTXRD":
+                fig = plot_therm_method_comparison(df_therm_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "9. α before/after T(bends)":
+                fig = plot_therm_alpha_before_after_bend(df_therm_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "10. α vs measurement temperature range":
+                fig = plot_therm_alpha_vs_temperature_range(df_therm_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "11. 4D Bubble chart: t, α, β, method":
+                fig = plot_therm_bubble_4d(df_therm_filtered)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            elif plot_type == "12. Violin plot: αav by method":
+                fig = plot_therm_violin_by_method(df_therm_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "13. Bubble: χBav vs β, size=pH2O, color=[B']":
+                fig = plot_therm_bubble_chi_vs_beta(df_therm_filtered)
+                st.plotly_chart(fig, use_container_width=True)
         else:
             st.warning("No data after filtering")
+        
+        st.subheader("📋 THERM Data Preview")
+        st.dataframe(df_therm_filtered.head(50))
     
     # ========================================================================
-    # РЕЖИМ 3: Contour Maps
+    # РЕЖИМ 2: PHASE ONLY
     # ========================================================================
-    elif analysis_mode == "3. Contour Maps (x/y/color)":
-        st.subheader("🗺️ Contour Maps")
+    elif analysis_mode == "🔬 Mode 2: PHASE only (phase transitions)":
+        st.subheader("🔬 PHASE TRANSITION ANALYSIS (7 plots)")
         
-        col1, col2 = st.columns(2)
-        with col1:
-            x_contour = st.selectbox("X axis", numeric_cols, index=numeric_cols.index('t') if 't' in numeric_cols else 0)
-            y_contour = st.selectbox("Y axis", numeric_cols, index=numeric_cols.index('rBav') if 'rBav' in numeric_cols else 0)
-        with col2:
-            z_contour = st.selectbox("Color (Z)", numeric_cols, index=numeric_cols.index('αav·106 (K-1)') if 'αav·106 (K-1)' in numeric_cols else 0)
+        plot_type = st.selectbox(
+            "Select plot type",
+            ["14. Phase diagram: Ce₁₋ₓZrₓO₃",
+             "15. T(PT) vs tolerance factor (t)",
+             "16. T(PT) vs structural disorder (σ²_rB)",
+             "17. Phase stability map: t vs Δχ, color=Symmetry",
+             "18. T(PT) vs doping concentration [B']",
+             "19. Violin plot: T(PT) by Symmetry",
+             "20. T(PT) distribution by transition type"]
+        )
         
-        if len(df_filtered) > 0:
-            fig = create_contour_plot(df_filtered, x_contour, y_contour, z_contour,
-                                      f"Contour: {z_contour} vs {x_contour} & {y_contour}")
-            st.plotly_chart(fig, use_container_width=True)
+        if len(df_phase_filtered) > 0:
+            if plot_type == "14. Phase diagram: Ce₁₋ₓZrₓO₃":
+                fig = plot_phase_diagram_cezr(df_phase_filtered)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            elif plot_type == "15. T(PT) vs tolerance factor (t)":
+                fig = plot_phase_t_vs_tolerance(df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "16. T(PT) vs structural disorder (σ²_rB)":
+                fig = plot_phase_t_vs_disorder(df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "17. Phase stability map: t vs Δχ, color=Symmetry":
+                fig = plot_phase_symmetry_map(df_phase_filtered)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            elif plot_type == "18. T(PT) vs doping concentration [B']":
+                fig = plot_phase_t_vs_doping(df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "19. Violin plot: T(PT) by Symmetry":
+                fig = plot_phase_violin_by_symmetry(df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "20. T(PT) distribution by transition type":
+                fig = plot_phase_t_distribution_by_type(df_phase_filtered)
+                st.pyplot(fig)
         else:
             st.warning("No data after filtering")
+        
+        st.subheader("📋 PHASE Data Preview")
+        st.dataframe(df_phase_filtered.head(50))
     
     # ========================================================================
-    # РЕЖИМ 4: Phase Transitions & Symmetry
+    # РЕЖИМ 3: CROSS ANALYSIS (THERM + PHASE)
     # ========================================================================
-    elif analysis_mode == "4. Phase Transitions & Symmetry":
-        st.subheader("🔬 Phase Transitions and Symmetry Analysis")
+    elif analysis_mode == "🔗 Mode 3: CROSS-analysis (THERM + PHASE)":
+        st.subheader("🔗 CROSS-ANALYSIS: THERM + PHASE (10 plots)")
+        st.markdown("⚠️ **Important**: Data are matched by composition (A, B, [B'], D1, D2). Multiple matches may exist.")
         
-        fig1 = plot_phase_transition_diagram(df_filtered)
-        st.plotly_chart(fig1, use_container_width=True)
+        plot_type = st.selectbox(
+            "Select cross-analysis plot type",
+            ["21. αav vs Symmetry (violin/boxplot)",
+             "22. β vs Symmetry (boxplot)",
+             "23. T(PT) vs αav (scatter)",
+             "24. T(PT) vs β (scatter)",
+             "25. 4D Bubble: t, α, β, color=Symmetry",
+             "26. T(bends) vs T(PT) correlation",
+             "27. αav gradient on phase diagram",
+             "28. ∆α (scan) vs transition type",
+             "29. pH₂O vs Symmetry",
+             "30. PCA of THERM, color=Symmetry from PHASE"]
+        )
         
-        fig2 = plot_violin_alpha_by_symmetry(df_filtered)
-        st.pyplot(fig2)
-        
-        fig3 = plot_method_comparison(df_filtered)
-        st.pyplot(fig3)
-        
-        fig4 = plot_nonconstant_beta_demo(df_filtered)
-        st.pyplot(fig4)
-        
-        fig5 = plot_alpha_vs_tolerance_with_filters(df_filtered)
-        st.pyplot(fig5)
-    
-    # ========================================================================
-    # РЕЖИМ 5: PCA & UMAP Projections
-    # ========================================================================
-    elif analysis_mode == "5. PCA & UMAP Projections":
-        st.subheader("📐 Dimensionality Reduction")
-        
-        # Выбор признаков для PCA
-        default_pca_features = [col for col in ['rAav', 'rBav', 't', 'χAav', 'χBav', 'Δχ_AB', 'σ²_rB'] if col in numeric_cols]
-        pca_features = st.multiselect("Select features for PCA", numeric_cols, default=default_pca_features)
-        pca_color = st.selectbox("Color by", categorical_cols + numeric_cols, index=0)
-        
-        if len(pca_features) >= 2 and len(df_filtered) > 0:
-            fig_pca = create_pca_plot(df_filtered, pca_features, pca_color, "PCA Biplot")
-            st.plotly_chart(fig_pca, use_container_width=True)
+        if len(df_therm_filtered) > 0 and len(df_phase_filtered) > 0:
+            if plot_type == "21. αav vs Symmetry (violin/boxplot)":
+                fig = plot_cross_alpha_vs_symmetry(df_therm_filtered, df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "22. β vs Symmetry (boxplot)":
+                fig = plot_cross_beta_vs_symmetry(df_therm_filtered, df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "23. T(PT) vs αav (scatter)":
+                fig = plot_cross_tpt_vs_alpha(df_therm_filtered, df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "24. T(PT) vs β (scatter)":
+                fig = plot_cross_tpt_vs_beta(df_therm_filtered, df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "25. 4D Bubble: t, α, β, color=Symmetry":
+                fig = plot_cross_bubble_with_symmetry(df_therm_filtered, df_phase_filtered)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            elif plot_type == "26. T(bends) vs T(PT) correlation":
+                fig = plot_cross_bends_vs_pt(df_therm_filtered, df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "27. αav gradient on phase diagram":
+                fig = plot_cross_alpha_gradient_on_phase_map(df_therm_filtered, df_phase_filtered)
+                st.plotly_chart(fig, use_container_width=True)
+            
+            elif plot_type == "28. ∆α (scan) vs transition type":
+                fig = plot_cross_delta_alpha_vs_transition_type(df_therm_filtered, df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "29. pH₂O vs Symmetry":
+                fig = plot_cross_ph2o_vs_symmetry(df_therm_filtered, df_phase_filtered)
+                st.pyplot(fig)
+            
+            elif plot_type == "30. PCA of THERM, color=Symmetry from PHASE":
+                fig = plot_cross_pca_with_symmetry(df_therm_filtered, df_phase_filtered)
+                st.plotly_chart(fig, use_container_width=True)
         else:
-            st.warning("Select at least 2 features for PCA")
+            st.warning("Insufficient data in one or both tables after filtering")
         
-        # UMAP
-        st.subheader("UMAP Projection (non-linear manifold)")
-        umap_features = st.multiselect("Select features for UMAP", numeric_cols, default=default_pca_features[:3] if len(default_pca_features) >= 3 else default_pca_features)
-        
-        if len(umap_features) >= 2 and len(df_filtered) > 10:
-            df_umap = df_filtered[umap_features].dropna()
-            if len(df_umap) >= 10:
-                scaler = StandardScaler()
-                X_scaled = scaler.fit_transform(df_umap.values)
-                reducer = umap.UMAP(n_components=2, random_state=42)
-                X_umap = reducer.fit_transform(X_scaled)
-                
-                fig_umap = go.Figure()
-                fig_umap.add_trace(go.Scatter(
-                    x=X_umap[:, 0], y=X_umap[:, 1],
-                    mode='markers',
-                    marker=dict(size=8, color='blue'),
-                    text=df_umap.index.astype(str)
-                ))
-                fig_umap.update_layout(title="UMAP Projection", width=800, height=600)
-                st.plotly_chart(fig_umap, use_container_width=True)
-            else:
-                st.warning("Not enough data for UMAP (need ≥10 samples)")
-        else:
-            st.warning("Select at least 2 features for UMAP")
+        st.subheader("📋 Matched Data Preview (THERM + Symmetry)")
+        df_matched_preview = match_compositions_one_to_one(df_therm_filtered, df_phase_filtered)
+        st.dataframe(df_matched_preview[['A', 'B', '[B\']', 'αav·106 (K-1)', 'β', 'Symmetry', 'T(PT)_matched']].head(50))
     
-    # ========================================================================
-    # РЕЖИМ 6: Advanced Correlations
-    # ========================================================================
-    elif analysis_mode == "6. Advanced Correlations (MI, Spearman)":
-        st.subheader("📈 Mutual Information Analysis")
-        
-        mi_features = st.multiselect("Descriptor features for MI", numeric_cols, default=numeric_cols[:5] if len(numeric_cols) >= 5 else numeric_cols)
-        mi_targets = st.multiselect("Target properties", [col for col in numeric_cols if 'α' in col or 'β' in col], default=[col for col in numeric_cols if 'αav' in col or 'β' in col])
-        
-        if len(mi_features) >= 2 and len(mi_targets) >= 1 and len(df_filtered) > 0:
-            mi_results, _ = compute_mutual_information(df_filtered, mi_features, mi_targets)
-            fig_mi = plot_mutual_information_heatmap(mi_results, mi_features)
-            st.pyplot(fig_mi)
-        else:
-            st.warning("Select at least 2 features and 1 target for MI analysis")
-        
-        st.subheader("📊 Correlation Matrix (Spearman + Clustering)")
-        fig_corr = plot_correlation_heatmap_advanced(df_filtered, corr_method='spearman')
-        st.pyplot(fig_corr)
-    
-    # ========================================================================
-    # РЕЖИМ 7: Clustering Analysis
-    # ========================================================================
-    elif analysis_mode == "7. Clustering Analysis":
-        st.subheader("🔧 Composition Clustering")
-        
-        cluster_features = st.multiselect("Features for clustering", numeric_cols, default=numeric_cols[:5] if len(numeric_cols) >= 5 else numeric_cols)
-        n_clusters = st.slider("Number of clusters (KMeans)", 2, 6, 3)
-        
-        if len(cluster_features) >= 2 and len(df_filtered) > 0:
-            labels, score, idx = perform_clustering(df_filtered, cluster_features, method='kmeans', n_clusters=n_clusters)
-            if labels is not None:
-                st.metric("Silhouette Score", f"{score:.3f}")
-                fig_clust = plot_clustering_pca(df_filtered, labels, cluster_features)
-                st.pyplot(fig_clust)
-                
-                df_clustered = df_filtered.loc[idx].copy()
-                df_clustered['Cluster'] = labels
-                st.dataframe(df_clustered[['A', 'B', 'Cluster', 'αav·106 (K-1)', 'β']].head(50))
-            else:
-                st.warning("Clustering failed: insufficient data")
-        else:
-            st.warning("Select at least 2 features for clustering")
-    
-    # ========================================================================
-    # РЕЖИМ 8: ML Model
-    # ========================================================================
-    elif analysis_mode == "8. ML Model (RandomForest + SHAP)":
-        st.subheader("🤖 Machine Learning: RandomForest + SHAP")
-        
-        ml_features = st.multiselect("Features for ML", numeric_cols, default=numeric_cols[:5] if len(numeric_cols) >= 5 else numeric_cols)
-        ml_target = st.selectbox("Target property", [col for col in numeric_cols if 'αav' in col or 'α·' in col or 'β' in col], index=0 if any('αav' in col for col in numeric_cols) else None)
-        
-        if len(ml_features) >= 2 and ml_target is not None and len(df_filtered) > 0:
-            rf, importance, shap_vals, X = train_rf_and_shap(df_filtered, ml_features, ml_target)
-            if rf is not None:
-                st.metric("Model R² (training)", f"{rf.score(X, df_filtered[ml_target].dropna().loc[X.index]):.3f}")
-                
-                fig_imp = plot_feature_importance(importance)
-                st.pyplot(fig_imp)
-                
-                fig_shap = plot_shap_summary(shap_vals, X)
-                st.pyplot(fig_shap)
-            else:
-                st.warning(f"Not enough data for ML (need ≥20 complete samples)")
-        else:
-            st.warning("Select at least 2 features and 1 target")
-    
-    # ========================================================================
-    # РЕЖИМ 9: Batch Plot Generator
-    # ========================================================================
-    elif analysis_mode == "9. Batch Plot Generator":
-        st.subheader("📸 Batch Plot Generation")
-        st.markdown("Generates all standard plots for the current filtered data.")
-        
-        if st.button("Generate All Plots"):
-            with st.spinner("Generating plots (may take 30-60 seconds)..."):
-                plot_funcs = [
-                    ("Bubble Chart (default)", lambda: create_bubble_plot(df_filtered, 't', 'αav·106 (K-1)', 'β', 'Symmetry', "Bubble Chart")),
-                    ("Contour Map (default)", lambda: create_contour_plot(df_filtered, 't', 'rBav', 'αav·106 (K-1)', "Contour Map")),
-                    ("Phase Transition Diagram", lambda: plot_phase_transition_diagram(df_filtered)),
-                    ("Violin Plot by Symmetry", lambda: plot_violin_alpha_by_symmetry(df_filtered)),
-                    ("Method Comparison", lambda: plot_method_comparison(df_filtered)),
-                    ("Non-constant β", lambda: plot_nonconstant_beta_demo(df_filtered)),
-                    ("α vs t", lambda: plot_alpha_vs_tolerance_with_filters(df_filtered)),
-                    ("PCA Biplot", lambda: create_pca_plot(df_filtered, ['rBav', 't', 'χBav', 'Δχ_AB'], 'αav·106 (K-1)', "PCA Biplot")),
-                    ("Correlation Heatmap", lambda: plot_correlation_heatmap_advanced(df_filtered))
-                ]
-                
-                for name, func in plot_funcs:
-                    st.subheader(name)
-                    try:
-                        fig = func()
-                        if hasattr(fig, 'to_html'):  # Plotly figure
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.pyplot(fig)
-                    except Exception as e:
-                        st.error(f"Failed to generate {name}: {str(e)}")
-    
-    # Кнопка скачивания обогащённых данных
+    # Кнопка скачивания
     st.sidebar.markdown("---")
-    if st.sidebar.button("💾 Download enriched dataset (CSV)"):
-        csv = df_filtered.to_csv(index=False).encode('utf-8')
+    if st.sidebar.button("💾 Download THERM data (CSV)"):
+        csv = df_therm_filtered.to_csv(index=False).encode('utf-8')
         b64 = base64.b64encode(csv).decode()
-        href = f'<a href="data:file/csv;base64,{b64}" download="enriched_perovskite_data.csv">Download CSV</a>'
+        href = f'<a href="data:file/csv;base64,{b64}" download="therm_data.csv">Download CSV</a>'
+        st.sidebar.markdown(href, unsafe_allow_html=True)
+    
+    if st.sidebar.button("💾 Download PHASE data (CSV)"):
+        csv = df_phase_filtered.to_csv(index=False).encode('utf-8')
+        b64 = base64.b64encode(csv).decode()
+        href = f'<a href="data:file/csv;base64,{b64}" download="phase_data.csv">Download CSV</a>'
         st.sidebar.markdown(href, unsafe_allow_html=True)
     
     st.sidebar.markdown("---")
-    st.sidebar.info("Built with Streamlit | Advanced descriptors: χ, σ², S_config, ionicity, octahedral factor, vacancy proxy, partial correlations, MI, SHAP, UMAP, clustering | Scientific style for publication-ready figures.")
+    st.sidebar.info("Built with Streamlit | 3 analysis modes | 30+ publication-ready plots | Cross-analysis by composition matching")
 
 if __name__ == "__main__":
     main()

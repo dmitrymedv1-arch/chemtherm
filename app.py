@@ -27,6 +27,8 @@ import pingouin as pg
 from statsmodels.stats.outliers_influence import variance_inflation_factor
 import warnings
 warnings.filterwarnings('ignore')
+import os
+os.environ['STREAMLIT_SERVER_WATCH_DIRS'] = 'false'
 
 # Импорт локальных модулей (предполагается, что они находятся в той же директории)
 try:

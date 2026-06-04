@@ -1380,7 +1380,7 @@ class ScientificVisualizer:
         # Последовательная фильтрация с reset_index после каждой операции
         for col in base_cols:
             if col in plot_df.columns:
-                plot_df = plot_df[plot_df[col] != 0]
+                plot_df = plot_df[plot_df[col] != 0].copy()
                 if len(plot_df) == 0:
                     ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
                     return fig

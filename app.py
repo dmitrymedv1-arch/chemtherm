@@ -2258,6 +2258,9 @@ def main():
             # 2D Scatter
             st.subheader("2D Concentration Map (Scatter)")
             df_clean = df.copy().reset_index(drop=True)
+            # Удаляем дублирующиеся колонки перед передачей в функцию визуализации
+            if df_clean.columns.duplicated().any():
+                df_clean = df_clean.loc[:, ~df_clean.columns.duplicated(keep='last')]
             fig = ScientificVisualizer.plot_scatter_2d(df_clean, x_axis, y_axis, color_col=z_axis)
             st.pyplot(fig)
             

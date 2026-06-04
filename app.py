@@ -1323,7 +1323,7 @@ class ScientificVisualizer:
         
         plt.tight_layout()
         return fig
-    
+
     @staticmethod
     def plot_scatter_2d(df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None,
                          size_col: str = None, title: str = None):
@@ -1339,21 +1339,29 @@ class ScientificVisualizer:
         if size_col and size_col in df.columns:
             base_cols.append(size_col)
         
-        # Создаем копию - df уже должен иметь уникальные индексы
+        # Используем .loc с булевой маской вместо прямой индексации
         plot_df = df[base_cols].copy()
-        plot_df = plot_df.dropna()
+        
+        # Создаем маску для фильтрации
+        mask = pd.Series([True] * len(plot_df), index=plot_df.index)
+        
+        # Filter out NaN
+        mask = mask & plot_df.notna().all(axis=1)
         
         # Filter out zeros in y_col (target property)
         if y_col in plot_df.columns:
-            plot_df = plot_df[plot_df[y_col] != 0]
+            mask = mask & (plot_df[y_col] != 0)
         
-        # Also filter out zeros in x_col if needed
-        if x_col in plot_df.columns and len(plot_df) > 0:
-            plot_df = plot_df[plot_df[x_col] != 0]
+        # Filter out zeros in x_col if needed
+        if x_col in plot_df.columns:
+            mask = mask & (plot_df[x_col] != 0)
         
         # Filter out zeros in color_col if it's being used for coloring
-        if color_col and color_col in plot_df.columns and len(plot_df) > 0:
-            plot_df = plot_df[plot_df[color_col] != 0]
+        if color_col and color_col in plot_df.columns:
+            mask = mask & (plot_df[color_col] != 0)
+        
+        # Применяем маску
+        plot_df = plot_df.loc[mask]
         
         if len(plot_df) == 0:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')

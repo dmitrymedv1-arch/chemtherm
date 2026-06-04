@@ -1359,38 +1359,55 @@ class ScientificVisualizer:
     def plot_scatter_2d(df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None,
                          size_col: str = None, title: str = None):
         """Create 2D scatter plot with optional color and size mapping"""
-        # Защита от дублирующихся колонок
-        if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='last')]
-        
         fig, ax = plt.subplots(figsize=(9, 7))
         
-        # Prepare data - start with all three columns if color_col provided
-        if color_col and color_col in df.columns:
-            base_cols = [x_col, y_col, color_col]
-        else:
-            base_cols = [x_col, y_col]
+        # Принудительно создаем копию и удаляем все дубликаты колонок
+        df_work = df.copy()
+        if df_work.columns.duplicated().any():
+            df_work = df_work.loc[:, ~df_work.columns.duplicated(keep='first')]
         
-        if size_col and size_col in df.columns:
-            base_cols.append(size_col)
+        # Проверяем наличие необходимых колонок
+        required_cols = [x_col, y_col]
+        if color_col:
+            required_cols.append(color_col)
+        if size_col:
+            required_cols.append(size_col)
         
-        # Создаём копию и удаляем NaN
-        plot_df = df[base_cols].dropna().copy()
+        # Проверяем, что все колонки существуют
+        missing_cols = [col for col in required_cols if col not in df_work.columns]
+        if missing_cols:
+            ax.text(0.5, 0.5, f"Missing columns: {missing_cols}", transform=ax.transAxes, ha='center', va='center')
+            return fig
         
-        # Последовательная фильтрация с reset_index после каждой операции
-        for col in base_cols:
+        # Подготовка данных: берем только нужные колонки
+        plot_df = df_work[required_cols].copy()
+        
+        # Удаляем строки с NaN
+        plot_df = plot_df.dropna()
+        
+        # Фильтруем нулевые значения (кроме color_col, если это категориальная переменная)
+        # Для числовых колонок удаляем нули
+        for col in [x_col, y_col]:
             if col in plot_df.columns:
-                plot_df = plot_df[plot_df[col] != 0].copy()
-                if len(plot_df) == 0:
-                    ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
-                    return fig
-                plot_df = plot_df.reset_index(drop=True)
+                plot_df = plot_df[plot_df[col] != 0]
+        
+        if color_col and color_col in plot_df.columns:
+            # Для color_col проверяем, является ли он числовым
+            if pd.api.types.is_numeric_dtype(plot_df[color_col]):
+                plot_df = plot_df[plot_df[color_col] != 0]
+        
+        if size_col and size_col in plot_df.columns:
+            if pd.api.types.is_numeric_dtype(plot_df[size_col]):
+                plot_df = plot_df[plot_df[size_col] != 0]
         
         if len(plot_df) == 0:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
             return fig
         
-        if color_col:
+        # Сбрасываем индекс для чистоты
+        plot_df = plot_df.reset_index(drop=True)
+        
+        if color_col and color_col in plot_df.columns:
             scatter = ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
                                 c=plot_df[color_col].values,
                                 s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
@@ -2257,10 +2274,13 @@ def main():
             
             # 2D Scatter
             st.subheader("2D Concentration Map (Scatter)")
+            # Создаем копию и сразу удаляем все дубликаты колонок
             df_clean = df.copy().reset_index(drop=True)
-            # Удаляем дублирующиеся колонки перед передачей в функцию визуализации
-            if df_clean.columns.duplicated().any():
-                df_clean = df_clean.loc[:, ~df_clean.columns.duplicated(keep='last')]
+            # Принудительно удаляем дублирующиеся колонки (оставляем первые)
+            df_clean = df_clean.loc[:, ~df_clean.columns.duplicated(keep='first')]
+            # Дополнительная очистка: удаляем колонки с полностью нулевыми значениями (кроме целевых)
+            cols_to_keep = [x_axis, y_axis, z_axis] + [c for c in df_clean.columns if c not in [x_axis, y_axis, z_axis]]
+            df_clean = df_clean[cols_to_keep]
             fig = ScientificVisualizer.plot_scatter_2d(df_clean, x_axis, y_axis, color_col=z_axis)
             st.pyplot(fig)
             

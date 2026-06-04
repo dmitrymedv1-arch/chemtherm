@@ -1516,12 +1516,19 @@ def main():
             # Alpha range
             alpha_col = 'α·106 (K-1)'
             if alpha_col in df.columns:
-                alpha_min = float(df[alpha_col].min())
-                alpha_max = float(df[alpha_col].max())
-                if alpha_min < alpha_max:
-                    alpha_range = st.slider("α (×10⁶ K⁻¹)", alpha_min, alpha_max, (alpha_min, alpha_max))
+                # Convert to numeric, coerce errors to NaN
+                alpha_numeric = pd.to_numeric(df[alpha_col], errors='coerce')
+                alpha_numeric = alpha_numeric.dropna()
+                
+                if len(alpha_numeric) > 0:
+                    alpha_min = float(alpha_numeric.min())
+                    alpha_max = float(alpha_numeric.max())
+                    if alpha_min < alpha_max:
+                        alpha_range = st.slider("α (×10⁶ K⁻¹)", alpha_min, alpha_max, (alpha_min, alpha_max))
+                    else:
+                        alpha_range = (alpha_min, alpha_max)
                 else:
-                    alpha_range = (alpha_min, alpha_max)
+                    alpha_range = (0, 20)
             else:
                 alpha_range = (0, 20)
             

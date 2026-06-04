@@ -1073,7 +1073,8 @@ class ScientificVisualizer:
         
         # Filter valid data (exclude zeros that may come from missing data)
         plot_df = df[[x_col, y_col]].dropna()
-        plot_df = plot_df[plot_df[y_col] != 0]
+        plot_df = plot_df.reset_index(drop=True)
+        plot_df = plot_df[plot_df[y_col] != 0]  
         
         if len(plot_df) > 0:
             groups = plot_df.groupby(x_col)[y_col].apply(list).to_dict()

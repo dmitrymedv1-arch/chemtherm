@@ -16,3 +16,4 @@ statsmodels
 plotly-express
 pillow
 adjustText
+xgboost

@@ -1422,10 +1422,13 @@ class ScientificVisualizer:
         # Prepare data - drop NaN in x and y
         plot_df = df[[x_col, y_col]].dropna()
         
+        # Add size column if specified - using direct assignment to avoid column overlap
         if size_col and size_col in df.columns:
-            plot_df = plot_df.join(df[size_col])
+            plot_df[size_col] = df.loc[plot_df.index, size_col]
+        
+        # Add color column if specified - using direct assignment to avoid column overlap
         if color_col and color_col in df.columns:
-            plot_df = plot_df.join(df[color_col])
+            plot_df[color_col] = df.loc[plot_df.index, color_col]
         
         if len(plot_df) < 3:
             ax.text(0.5, 0.5, f"Not enough valid data (n={len(plot_df)})", 
@@ -1435,26 +1438,39 @@ class ScientificVisualizer:
         # Bubble sizes (scale to reasonable range)
         if size_col and size_col in plot_df.columns:
             sizes = plot_df[size_col].values
-            # Scale sizes between 20 and 500
+            # Remove NaN for scaling
+            sizes = sizes[~np.isnan(sizes)]
             if len(sizes) > 1 and sizes.max() > sizes.min():
-                sizes_scaled = 20 + 480 * (sizes - sizes.min()) / (sizes.max() - sizes.min())
+                sizes_scaled = 20 + 480 * (plot_df[size_col].values - sizes.min()) / (sizes.max() - sizes.min())
+                # Handle any remaining NaN after scaling
+                sizes_scaled = np.nan_to_num(sizes_scaled, nan=100)
             else:
-                sizes_scaled = np.full(len(sizes), 100)
+                sizes_scaled = np.full(len(plot_df), 100)
         else:
             sizes_scaled = np.full(len(plot_df), 100)
         
         # Create scatter with bubbles
         if color_col and color_col in plot_df.columns:
-            scatter = ax.scatter(plot_df[x_col], plot_df[y_col], 
-                                s=sizes_scaled, c=plot_df[color_col],
-                                cmap=ScientificVisualizer.CMAPS['thermal'],
-                                alpha=0.6, edgecolors='black', linewidth=0.8)
-            cbar = plt.colorbar(scatter, ax=ax)
-            cbar.set_label(color_col, fontsize=10, fontweight='bold')
+            # Filter out NaN in color column for scatter
+            color_valid_mask = ~np.isnan(plot_df[color_col].values)
+            if color_valid_mask.any():
+                scatter = ax.scatter(plot_df[x_col].values[color_valid_mask], 
+                                    plot_df[y_col].values[color_valid_mask], 
+                                    s=sizes_scaled[color_valid_mask], 
+                                    c=plot_df[color_col].values[color_valid_mask],
+                                    cmap=ScientificVisualizer.CMAPS['thermal'],
+                                    alpha=0.6, edgecolors='black', linewidth=0.8)
+                cbar = plt.colorbar(scatter, ax=ax)
+                cbar.set_label(color_col, fontsize=10, fontweight='bold')
+            else:
+                # Fallback: no valid color data
+                ax.scatter(plot_df[x_col], plot_df[y_col], 
+                          s=sizes_scaled, c=ScientificVisualizer.COLORS['primary'],
+                          alpha=0.6, edgecolors='black', linewidth=0.8)
         else:
-            scatter = ax.scatter(plot_df[x_col], plot_df[y_col], 
-                                s=sizes_scaled, c=ScientificVisualizer.COLORS['primary'],
-                                alpha=0.6, edgecolors='black', linewidth=0.8)
+            ax.scatter(plot_df[x_col], plot_df[y_col], 
+                      s=sizes_scaled, c=ScientificVisualizer.COLORS['primary'],
+                      alpha=0.6, edgecolors='black', linewidth=0.8)
         
         # Add density contours (heatmap-style)
         try:
@@ -1462,20 +1478,25 @@ class ScientificVisualizer:
             x_vals = plot_df[x_col].values
             y_vals = plot_df[y_col].values
             
-            if len(x_vals) >= 4:
+            # Remove NaN for KDE
+            kde_valid_mask = ~(np.isnan(x_vals) | np.isnan(y_vals))
+            x_vals_clean = x_vals[kde_valid_mask]
+            y_vals_clean = y_vals[kde_valid_mask]
+            
+            if len(x_vals_clean) >= 4:
                 # Create grid for contour
-                x_grid = np.linspace(x_vals.min(), x_vals.max(), 50)
-                y_grid = np.linspace(y_vals.min(), y_vals.max(), 50)
+                x_grid = np.linspace(x_vals_clean.min(), x_vals_clean.max(), 50)
+                y_grid = np.linspace(y_vals_clean.min(), y_vals_clean.max(), 50)
                 X_grid, Y_grid = np.meshgrid(x_grid, y_grid)
                 
                 # Calculate KDE
-                xy = np.vstack([x_vals, y_vals])
+                xy = np.vstack([x_vals_clean, y_vals_clean])
                 kde = gaussian_kde(xy)
                 Z = kde(np.vstack([X_grid.ravel(), Y_grid.ravel()])).reshape(X_grid.shape)
                 
                 # Plot contours
                 contour = ax.contour(X_grid, Y_grid, Z, levels=5, 
-                                     colors='white', linewidths=0.8, alpha=0.6)
+                                    colors='white', linewidths=0.8, alpha=0.6)
                 ax.clabel(contour, inline=True, fontsize=8, fmt='%.2f')
         except Exception:
             pass  # Skip density contours if fails
@@ -1487,7 +1508,12 @@ class ScientificVisualizer:
                 size_vals = np.linspace(size_vals.min(), size_vals.max(), 4)
             for size_val in size_vals:
                 if not np.isnan(size_val):
-                    scaled_size = 20 + 480 * (size_val - plot_df[size_col].min()) / (plot_df[size_col].max() - plot_df[size_col].min())
+                    # Calculate scaled size for legend
+                    sizes_clean = plot_df[size_col].dropna().values
+                    if len(sizes_clean) > 1 and sizes_clean.max() > sizes_clean.min():
+                        scaled_size = 20 + 480 * (size_val - sizes_clean.min()) / (sizes_clean.max() - sizes_clean.min())
+                    else:
+                        scaled_size = 100
                     ax.scatter([], [], s=scaled_size, c='gray', alpha=0.6, 
                               edgecolors='black', linewidth=0.8,
                               label=f'{size_col} = {size_val:.3f}')

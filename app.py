@@ -2,21 +2,23 @@
 Streamlit Application for Analysis of Thermal and Chemical Expansion
 of Proton-Conducting Perovskite Oxides
 
-Version: 2.2 (with full handling of '-' and missing values)
+Version: 3.0 (with NaN handling, extended descriptors, enhanced visualizations)
 Author: Materials Informatics Research
 Description: Comprehensive analysis tool for understanding composition-structure-property
              relationships in proton-conducting perovskites with focus on thermal
              expansion (α), chemical expansion (β), and phase transitions.
              
 Features:
-- Robust handling of '-' and missing values in all data fields
+- Robust handling of '-' and missing values (now using NaN instead of 0)
 - Upload and process two independent datasets via text/CSV/TSV input
 - Calculate 35+ structural, electronegativity, and thermodynamic descriptors
 - Interactive visualizations with scientific styling
 - Machine learning models for property prediction
 - SHAP analysis for interpretability
-- Phase transition impact analysis
+- Phase transition impact analysis with advanced plots
 - Clustering and dimensionality reduction
+- Enhanced pairplot with user-selectable descriptors
+- Bubble charts with density contours (heatmap-style)
 """
 
 import streamlit as st
@@ -62,15 +64,17 @@ from io import StringIO
 warnings.filterwarnings('ignore')
 
 # ============================================================================
-# 0. УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ДЛЯ БЕЗОПАСНОГО ПРЕОБРАЗОВАНИЯ В FLOAT
+# 0. УНИВЕРСАЛЬНАЯ ФУНКЦИЯ ДЛЯ БЕЗОПАСНОГО ПРЕОБРАЗОВАНИЯ В FLOAT (теперь возвращает NaN)
 # ============================================================================
 
-def safe_float_conversion(value: Any, default: float = 0.0) -> float:
+def safe_float_conversion(value: Any, default: float = np.nan) -> float:
     """
     Safely convert any value to float, handling:
     - '-', '—', '', None, NaN
     - Strings with commas (European format: '0,0971847700154417')
     - Lists, tuples, and other sequences
+    
+    Returns NaN for missing values instead of 0 to preserve physical meaning.
     """
     # Handle None, NaN, and empty values
     if value is None:
@@ -122,10 +126,10 @@ def safe_parse_temperature_range(temp_range_str: Any) -> Tuple[float, float, flo
     Safely parse temperature range string like '27-1000' or '430-630'
     Returns (T_min, T_max, T_span, T_mid)
     """
-    T_min = 0.0
-    T_max = 0.0
-    T_span = 0.0
-    T_mid = 0.0
+    T_min = np.nan
+    T_max = np.nan
+    T_span = np.nan
+    T_mid = np.nan
     
     if pd.isna(temp_range_str) or temp_range_str == '-' or temp_range_str == '':
         return T_min, T_max, T_span, T_mid
@@ -135,9 +139,9 @@ def safe_parse_temperature_range(temp_range_str: Any) -> Tuple[float, float, flo
         parts = temp_str.split('-')
         if len(parts) == 2:
             try:
-                T_min = safe_float_conversion(parts[0].strip(), 0.0)
-                T_max = safe_float_conversion(parts[1].strip(), 0.0)
-                if T_min > 0 and T_max > 0 and T_max > T_min:
+                T_min = safe_float_conversion(parts[0].strip(), np.nan)
+                T_max = safe_float_conversion(parts[1].strip(), np.nan)
+                if not np.isnan(T_min) and not np.isnan(T_max) and T_max > T_min:
                     T_span = T_max - T_min
                     T_mid = (T_min + T_max) / 2
             except (ValueError, TypeError):
@@ -149,7 +153,7 @@ def safe_parse_temperature_range(temp_range_str: Any) -> Tuple[float, float, flo
 def safe_parse_semicolon_values(value: Any) -> List[float]:
     """
     Safely parse semicolon-separated values like '400;600' or '10.6;4.73;10.1'
-    Returns list of floats
+    Returns list of floats (empty list for missing)
     """
     if pd.isna(value) or value == '-' or value == '':
         return []
@@ -161,13 +165,13 @@ def safe_parse_semicolon_values(value: Any) -> List[float]:
         for part in parts:
             part = part.strip()
             if part and part != '-':
-                val = safe_float_conversion(part, None)
-                if val is not None:
+                val = safe_float_conversion(part, np.nan)
+                if not np.isnan(val):
                     result.append(val)
         return result
     else:
-        val = safe_float_conversion(value_str, None)
-        return [val] if val is not None else []
+        val = safe_float_conversion(value_str, np.nan)
+        return [val] if not np.isnan(val) else []
 
 # ============================================================================
 # 1. НАСТРОЙКИ СТРАНИЦЫ И СТИЛЯ
@@ -487,83 +491,99 @@ class PerovskiteDescriptorCalculator:
     def get_ionic_radius(self, element: str, site: str) -> float:
         """Get ionic radius for element based on site (A or B)"""
         if pd.isna(element) or element == '-' or element == '':
-            return 0.0
+            return np.nan
         
         # Determine coordination number based on site
         if site.upper() == 'A':
             # A-site typically CN=12, fallback to CN=8
             radius = ionic_radii.cn12.get(element, None)
             if radius is None:
-                radius = ionic_radii.cn8.get(element, 0.0)
+                radius = ionic_radii.cn8.get(element, np.nan)
         else:  # B-site
             # B-site typically CN=6, fallback to CN=4
             radius = ionic_radii.cn6.get(element, None)
             if radius is None:
-                radius = ionic_radii.cn4.get(element, 0.0)
-        return radius if radius is not None else 0.0
+                radius = ionic_radii.cn4.get(element, np.nan)
+        return radius if radius is not None else np.nan
     
     def get_electronegativity(self, element: str) -> float:
         """Get Pauling electronegativity"""
         if pd.isna(element) or element == '-' or element == '':
-            return 0.0
-        return element_props.electronegativity.get(element, 0.0)
+            return np.nan
+        return element_props.electronegativity.get(element, np.nan)
     
     def get_polarizability(self, element: str) -> float:
         """Get ionic polarizability"""
         if pd.isna(element) or element == '-' or element == '':
-            return 0.0
-        return element_props.polarizability.get(element, 0.0)
+            return np.nan
+        return element_props.polarizability.get(element, np.nan)
     
     def get_ionization_potential(self, element: str) -> float:
         """Get first ionization potential (eV)"""
         if pd.isna(element) or element == '-' or element == '':
-            return 0.0
-        return element_props.ionization_potential.get(element, 0.0)
+            return np.nan
+        return element_props.ionization_potential.get(element, np.nan)
     
     def get_valency(self, element: str) -> int:
         """Get common oxidation state"""
         if pd.isna(element) or element == '-' or element == '':
-            return 0
-        return element_props.valency.get(element, 0)
+            return np.nan
+        return element_props.valency.get(element, np.nan)
     
     def calculate_average_radius(self, elements: List[str], concentrations: List[float], site: str) -> float:
-        """Calculate weighted average ionic radius"""
+        """Calculate weighted average ionic radius (returns NaN if no valid data)"""
         total = 0.0
+        weight_sum = 0.0
         for elem, conc in zip(elements, concentrations):
-            if conc > 0 and elem not in [None, '-', '']:
-                total += conc * self.get_ionic_radius(elem, site)
-        return total if total > 0 else 0.0
+            if not pd.isna(conc) and conc > 0 and elem not in [None, '-', ''] and not pd.isna(elem):
+                rad = self.get_ionic_radius(elem, site)
+                if not np.isnan(rad):
+                    total += conc * rad
+                    weight_sum += conc
+        return total / weight_sum if weight_sum > 0 else np.nan
     
     def calculate_average_electronegativity(self, elements: List[str], concentrations: List[float]) -> float:
-        """Calculate weighted average electronegativity"""
+        """Calculate weighted average electronegativity (returns NaN if no valid data)"""
         total = 0.0
+        weight_sum = 0.0
         for elem, conc in zip(elements, concentrations):
-            if conc > 0 and elem not in [None, '-', '']:
-                total += conc * self.get_electronegativity(elem)
-        return total if total > 0 else 0.0
+            if not pd.isna(conc) and conc > 0 and elem not in [None, '-', ''] and not pd.isna(elem):
+                chi = self.get_electronegativity(elem)
+                if not np.isnan(chi):
+                    total += conc * chi
+                    weight_sum += conc
+        return total / weight_sum if weight_sum > 0 else np.nan
     
     def calculate_average_polarizability(self, elements: List[str], concentrations: List[float]) -> float:
-        """Calculate weighted average polarizability"""
+        """Calculate weighted average polarizability (returns NaN if no valid data)"""
         total = 0.0
+        weight_sum = 0.0
         for elem, conc in zip(elements, concentrations):
-            if conc > 0 and elem not in [None, '-', '']:
-                total += conc * self.get_polarizability(elem)
-        return total if total > 0 else 0.0
+            if not pd.isna(conc) and conc > 0 and elem not in [None, '-', ''] and not pd.isna(elem):
+                pol = self.get_polarizability(elem)
+                if not np.isnan(pol):
+                    total += conc * pol
+                    weight_sum += conc
+        return total / weight_sum if weight_sum > 0 else np.nan
     
     def calculate_average_valency(self, elements: List[str], concentrations: List[float]) -> float:
-        """Calculate weighted average valency"""
+        """Calculate weighted average valency (returns NaN if no valid data)"""
         total = 0.0
+        weight_sum = 0.0
         for elem, conc in zip(elements, concentrations):
-            if conc > 0 and elem not in [None, '-', '']:
-                total += conc * self.get_valency(elem)
-        return total if total > 0 else 0.0
+            if not pd.isna(conc) and conc > 0 and elem not in [None, '-', ''] and not pd.isna(elem):
+                val = self.get_valency(elem)
+                if not np.isnan(val):
+                    total += conc * val
+                    weight_sum += conc
+        return total / weight_sum if weight_sum > 0 else np.nan
     
     def calculate_configurational_entropy(self, concentrations: List[float]) -> float:
         """Calculate configurational entropy: S = -R * Σ(x_i * ln(x_i))"""
         total = 0.0
-        valid_concs = [c for c in concentrations if c > 0]
+        valid_concs = [c for c in concentrations if not pd.isna(c) and c > 0]
         if not valid_concs:
-            return 0.0
+            return np.nan
         # Normalize to sum=1 if not already
         sum_conc = sum(valid_concs)
         if sum_conc > 0:
@@ -577,7 +597,7 @@ class PerovskiteDescriptorCalculator:
         """
         Calculate all 35+ descriptors for a given composition row
         
-        Returns dictionary with descriptor names and values
+        Returns dictionary with descriptor names and values (NaN for missing)
         """
         descriptors = {}
         
@@ -589,30 +609,63 @@ class PerovskiteDescriptorCalculator:
         D1 = row.get('D1', None) if not pd.isna(row.get('D1', None)) else None
         D2 = row.get('D2', None) if not pd.isna(row.get('D2', None)) else None
         
-        # Concentrations - using safe_float_conversion for all
-        conc_A_prime = safe_float_conversion(row.get("[A']", 0), 0.0)
-        conc_B_prime = safe_float_conversion(row.get("[B']", 0), 0.0)
-        conc_D1 = safe_float_conversion(row.get("[D1]", 0), 0.0)
-        conc_D2 = safe_float_conversion(row.get("[D2]", 0), 0.0)
+        # Concentrations - using safe_float_conversion (returns NaN for missing)
+        conc_A_prime = safe_float_conversion(row.get("[A']", np.nan), np.nan)
+        conc_B_prime = safe_float_conversion(row.get("[B']", np.nan), np.nan)
+        conc_D1 = safe_float_conversion(row.get("[D1]", np.nan), np.nan)
+        conc_D2 = safe_float_conversion(row.get("[D2]", np.nan), np.nan)
         
-        # Ensure concentrations are within [0, 1]
-        conc_A_prime = max(0.0, min(1.0, conc_A_prime))
-        conc_B_prime = max(0.0, min(1.0, conc_B_prime))
-        conc_D1 = max(0.0, min(1.0, conc_D1))
-        conc_D2 = max(0.0, min(1.0, conc_D2))
+        # Ensure concentrations are within [0, 1] if not NaN
+        if not np.isnan(conc_A_prime):
+            conc_A_prime = max(0.0, min(1.0, conc_A_prime))
+        if not np.isnan(conc_B_prime):
+            conc_B_prime = max(0.0, min(1.0, conc_B_prime))
+        if not np.isnan(conc_D1):
+            conc_D1 = max(0.0, min(1.0, conc_D1))
+        if not np.isnan(conc_D2):
+            conc_D2 = max(0.0, min(1.0, conc_D2))
         
-        # Calculate remaining concentrations
-        conc_A = 1.0 - conc_A_prime
-        conc_B = 1.0 - conc_B_prime - conc_D1 - conc_D2
+        # Calculate remaining concentrations (handling NaNs)
+        conc_A = 1.0 - (conc_A_prime if not np.isnan(conc_A_prime) else 0)
+        
+        # total_dopant_B is ONLY D1+D2 (acceptor dopants creating vacancies)
+        total_dopant_B_val = 0.0
+        if not np.isnan(conc_D1):
+            total_dopant_B_val += conc_D1
+        if not np.isnan(conc_D2):
+            total_dopant_B_val += conc_D2
+        
+        # B concentration = 1 - B_prime - D1 - D2
+        conc_B = 1.0
+        if not np.isnan(conc_B_prime):
+            conc_B -= conc_B_prime
+        if not np.isnan(conc_D1):
+            conc_B -= conc_D1
+        if not np.isnan(conc_D2):
+            conc_B -= conc_D2
         conc_B = max(0.0, conc_B)  # Ensure non-negative
+        
+        # Store individual concentration descriptors
+        descriptors['conc_A_prime'] = conc_A_prime if not np.isnan(conc_A_prime) else 0.0
+        descriptors['conc_B_prime'] = conc_B_prime if not np.isnan(conc_B_prime) else 0.0
+        descriptors['conc_D1'] = conc_D1 if not np.isnan(conc_D1) else 0.0
+        descriptors['conc_D2'] = conc_D2 if not np.isnan(conc_D2) else 0.0
+        descriptors['conc_A'] = conc_A
+        descriptors['conc_B'] = conc_B
         
         # ====================================================================
         # Category 1: Geometric descriptors
         # ====================================================================
         
         # A-site elements and concentrations
-        A_elements = [A, A_prime] if A_prime not in [None, '-', ''] else [A]
-        A_concentrations = [conc_A, conc_A_prime] if A_prime not in [None, '-', ''] else [1.0]
+        A_elements = []
+        A_concentrations = []
+        if A and A not in [None, '-', '']:
+            A_elements.append(A)
+            A_concentrations.append(conc_A)
+        if A_prime and A_prime not in [None, '-', ''] and conc_A_prime > 0:
+            A_elements.append(A_prime)
+            A_concentrations.append(conc_A_prime)
         
         # B-site elements and concentrations
         B_elements = []
@@ -634,41 +687,70 @@ class PerovskiteDescriptorCalculator:
         rA_avg = self.calculate_average_radius(A_elements, A_concentrations, 'A')
         rB_avg = self.calculate_average_radius(B_elements, B_concentrations, 'B')
         
-        descriptors['rA_avg'] = rA_avg
-        descriptors['rB_avg'] = rB_avg
-        descriptors['rA_rB_ratio'] = rA_avg / rB_avg if rB_avg > 0 else 0
+        descriptors['rA_avg'] = rA_avg if not np.isnan(rA_avg) else 0.0
+        descriptors['rB_avg'] = rB_avg if not np.isnan(rB_avg) else 0.0
+        descriptors['rA_rB_ratio'] = (rA_avg / rB_avg) if (not np.isnan(rA_avg) and not np.isnan(rB_avg) and rB_avg > 0) else 0.0
         
         # Tolerance factor (Goldschmidt)
         sqrt2 = np.sqrt(2)
-        denominator = sqrt2 * (rB_avg + self.r_o)
-        t = (rA_avg + self.r_o) / denominator if denominator > 0 else 0
+        denominator = sqrt2 * (rB_avg + self.r_o) if not np.isnan(rB_avg) else 0
+        t = (rA_avg + self.r_o) / denominator if (not np.isnan(rA_avg) and denominator > 0) else 0
         descriptors['tolerance_factor'] = t
         descriptors['tolerance_deviation'] = abs(1 - t)
         
         # Octahedral factor
-        octahedral = rB_avg / self.r_o if self.r_o > 0 else 0
+        octahedral = rB_avg / self.r_o if (not np.isnan(rB_avg) and self.r_o > 0) else 0
         descriptors['octahedral_factor'] = octahedral
         
         # Radius difference
-        delta_r_AB = abs(rA_avg - rB_avg)
+        if not np.isnan(rA_avg) and not np.isnan(rB_avg):
+            delta_r_AB = abs(rA_avg - rB_avg)
+        else:
+            delta_r_AB = 0.0
         descriptors['delta_r_AB'] = delta_r_AB
         descriptors['delta_r_AB_norm'] = delta_r_AB / self.r_o if self.r_o > 0 else 0
         
         # Variance of B-site radii
         if len(B_elements) > 1:
-            rB_squared_avg = sum(c * (self.get_ionic_radius(e, 'B')**2) 
-                                 for e, c in zip(B_elements, B_concentrations) if e not in [None, '-', ''])
-            rB_avg_sq = descriptors['rB_avg']**2
-            descriptors['variance_rB'] = max(0, rB_squared_avg - rB_avg_sq)
+            valid_radii = []
+            valid_concs = []
+            for e, c in zip(B_elements, B_concentrations):
+                rad = self.get_ionic_radius(e, 'B')
+                if not np.isnan(rad) and c > 0:
+                    valid_radii.append(rad)
+                    valid_concs.append(c)
+            if len(valid_radii) > 1:
+                total_conc = sum(valid_concs)
+                if total_conc > 0:
+                    rB_squared_avg = sum(c * (r**2) for r, c in zip(valid_radii, valid_concs)) / total_conc
+                    rB_avg_sq = (descriptors['rB_avg'])**2
+                    descriptors['variance_rB'] = max(0, rB_squared_avg - rB_avg_sq)
+                else:
+                    descriptors['variance_rB'] = 0.0
+            else:
+                descriptors['variance_rB'] = 0.0
         else:
             descriptors['variance_rB'] = 0.0
         
         # Variance of A-site radii
         if len(A_elements) > 1:
-            rA_squared_avg = sum(c * (self.get_ionic_radius(e, 'A')**2)
-                                 for e, c in zip(A_elements, A_concentrations) if e not in [None, '-', ''])
-            rA_avg_sq = descriptors['rA_avg']**2
-            descriptors['variance_rA'] = max(0, rA_squared_avg - rA_avg_sq)
+            valid_radii = []
+            valid_concs = []
+            for e, c in zip(A_elements, A_concentrations):
+                rad = self.get_ionic_radius(e, 'A')
+                if not np.isnan(rad) and c > 0:
+                    valid_radii.append(rad)
+                    valid_concs.append(c)
+            if len(valid_radii) > 1:
+                total_conc = sum(valid_concs)
+                if total_conc > 0:
+                    rA_squared_avg = sum(c * (r**2) for r, c in zip(valid_radii, valid_concs)) / total_conc
+                    rA_avg_sq = (descriptors['rA_avg'])**2
+                    descriptors['variance_rA'] = max(0, rA_squared_avg - rA_avg_sq)
+                else:
+                    descriptors['variance_rA'] = 0.0
+            else:
+                descriptors['variance_rA'] = 0.0
         else:
             descriptors['variance_rA'] = 0.0
         
@@ -677,30 +759,36 @@ class PerovskiteDescriptorCalculator:
         # ====================================================================
         
         # Individual element electronegativities
-        descriptors['chi_A'] = self.get_electronegativity(A) if A else 0
-        descriptors['chi_A_prime'] = self.get_electronegativity(A_prime) if A_prime else 0
-        descriptors['chi_B'] = self.get_electronegativity(B) if B else 0
-        descriptors['chi_B_prime'] = self.get_electronegativity(B_prime) if B_prime else 0
-        descriptors['chi_D1'] = self.get_electronegativity(D1) if D1 else 0
-        descriptors['chi_D2'] = self.get_electronegativity(D2) if D2 else 0
+        descriptors['chi_A'] = self.get_electronegativity(A) if A and A not in [None, '-', ''] else np.nan
+        descriptors['chi_A_prime'] = self.get_electronegativity(A_prime) if A_prime and A_prime not in [None, '-', ''] else np.nan
+        descriptors['chi_B'] = self.get_electronegativity(B) if B and B not in [None, '-', ''] else np.nan
+        descriptors['chi_B_prime'] = self.get_electronegativity(B_prime) if B_prime and B_prime not in [None, '-', ''] else np.nan
+        descriptors['chi_D1'] = self.get_electronegativity(D1) if D1 and D1 not in [None, '-', ''] else np.nan
+        descriptors['chi_D2'] = self.get_electronegativity(D2) if D2 and D2 not in [None, '-', ''] else np.nan
+        
+        # Replace NaN with 0 for compatibility
+        for key in ['chi_A', 'chi_A_prime', 'chi_B', 'chi_B_prime', 'chi_D1', 'chi_D2']:
+            if np.isnan(descriptors[key]):
+                descriptors[key] = 0.0
         
         # Average electronegativities
         chiA_avg = self.calculate_average_electronegativity(A_elements, A_concentrations)
         chiB_avg = self.calculate_average_electronegativity(B_elements, B_concentrations)
-        descriptors['chiA_avg'] = chiA_avg
-        descriptors['chiB_avg'] = chiB_avg
+        
+        descriptors['chiA_avg'] = chiA_avg if not np.isnan(chiA_avg) else 0.0
+        descriptors['chiB_avg'] = chiB_avg if not np.isnan(chiB_avg) else 0.0
         
         # Difference and ratio
-        delta_chi_AB = abs(chiA_avg - chiB_avg)
+        delta_chi_AB = abs(descriptors['chiA_avg'] - descriptors['chiB_avg'])
         descriptors['delta_chi_AB'] = delta_chi_AB
-        descriptors['chi_ratio_AB'] = chiA_avg / chiB_avg if chiB_avg > 0 else 0
+        descriptors['chi_ratio_AB'] = descriptors['chiA_avg'] / descriptors['chiB_avg'] if descriptors['chiB_avg'] > 0 else 0
         
         # Total average electronegativity
-        descriptors['chi_total_avg'] = (chiA_avg + chiB_avg) / 2
+        descriptors['chi_total_avg'] = (descriptors['chiA_avg'] + descriptors['chiB_avg']) / 2
         
         # Ionicity (Pauling formula)
-        ionicity_AO = 1 - np.exp(-0.25 * (chiA_avg - self.chi_o)**2)
-        ionicity_BO = 1 - np.exp(-0.25 * (chiB_avg - self.chi_o)**2)
+        ionicity_AO = 1 - np.exp(-0.25 * (descriptors['chiA_avg'] - self.chi_o)**2)
+        ionicity_BO = 1 - np.exp(-0.25 * (descriptors['chiB_avg'] - self.chi_o)**2)
         descriptors['ionicity_AO'] = ionicity_AO
         descriptors['ionicity_BO'] = ionicity_BO
         
@@ -714,21 +802,25 @@ class PerovskiteDescriptorCalculator:
         descriptors['S_config_total'] = descriptors['S_config_A'] + descriptors['S_config_B']
         
         # Valency
-        descriptors['valency_A'] = self.get_valency(A) if A else 0
-        descriptors['valency_A_prime'] = self.get_valency(A_prime) if A_prime else 0
-        descriptors['valency_B'] = self.get_valency(B) if B else 0
-        descriptors['valency_B_prime'] = self.get_valency(B_prime) if B_prime else 0
-        descriptors['valency_D1'] = self.get_valency(D1) if D1 else 0
-        descriptors['valency_D2'] = self.get_valency(D2) if D2 else 0
+        descriptors['valency_A'] = self.get_valency(A) if A and A not in [None, '-', ''] else 0
+        descriptors['valency_A_prime'] = self.get_valency(A_prime) if A_prime and A_prime not in [None, '-', ''] else 0
+        descriptors['valency_B'] = self.get_valency(B) if B and B not in [None, '-', ''] else 0
+        descriptors['valency_B_prime'] = self.get_valency(B_prime) if B_prime and B_prime not in [None, '-', ''] else 0
+        descriptors['valency_D1'] = self.get_valency(D1) if D1 and D1 not in [None, '-', ''] else 0
+        descriptors['valency_D2'] = self.get_valency(D2) if D2 and D2 not in [None, '-', ''] else 0
         
         # Average valency on B-site
         VB_avg = self.calculate_average_valency(B_elements, B_concentrations)
-        descriptors['VB_avg'] = VB_avg
+        descriptors['VB_avg'] = VB_avg if not np.isnan(VB_avg) else 0.0
         
         # Oxygen vacancy proxy (for Ce4+/Zr4+ based perovskites)
-        # Assuming perovskite with A2+B4+O3, dopants with M3+ create oxygen vacancies
-        # Vacancy concentration = [D1]/2 + [D2]/2
-        descriptors['Vo_proxy'] = (conc_D1 + conc_D2) / 2
+        # Vacancy concentration = [D1]/2 + [D2]/2 (only from acceptor dopants, NOT from B')
+        Vo_proxy_val = 0.0
+        if not np.isnan(conc_D1):
+            Vo_proxy_val += conc_D1 / 2
+        if not np.isnan(conc_D2):
+            Vo_proxy_val += conc_D2 / 2
+        descriptors['Vo_proxy'] = Vo_proxy_val
         
         # ====================================================================
         # Category 4: Combined (physics-inspired) descriptors
@@ -752,54 +844,59 @@ class PerovskiteDescriptorCalculator:
         descriptors['chi_ratio_t'] = descriptors['chi_ratio_AB'] * t
         
         # rB × chiB
-        descriptors['rB_x_chiB'] = rB_avg * chiB_avg
+        descriptors['rB_x_chiB'] = descriptors['rB_avg'] * descriptors['chiB_avg']
         
         # ====================================================================
         # Category 5: Additional useful descriptors
         # ====================================================================
         
-        # Total dopant concentrations
-        descriptors['total_dopant_A'] = conc_A_prime
-        descriptors['total_dopant_B'] = conc_B_prime + conc_D1 + conc_D2
-        descriptors['total_dopant'] = conc_A_prime + conc_B_prime + conc_D1 + conc_D2
+        # Total dopant concentrations (distinguishing B' from D1+D2)
+        descriptors['total_dopant_A'] = conc_A_prime if not np.isnan(conc_A_prime) else 0.0
+        descriptors['total_dopant_B'] = total_dopant_B_val  # ONLY D1+D2, NOT including B'
+        descriptors['total_dopant_B_with_Bprime'] = total_dopant_B_val + (conc_B_prime if not np.isnan(conc_B_prime) else 0.0)
+        descriptors['total_dopant'] = descriptors['total_dopant_A'] + descriptors['total_dopant_B']
         
-        # Oxygen stoichiometry parameter delta - using safe_float_conversion
-        delta = safe_float_conversion(row.get('δ', 0), 0.0)
-        descriptors['delta'] = delta
+        # Oxygen stoichiometry parameter delta
+        delta = safe_float_conversion(row.get('δ', np.nan), np.nan)
+        descriptors['delta'] = delta if not np.isnan(delta) else 0.0
         
-        # Chemical expansion beta - using safe_float_conversion
-        beta_val = safe_float_conversion(row.get('β', 0), 0.0)
-        descriptors['beta'] = beta_val
+        # Chemical expansion beta
+        beta_val = safe_float_conversion(row.get('β', np.nan), np.nan)
+        descriptors['beta'] = beta_val if not np.isnan(beta_val) else 0.0
         
-        # True thermal expansion coefficient alpha - using safe_float_conversion
-        alpha_val = safe_float_conversion(row.get('α·106 (K-1)', 0), 0.0)
-        descriptors['alpha_true'] = alpha_val
+        # True thermal expansion coefficient alpha
+        alpha_val = safe_float_conversion(row.get('α·106 (K-1)', np.nan), np.nan)
+        descriptors['alpha_true'] = alpha_val if not np.isnan(alpha_val) else 0.0
         
-        # Apparent thermal expansion coefficient alpha_av - using safe_float_conversion
-        alpha_av_raw = row.get('αav·106 (K-1)', 0)
+        # Apparent thermal expansion coefficient alpha_av
+        alpha_av_raw = row.get('αav·106 (K-1)', np.nan)
         if pd.isna(alpha_av_raw) or alpha_av_raw == '-' or alpha_av_raw == '':
-            descriptors['alpha_apparent'] = 0.0
+            descriptors['alpha_apparent'] = np.nan
         else:
             alpha_av_list = safe_parse_semicolon_values(alpha_av_raw)
-            descriptors['alpha_apparent'] = alpha_av_list[0] if alpha_av_list else 0.0
+            descriptors['alpha_apparent'] = alpha_av_list[0] if alpha_av_list else np.nan
+        if np.isnan(descriptors['alpha_apparent']):
+            descriptors['alpha_apparent'] = 0.0
         
-        # Water partial pressure - using safe_float_conversion
-        pH2O = safe_float_conversion(row.get('pH2O', 0), 0.0)
-        descriptors['log_pH2O'] = np.log10(pH2O) if pH2O > 0 else -10
+        # Water partial pressure
+        pH2O = safe_float_conversion(row.get('pH2O', np.nan), np.nan)
+        descriptors['log_pH2O'] = np.log10(pH2O) if (not np.isnan(pH2O) and pH2O > 0) else -10
         
-        # Temperature range span - using safe_parse_temperature_range
+        # Temperature range span
         temp_range = row.get('∆T, °C', '')
         T_min, T_max, T_span, T_mid = safe_parse_temperature_range(temp_range)
-        descriptors['T_min'] = T_min
-        descriptors['T_max'] = T_max
-        descriptors['T_span'] = T_span
-        descriptors['T_mid'] = T_mid
+        descriptors['T_min'] = T_min if not np.isnan(T_min) else 0.0
+        descriptors['T_max'] = T_max if not np.isnan(T_max) else 0.0
+        descriptors['T_span'] = T_span if not np.isnan(T_span) else 0.0
+        descriptors['T_mid'] = T_mid if not np.isnan(T_mid) else 0.0
         
-        # Bends temperatures - using safe_parse_semicolon_values
+        # Bends temperatures
         bends_raw = row.get('T(bends), °C', '')
         bends_list = safe_parse_semicolon_values(bends_raw)
-        descriptors['T_bends_first'] = bends_list[0] if bends_list else 0.0
+        descriptors['T_bends_first'] = bends_list[0] if bends_list else np.nan
         descriptors['T_bends_count'] = len(bends_list)
+        if np.isnan(descriptors['T_bends_first']):
+            descriptors['T_bends_first'] = 0.0
         
         # Method encoding (for ML)
         method = row.get('method', '')
@@ -923,7 +1020,7 @@ class ModernProgressBar:
         self.status_text.success(f"✅ {self.desc} completed! Time: {time.time() - self.start_time:.1f}s")
 
 # ============================================================================
-# 6. ВИЗУАЛИЗАЦИИ
+# 6. ВИЗУАЛИЗАЦИИ (РАСШИРЕННЫЕ)
 # ============================================================================
 
 class ScientificVisualizer:
@@ -996,12 +1093,11 @@ class ScientificVisualizer:
     
     @staticmethod
     def plot_distribution(df: pd.DataFrame, column: str, title: str = None, bins: int = 30):
-        """Plot histogram with KDE and statistics"""
+        """Plot histogram with KDE and statistics (ignores NaN)"""
         fig, ax = plt.subplots(figsize=(8, 5))
         
-        # Filter out zeros and NaNs for distribution (zeros may be from missing data)
+        # Filter out NaNs for distribution
         data = df[column].dropna()
-        data = data[data != 0]  # Exclude zeros that came from missing data
         
         if len(data) == 0:
             ax.text(0.5, 0.5, "No valid data available", transform=ax.transAxes, ha='center', va='center')
@@ -1045,12 +1141,11 @@ class ScientificVisualizer:
     @staticmethod
     def plot_boxplot_comparison(df: pd.DataFrame, x_col: str, y_col: str, 
                                  title: str = None, palette: str = 'Set2'):
-        """Create boxplot for categorical comparison"""
+        """Create boxplot for categorical comparison (ignores NaN)"""
         fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Filter valid data (exclude zeros that may come from missing data)
+        # Filter valid data
         plot_df = df[[x_col, y_col]].dropna()
-        plot_df = plot_df[plot_df[y_col] != 0]
         
         if len(plot_df) > 0:
             groups = plot_df.groupby(x_col)[y_col].apply(list).to_dict()
@@ -1083,7 +1178,7 @@ class ScientificVisualizer:
         """
         Create enhanced correlation matrix highlighting top correlations with target
         """
-        # Filter features that exist and have valid data
+        # Filter features that exist and have valid data (at least 5 non-NaN)
         valid_features = [f for f in features if f in df.columns and df[f].notna().sum() > 5]
         
         if len(valid_features) < 2:
@@ -1127,13 +1222,61 @@ class ScientificVisualizer:
         return fig
     
     @staticmethod
+    def plot_pairplot_interactive(df: pd.DataFrame, selected_features: List[str], 
+                                   color_by: str = None, title: str = "Pairplot"):
+        """
+        Create enhanced pairplot with user-selected descriptors.
+        Features: colored points by target variable, KDE on diagonal, customizable.
+        """
+        if len(selected_features) < 2:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.text(0.5, 0.5, "Select at least 2 features", transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        # Filter data: keep rows where all selected features are non-NaN
+        plot_df = df[selected_features].dropna()
+        
+        if len(plot_df) < 3:
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.text(0.5, 0.5, f"Not enough valid data (n={len(plot_df)})", 
+                   transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        # Add color column if specified and available
+        if color_by and color_by in df.columns:
+            color_data = df.loc[plot_df.index, color_by]
+            plot_df = plot_df.copy()
+            plot_df['_color'] = color_data
+        
+        # Create pairplot
+        if color_by and color_by in df.columns and '_color' in plot_df.columns:
+            # Filter out NaN in color column
+            plot_df_color = plot_df.dropna(subset=['_color'])
+            if len(plot_df_color) > 0:
+                g = sns.pairplot(plot_df_color, vars=selected_features, hue='_color',
+                                 diag_kind='kde', palette=ScientificVisualizer.CMAPS['thermal'],
+                                 plot_kws={'alpha': 0.6, 's': 30, 'edgecolor': 'black', 'linewidth': 0.5},
+                                 diag_kws={'fill': True, 'alpha': 0.7})
+                g.fig.suptitle(f'{title}\nColor by: {color_by}', y=1.02, fontsize=14, fontweight='bold')
+            else:
+                g = sns.pairplot(plot_df, vars=selected_features, diag_kind='kde',
+                                 plot_kws={'alpha': 0.6, 's': 30, 'edgecolor': 'black', 'linewidth': 0.5})
+                g.fig.suptitle(title, y=1.02, fontsize=14, fontweight='bold')
+        else:
+            g = sns.pairplot(plot_df, vars=selected_features, diag_kind='kde',
+                             plot_kws={'alpha': 0.6, 's': 30, 'edgecolor': 'black', 'linewidth': 0.5})
+            g.fig.suptitle(title, y=1.02, fontsize=14, fontweight='bold')
+        
+        return g.fig
+    
+    @staticmethod
     def plot_regression_analysis(y_true: np.ndarray, y_pred: np.ndarray, 
                                   model_name: str = 'Model'):
-        """Plot actual vs predicted with residuals"""
+        """Plot actual vs predicted with residuals (ignores NaN)"""
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
         
-        # Filter out zero values that may indicate missing data
-        valid_mask = (y_true != 0) & (y_pred != 0)
+        # Filter out NaN values
+        valid_mask = ~(np.isnan(y_true) | np.isnan(y_pred))
         y_true_valid = y_true[valid_mask]
         y_pred_valid = y_pred[valid_mask]
         
@@ -1230,13 +1373,11 @@ class ScientificVisualizer:
     @staticmethod
     def plot_scatter_2d(df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None,
                          size_col: str = None, title: str = None):
-        """Create 2D scatter plot with optional color and size mapping"""
+        """Create 2D scatter plot with optional color and size mapping (ignores NaN)"""
         fig, ax = plt.subplots(figsize=(9, 7))
         
-        # Prepare data - filter out zeros that indicate missing data for y_col
+        # Prepare data - drop NaN in x and y
         plot_df = df[[x_col, y_col]].dropna()
-        if y_col in plot_df.columns:
-            plot_df = plot_df[plot_df[y_col] != 0]
         
         if color_col and color_col in df.columns:
             plot_df = plot_df.join(df[color_col])
@@ -1247,17 +1388,17 @@ class ScientificVisualizer:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
             return fig
         
-        if color_col:
+        if color_col and color_col in plot_df.columns:
             scatter = ax.scatter(plot_df[x_col], plot_df[y_col], 
-                                c=plot_df[color_col] if color_col else None,
-                                s=plot_df[size_col]*50 if size_col else 50,
+                                c=plot_df[color_col],
+                                s=plot_df[size_col]*50 if size_col and size_col in plot_df.columns else 50,
                                 cmap=ScientificVisualizer.CMAPS['thermal'],
                                 alpha=0.7, edgecolors='black', linewidth=0.5)
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(color_col, fontsize=10)
         else:
             ax.scatter(plot_df[x_col], plot_df[y_col], 
-                      s=plot_df[size_col]*50 if size_col else 50,
+                      s=plot_df[size_col]*50 if size_col and size_col in plot_df.columns else 50,
                       c=ScientificVisualizer.COLORS['primary'],
                       alpha=0.7, edgecolors='black', linewidth=0.5)
         
@@ -1269,9 +1410,100 @@ class ScientificVisualizer:
         return fig
     
     @staticmethod
+    def plot_bubble_with_density(df: pd.DataFrame, x_col: str, y_col: str, 
+                                  size_col: str = None, color_col: str = None,
+                                  title: str = None):
+        """
+        Create bubble chart with density contour overlay (heatmap-style).
+        Features: colorbar on right, size legend, density contours.
+        """
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Prepare data - drop NaN in x and y
+        plot_df = df[[x_col, y_col]].dropna()
+        
+        if size_col and size_col in df.columns:
+            plot_df = plot_df.join(df[size_col])
+        if color_col and color_col in df.columns:
+            plot_df = plot_df.join(df[color_col])
+        
+        if len(plot_df) < 3:
+            ax.text(0.5, 0.5, f"Not enough valid data (n={len(plot_df)})", 
+                   transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        # Bubble sizes (scale to reasonable range)
+        if size_col and size_col in plot_df.columns:
+            sizes = plot_df[size_col].values
+            # Scale sizes between 20 and 500
+            if len(sizes) > 1 and sizes.max() > sizes.min():
+                sizes_scaled = 20 + 480 * (sizes - sizes.min()) / (sizes.max() - sizes.min())
+            else:
+                sizes_scaled = np.full(len(sizes), 100)
+        else:
+            sizes_scaled = np.full(len(plot_df), 100)
+        
+        # Create scatter with bubbles
+        if color_col and color_col in plot_df.columns:
+            scatter = ax.scatter(plot_df[x_col], plot_df[y_col], 
+                                s=sizes_scaled, c=plot_df[color_col],
+                                cmap=ScientificVisualizer.CMAPS['thermal'],
+                                alpha=0.6, edgecolors='black', linewidth=0.8)
+            cbar = plt.colorbar(scatter, ax=ax)
+            cbar.set_label(color_col, fontsize=10, fontweight='bold')
+        else:
+            scatter = ax.scatter(plot_df[x_col], plot_df[y_col], 
+                                s=sizes_scaled, c=ScientificVisualizer.COLORS['primary'],
+                                alpha=0.6, edgecolors='black', linewidth=0.8)
+        
+        # Add density contours (heatmap-style)
+        try:
+            from scipy.stats import gaussian_kde
+            x_vals = plot_df[x_col].values
+            y_vals = plot_df[y_col].values
+            
+            if len(x_vals) >= 4:
+                # Create grid for contour
+                x_grid = np.linspace(x_vals.min(), x_vals.max(), 50)
+                y_grid = np.linspace(y_vals.min(), y_vals.max(), 50)
+                X_grid, Y_grid = np.meshgrid(x_grid, y_grid)
+                
+                # Calculate KDE
+                xy = np.vstack([x_vals, y_vals])
+                kde = gaussian_kde(xy)
+                Z = kde(np.vstack([X_grid.ravel(), Y_grid.ravel()])).reshape(X_grid.shape)
+                
+                # Plot contours
+                contour = ax.contour(X_grid, Y_grid, Z, levels=5, 
+                                     colors='white', linewidths=0.8, alpha=0.6)
+                ax.clabel(contour, inline=True, fontsize=8, fmt='%.2f')
+        except Exception:
+            pass  # Skip density contours if fails
+        
+        # Add size legend
+        if size_col and size_col in plot_df.columns:
+            size_vals = plot_df[size_col].dropna().unique()
+            if len(size_vals) > 3:
+                size_vals = np.linspace(size_vals.min(), size_vals.max(), 4)
+            for size_val in size_vals:
+                if not np.isnan(size_val):
+                    scaled_size = 20 + 480 * (size_val - plot_df[size_col].min()) / (plot_df[size_col].max() - plot_df[size_col].min())
+                    ax.scatter([], [], s=scaled_size, c='gray', alpha=0.6, 
+                              edgecolors='black', linewidth=0.8,
+                              label=f'{size_col} = {size_val:.3f}')
+            ax.legend(loc='upper left', fontsize=8, framealpha=0.9)
+        
+        ax.set_xlabel(x_col, fontsize=11, fontweight='bold')
+        ax.set_ylabel(y_col, fontsize=11, fontweight='bold')
+        ax.set_title(title or f'Bubble Chart: {y_col} vs {x_col}', fontsize=12, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        
+        return fig
+    
+    @staticmethod
     def plot_pca_2d(X_pca: np.ndarray, y: np.ndarray, 
                     labels: List[str] = None, title: str = 'PCA Projection'):
-        """Create 2D PCA scatter plot with color mapping"""
+        """Create 2D PCA scatter plot with color mapping (ignores NaN)"""
         fig, ax = plt.subplots(figsize=(10, 8))
         
         # Filter out invalid points
@@ -1305,7 +1537,7 @@ class ScientificVisualizer:
     @staticmethod
     def plot_concentration_heatmap(df: pd.DataFrame, x_col: str, y_col: str, 
                                     z_col: str, bins: int = 20):
-        """Create 2D heatmap for concentration dependence"""
+        """Create 2D heatmap for concentration dependence (ignores NaN)"""
         fig, ax = plt.subplots(figsize=(10, 8))
         
         # Create grid
@@ -1313,17 +1545,11 @@ class ScientificVisualizer:
         y = df[y_col].values
         z = df[z_col].values
         
-        # Remove NaN and zero values (zero may indicate missing data for z)
+        # Remove NaN
         mask = ~(np.isnan(x) | np.isnan(y) | np.isnan(z))
         x = x[mask]
         y = y[mask]
         z = z[mask]
-        
-        # Also filter out zero z values (likely missing data)
-        nonzero_mask = z != 0
-        x = x[nonzero_mask]
-        y = y[nonzero_mask]
-        z = z[nonzero_mask]
         
         if len(x) < 4:
             ax.text(0.5, 0.5, f"Not enough data points for heatmap (n={len(x)})", 
@@ -1355,6 +1581,153 @@ class ScientificVisualizer:
         ax.set_title(f'{z_col} concentration map', fontsize=12, fontweight='bold')
         
         return fig
+    
+    @staticmethod
+    def plot_phase_transition_vs_dopant(df_phase: pd.DataFrame, df_chem: pd.DataFrame,
+                                          dopant_col: str, temp_col: str = 'T_transition',
+                                          title: str = None):
+        """
+        Plot phase transition temperature vs dopant concentration.
+        Merges phase and chemical data by composition.
+        """
+        fig, ax = plt.subplots(figsize=(10, 7))
+        
+        # Attempt to merge by common composition columns
+        merge_cols = ['A', 'B', '[D1]', '[D2]', 'δ']
+        available_merge = [c for c in merge_cols if c in df_phase.columns and c in df_chem.columns]
+        
+        if not available_merge:
+            ax.text(0.5, 0.5, "Cannot merge phase and chemical data: no common columns", 
+                   transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        try:
+            merged = pd.merge(df_phase, df_chem, on=available_merge, how='inner')
+        except:
+            ax.text(0.5, 0.5, "Merge failed", transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        if len(merged) == 0:
+            ax.text(0.5, 0.5, "No matching samples between phase and chemical datasets", 
+                   transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        # Get temperature data
+        if temp_col not in merged.columns:
+            ax.text(0.5, 0.5, f"Temperature column '{temp_col}' not found", 
+                   transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        plot_df = merged[[dopant_col, temp_col]].dropna()
+        
+        if len(plot_df) < 3:
+            ax.text(0.5, 0.5, f"Not enough valid data (n={len(plot_df)})", 
+                   transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        # Scatter plot with trend line
+        ax.scatter(plot_df[dopant_col], plot_df[temp_col], 
+                  c=ScientificVisualizer.COLORS['primary'], s=60,
+                  alpha=0.7, edgecolors='black', linewidth=0.8)
+        
+        # Add trend line
+        if len(plot_df) > 3:
+            z = np.polyfit(plot_df[dopant_col], plot_df[temp_col], 1)
+            p = np.poly1d(z)
+            x_trend = np.linspace(plot_df[dopant_col].min(), plot_df[dopant_col].max(), 100)
+            ax.plot(x_trend, p(x_trend), 'r--', alpha=0.7, 
+                   label=f'Trend: {z[0]:.1f}·x + {z[1]:.1f}')
+        
+        ax.set_xlabel(dopant_col, fontsize=11, fontweight='bold')
+        ax.set_ylabel('Phase Transition Temperature (°C)', fontsize=11, fontweight='bold')
+        ax.set_title(title or f'Phase Transition Temperature vs {dopant_col}', fontsize=12, fontweight='bold')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        return fig
+    
+    @staticmethod
+    def plot_transition_count_vs_dopant(df_phase: pd.DataFrame, df_chem: pd.DataFrame,
+                                          dopant_col: str, title: str = None):
+        """
+        Plot number of phase transitions vs dopant concentration.
+        """
+        fig, ax = plt.subplots(figsize=(10, 7))
+        
+        # Merge data
+        merge_cols = ['A', 'B', '[D1]', '[D2]', 'δ']
+        available_merge = [c for c in merge_cols if c in df_phase.columns and c in df_chem.columns]
+        
+        if not available_merge:
+            ax.text(0.5, 0.5, "Cannot merge phase and chemical data", 
+                   transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        try:
+            merged = pd.merge(df_phase, df_chem, on=available_merge, how='inner')
+        except:
+            ax.text(0.5, 0.5, "Merge failed", transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        if len(merged) == 0:
+            ax.text(0.5, 0.5, "No matching samples", transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        # Count transitions from Phase transitions (PT) column or parse
+        transition_counts = []
+        valid_dopants = []
+        
+        for idx, row in merged.iterrows():
+            pt_str = row.get('Phase transitions (PT)', '')
+            if pd.isna(pt_str) or pt_str == '-':
+                continue
+            
+            # Count semicolons to estimate number of phases
+            n_transitions = pt_str.count(';')
+            if n_transitions > 0:
+                transition_counts.append(n_transitions)
+            else:
+                transition_counts.append(1)  # At least one phase
+            
+            dopant_val = row.get(dopant_col, np.nan)
+            if not np.isnan(dopant_val):
+                valid_dopants.append(dopant_val)
+        
+        if len(transition_counts) < 3:
+            ax.text(0.5, 0.5, f"Not enough data (n={len(transition_counts)})", 
+                   transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        # Create boxplot by dopant bins
+        dopant_array = np.array(valid_dopants)
+        counts_array = np.array(transition_counts)
+        
+        # Bin dopant concentrations
+        bins = np.linspace(dopant_array.min(), dopant_array.max(), 5)
+        bin_indices = np.digitize(dopant_array, bins)
+        
+        box_data = []
+        bin_labels = []
+        for i in range(1, len(bins)):
+            mask = bin_indices == i
+            if mask.any():
+                box_data.append(counts_array[mask])
+                bin_labels.append(f'{bins[i-1]:.2f}-{bins[i]:.2f}')
+        
+        if box_data:
+            bp = ax.boxplot(box_data, labels=bin_labels, patch_artist=True,
+                           showmeans=True, meanprops={'marker': 'D', 'markerfacecolor': 'red'})
+            
+            for patch in bp['boxes']:
+                patch.set_facecolor(ScientificVisualizer.COLORS['primary'])
+                patch.set_alpha(0.7)
+        
+        ax.set_xlabel(dopant_col, fontsize=11, fontweight='bold')
+        ax.set_ylabel('Number of Phase Transitions', fontsize=11, fontweight='bold')
+        ax.set_title(title or f'Phase Transition Count vs {dopant_col}', fontsize=12, fontweight='bold')
+        ax.grid(True, alpha=0.3, axis='y')
+        
+        return fig
 
 # ============================================================================
 # 7. ML МОДЕЛИ
@@ -1369,11 +1742,10 @@ class MLModelManager:
         
     def prepare_features(self, df: pd.DataFrame, feature_cols: List[str], 
                           target_col: str = None) -> Tuple[np.ndarray, Optional[np.ndarray]]:
-        """Prepare feature matrix and optional target vector"""
-        # Filter valid rows - exclude rows where target is zero (likely missing)
+        """Prepare feature matrix and optional target vector (ignores NaN)"""
+        # Filter valid rows - exclude rows with NaN in any feature or target
         if target_col:
             valid_df = df[feature_cols + [target_col]].dropna()
-            valid_df = valid_df[valid_df[target_col] != 0]  # Exclude zeros from missing data
             if len(valid_df) == 0:
                 return np.array([]), np.array([])
             X = valid_df[feature_cols].values
@@ -1696,22 +2068,26 @@ def main():
             
             # pH2O range
             if 'log_pH2O' in df.columns:
-                pH2O_min = float(df['log_pH2O'].min())
-                pH2O_max = float(df['log_pH2O'].max())
-                if pH2O_min < pH2O_max:
-                    pH2O_range = st.slider("log(pH₂O)", pH2O_min, pH2O_max, (pH2O_min, pH2O_max))
+                pH2O_vals = df['log_pH2O'].dropna()
+                if len(pH2O_vals) > 0:
+                    pH2O_min = float(pH2O_vals.min())
+                    pH2O_max = float(pH2O_vals.max())
+                    if pH2O_min < pH2O_max:
+                        pH2O_range = st.slider("log(pH₂O)", pH2O_min, pH2O_max, (pH2O_min, pH2O_max))
+                    else:
+                        pH2O_range = (pH2O_min, pH2O_max)
                 else:
-                    pH2O_range = (pH2O_min, pH2O_max)
+                    pH2O_range = (-10, 0)
             else:
                 pH2O_range = (-10, 0)
             
             # Alpha range
             alpha_col = 'alpha_true'
             if alpha_col in df.columns:
-                alpha_values = df[alpha_col][df[alpha_col] != 0]  # Exclude zeros from missing data
-                if len(alpha_values) > 0:
-                    alpha_min = float(alpha_values.min())
-                    alpha_max = float(alpha_values.max())
+                alpha_vals = df[alpha_col].dropna()
+                if len(alpha_vals) > 0:
+                    alpha_min = float(alpha_vals.min())
+                    alpha_max = float(alpha_vals.max())
                     if alpha_min < alpha_max:
                         alpha_range = st.slider("α (×10⁶ K⁻¹)", alpha_min, alpha_max, (alpha_min, alpha_max))
                     else:
@@ -1762,7 +2138,7 @@ def main():
                 except Exception as e:
                     st.warning(f"Error processing row {idx}: {e}")
                     # Append empty descriptors
-                    empty_desc = {k: 0.0 for k in PerovskiteDescriptorCalculator().calculate_all_descriptors(chem_df.iloc[0]).keys()}
+                    empty_desc = {k: np.nan for k in PerovskiteDescriptorCalculator().calculate_all_descriptors(chem_df.iloc[0]).keys()}
                     descriptors_list.append(empty_desc)
                 
                 if idx % 5 == 0:
@@ -1790,7 +2166,7 @@ def main():
     if st.session_state.chem_with_descriptors is not None:
         df = st.session_state.filtered_df if 'filtered_df' in st.session_state else st.session_state.chem_with_descriptors
         
-        # Create tabs
+        # Create tabs (removed 3D Scatter tab)
         tabs = st.tabs([
             "📊 Data Overview",
             "📈 EDA & Distributions",
@@ -1816,13 +2192,13 @@ def main():
             with col3:
                 alpha_col = 'alpha_true'
                 if alpha_col in df.columns:
-                    alpha_vals = df[alpha_col][df[alpha_col] != 0]
+                    alpha_vals = df[alpha_col].dropna()
                     mean_alpha = alpha_vals.mean() if len(alpha_vals) > 0 else 0
                     st.metric("Mean α (×10⁶ K⁻¹)", f"{mean_alpha:.2f}")
             with col4:
                 beta_col = 'beta'
                 if beta_col in df.columns:
-                    beta_vals = df[beta_col][df[beta_col] != 0]
+                    beta_vals = df[beta_col].dropna()
                     mean_beta = beta_vals.mean() if len(beta_vals) > 0 else 0
                     st.metric("Mean β", f"{mean_beta:.4f}")
             
@@ -1879,7 +2255,6 @@ def main():
                     positions = []
                     for i, a in enumerate(valid_a_sites):
                         vals = df[df['A'] == a][selected_target].dropna().values
-                        vals = vals[vals != 0]  # Exclude zeros from missing data
                         if len(vals) > 0:
                             data_to_plot.append(vals)
                             positions.append(i)
@@ -1902,6 +2277,7 @@ def main():
             # Select features for correlation
             default_features = ['rB_avg', 'tolerance_factor', 'chiB_avg', 'delta_chi_AB',
                                'variance_rB', 'S_config_B', 'VB_avg', 'Vo_proxy',
+                               'conc_B_prime', 'conc_D1', 'conc_D2', 'total_dopant_B',
                                'alpha_true', 'beta']
             available_features = [f for f in default_features if f in df.columns]
             
@@ -1912,40 +2288,71 @@ def main():
             else:
                 st.warning("Not enough features for correlation analysis")
             
-            # Pairplot (limited to avoid performance issues)
-            st.subheader("Pairplot of Top Features")
-            if len(available_features) >= 4:
-                import seaborn as sns
-                pairplot_df = df[available_features[:5]].dropna()
-                # Filter out zeros that indicate missing data
-                for col in pairplot_df.columns:
-                    pairplot_df = pairplot_df[pairplot_df[col] != 0]
-                if len(pairplot_df) > 0 and len(pairplot_df) < 500:
-                    fig = sns.pairplot(pairplot_df, diag_kind='kde')
-                    st.pyplot(fig)
-                else:
-                    if len(pairplot_df) > 0:
-                        st.info(f"Using {min(200, len(pairplot_df))} samples for pairplot")
-                        fig = sns.pairplot(pairplot_df.head(200), diag_kind='kde')
-                        st.pyplot(fig)
+            # Pairplot with user-selectable descriptors (NEW ENHANCED FEATURE)
+            st.subheader("Interactive Pairplot of Selected Descriptors")
+            
+            # Extended list of 20+ descriptors for pairplot
+            pairplot_descriptor_options = [
+                'tolerance_factor', 'rA_avg', 'rB_avg', 'rA_rB_ratio',
+                'chiA_avg', 'chiB_avg', 'delta_chi_AB', 'chi_ratio_AB',
+                'conc_B_prime', 'conc_D1', 'conc_D2', 'total_dopant_B',
+                'Vo_proxy', 'S_config_B', 'variance_rB', 'VB_avg',
+                'ionicity_BO', 'delta_chi_div_t', 'octahedral_factor',
+                'alpha_true', 'beta', 'delta'
+            ]
+            available_pairplot = [d for d in pairplot_descriptor_options if d in df.columns]
+            
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                selected_pairplot_features = st.multiselect(
+                    "Select descriptors for pairplot (2-6 recommended)",
+                    available_pairplot,
+                    default=available_pairplot[:4] if len(available_pairplot) >= 4 else available_pairplot,
+                    key="pairplot_features"
+                )
+            with col2:
+                color_options = [None] + [c for c in ['alpha_true', 'beta', 'method', 'A', 'B'] if c in df.columns]
+                pairplot_color = st.selectbox("Color points by", color_options, index=0, key="pairplot_color")
+            
+            if len(selected_pairplot_features) >= 2:
+                fig = ScientificVisualizer.plot_pairplot_interactive(
+                    df, selected_pairplot_features, 
+                    color_by=pairplot_color if pairplot_color else None,
+                    title="Composition-Property Relationships"
+                )
+                st.pyplot(fig)
+            else:
+                st.info("Select at least 2 descriptors for pairplot")
         
-        # Tab 4: Concentration Maps
+        # Tab 4: Concentration Maps (EXPANDED: 18 descriptors including conc_B_prime)
         with tabs[3]:
             st.header("🗺️ Concentration Maps")
             
+            # EXPANDED list of 18+ descriptors for 2D maps
+            map_x_options = [
+                'conc_D1', 'conc_D2', 'total_dopant_B', 'conc_B_prime',
+                'tolerance_factor', 'chiB_avg', 'rB_avg', 'delta_chi_AB',
+                'chi_ratio_AB', 'Vo_proxy', 'S_config_B', 'variance_rB',
+                'tolerance_deviation', 'octahedral_factor', 'VB_avg'
+            ]
+            map_x_available = [c for c in map_x_options if c in df.columns]
+            
+            map_y_options = [
+                'conc_D2', 'conc_D1', 'total_dopant_B', 'conc_B_prime',
+                'variance_rB', 'S_config_B', 'VB_avg', 'Vo_proxy',
+                'delta_chi_AB', 'chi_ratio_AB', 'tolerance_deviation'
+            ]
+            map_y_available = [c for c in map_y_options if c in df.columns]
+            
             col1, col2 = st.columns(2)
             with col1:
-                x_options = ['[D1]', '[D2]', 'total_dopant_B', 'tolerance_factor', 'chiB_avg', 'rB_avg']
                 x_axis = st.selectbox("X-axis (concentration/descriptor)", 
-                                      [c for c in x_options if c in df.columns],
-                                      key="conc_x")
+                                      map_x_available, key="conc_x")
             with col2:
-                y_options = ['[D2]', '[D1]', 'total_dopant_B', 'variance_rB', 'S_config_B', 'VB_avg']
                 y_axis = st.selectbox("Y-axis (concentration/descriptor)",
-                                      [c for c in y_options if c in df.columns],
-                                      key="conc_y")
+                                      map_y_available, key="conc_y")
             
-            z_options = ['alpha_true', 'alpha_apparent', 'beta', 'tolerance_factor']
+            z_options = ['alpha_true', 'alpha_apparent', 'beta', 'tolerance_factor', 'delta']
             z_axis = st.selectbox("Color by (property)", 
                                   [c for c in z_options if c in df.columns])
             
@@ -1958,75 +2365,57 @@ def main():
             st.subheader("2D Heatmap")
             fig2 = ScientificVisualizer.plot_concentration_heatmap(df, x_axis, y_axis, z_axis)
             st.pyplot(fig2)
-            
-            # 3D Scatter (plotly)
-            st.subheader("3D Interactive Scatter")
-            if len(df) > 0:
-                # Filter out zeros for z_axis
-                plot_df = df[df[z_axis] != 0].copy()
-                if len(plot_df) > 0:
-                    fig3 = px.scatter_3d(plot_df, x=x_axis, y=y_axis, z=z_axis,
-                                         color=z_axis,
-                                         hover_data=['A', 'B', '[D1]', '[D2]'],
-                                         title=f'3D Visualization: {z_axis} vs {x_axis} and {y_axis}')
-                    st.plotly_chart(fig3, use_container_width=True)
-                else:
-                    st.info("No valid data for 3D scatter plot")
         
-        # Tab 5: Bubble Charts
+        # Tab 5: Bubble Charts (with density contours, heatmap-style)
         with tabs[4]:
-            st.header("💨 Bubble Charts")
+            st.header("💨 Bubble Charts with Density Contours")
             
             st.markdown("""
             <div class="info-box">
-            <b>Interactive bubble charts:</b> Y-axis shows target property (α, αav, or β),<br>
-            while X-axis, bubble size, and color can be customized.
+            <b>Interactive bubble charts with heatmap-style density contours:</b><br>
+            - Bubble size represents a third variable<br>
+            - Color shows a fourth variable (with colorbar on right)<br>
+            - Density contours overlay the plot (like a 2D heatmap)
             </div>
             """, unsafe_allow_html=True)
             
-            # Select Y-axis (target property)
+            # Extended list of descriptors for bubble chart
+            bubble_x_options = [
+                'tolerance_factor', 'chiB_avg', 'rB_avg', 'delta_chi_AB',
+                'conc_D1', 'conc_D2', 'total_dopant_B', 'conc_B_prime',
+                'Vo_proxy', 'S_config_B', 'variance_rB'
+            ]
+            bubble_x_available = [c for c in bubble_x_options if c in df.columns]
+            
             bubble_y_options = ['alpha_true', 'alpha_apparent', 'beta']
-            y_bubble = st.selectbox("Y-axis (target property)",
-                                    [c for c in bubble_y_options if c in df.columns],
-                                    key="bubble_y")
+            bubble_y_available = [c for c in bubble_y_options if c in df.columns]
             
-            col1, col2, col3 = st.columns(3)
+            bubble_size_options = ['delta', 'total_dopant_B', 'S_config_B', 'Vo_proxy', 'beta']
+            bubble_size_available = [c for c in bubble_size_options if c in df.columns]
+            
+            bubble_color_options = ['alpha_true', 'beta', 'tolerance_factor', 'delta', 'chiB_avg']
+            bubble_color_available = [c for c in bubble_color_options if c in df.columns]
+            
+            col1, col2 = st.columns(2)
             with col1:
-                x_options = ['tolerance_factor', 'chiB_avg', 'rB_avg', 'delta_chi_AB', '[D1]', '[D2]']
-                x_bubble = st.selectbox("X-axis", 
-                                        [c for c in x_options if c in df.columns],
-                                        key="bubble_x")
+                x_bubble = st.selectbox("X-axis", bubble_x_available, key="bubble_x")
+                size_bubble = st.selectbox("Bubble size", bubble_size_available, key="bubble_size")
             with col2:
-                size_options = ['delta', 'total_dopant_B', 'S_config_B', 'beta']
-                size_bubble = st.selectbox("Bubble size",
-                                           [c for c in size_options if c in df.columns],
-                                           key="bubble_size")
-            with col3:
-                color_options = ['method', 'A', 'B', 'alpha_true', 'beta']
-                color_bubble = st.selectbox("Color",
-                                            [c for c in color_options if c in df.columns],
-                                            key="bubble_color")
+                y_bubble = st.selectbox("Y-axis (target property)", bubble_y_available, key="bubble_y")
+                color_bubble = st.selectbox("Color (colorbar on right)", bubble_color_available, key="bubble_color")
             
-            # Create plotly bubble chart
             if len(df) > 0:
-                # Filter out zeros for y-axis
-                plot_df = df[df[y_bubble] != 0].copy()
+                # Filter out NaN in y
+                plot_df = df.dropna(subset=[y_bubble])
                 if len(plot_df) > 0:
-                    fig = px.scatter(plot_df, x=x_bubble, y=y_bubble,
-                                     size=size_bubble if size_bubble else None,
-                                     color=color_bubble,
-                                     hover_data=['A', 'B', '[D1]', '[D2]', 'method'],
-                                     title=f'Bubble Chart: {y_bubble} vs {x_bubble}',
-                                     size_max=30)
-                    fig.update_layout(
-                        template='plotly_white',
-                        font=dict(family='Times New Roman', size=12),
-                        xaxis_title=x_bubble,
-                        yaxis_title=y_bubble
+                    fig = ScientificVisualizer.plot_bubble_with_density(
+                        plot_df, x_bubble, y_bubble, 
+                        size_col=size_bubble, color_col=color_bubble,
+                        title=f'{y_bubble} vs {x_bubble} (bubble size: {size_bubble})'
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.pyplot(fig)
                 else:
-                    st.info("No valid data for bubble chart")
+                    st.info(f"No valid data for {y_bubble}")
         
         # Tab 6: Machine Learning
         with tabs[5]:
@@ -2038,9 +2427,10 @@ def main():
                                      [c for c in ml_target_options if c in df.columns],
                                      key="ml_target")
             
-            # Select features
+            # Select features (expanded list)
             default_ml_features = ['tolerance_factor', 'chiB_avg', 'delta_chi_AB', 'rB_avg',
                                    'variance_rB', 'S_config_B', 'VB_avg', 'Vo_proxy',
+                                   'conc_B_prime', 'conc_D1', 'conc_D2', 'total_dopant_B',
                                    'log_pH2O', 'T_span']
             available_ml_features = [f for f in default_ml_features if f in df.columns]
             
@@ -2103,7 +2493,7 @@ def main():
             else:
                 st.info("Select at least one feature and ensure sufficient data")
         
-        # Tab 7: Phase Transitions
+        # Tab 7: Phase Transitions (ENHANCED with 3 new plots)
         with tabs[6]:
             st.header("🔬 Phase Transition Analysis")
             
@@ -2149,6 +2539,103 @@ def main():
                     st.pyplot(fig)
                 else:
                     st.info("No symmetry information found")
+                
+                # NEW PLOT 1: Phase transition temperature vs dopant concentration
+                if st.session_state.chem_with_descriptors is not None:
+                    st.subheader("Phase Transition Temperature vs Dopant Concentration")
+                    
+                    chem_df_full = st.session_state.chem_with_descriptors
+                    
+                    dopant_options = ['total_dopant_B', 'conc_B_prime', 'conc_D1', 'conc_D2']
+                    available_dopants = [d for d in dopant_options if d in chem_df_full.columns]
+                    
+                    if available_dopants:
+                        selected_dopant = st.selectbox("Select dopant variable", available_dopants, key="pt_dopant")
+                        
+                        # Parse transition temperatures from phase_df
+                        phase_data_list = []
+                        for idx, row in phase_df.iterrows():
+                            temps = DataParser.parse_bends_temperatures(row.get('T (PT), °C', ''))
+                            if temps:
+                                # Use first transition temperature
+                                phase_data_list.append({
+                                    'T_transition': temps[0],
+                                    **{col: row.get(col, np.nan) for col in ['A', 'B', '[D1]', '[D2]', 'δ'] if col in phase_df.columns}
+                                })
+                        
+                        if phase_data_list:
+                            phase_temp_df = pd.DataFrame(phase_data_list)
+                            
+                            fig = ScientificVisualizer.plot_phase_transition_vs_dopant(
+                                phase_temp_df, chem_df_full, selected_dopant, 'T_transition',
+                                title=f'Phase Transition Temperature vs {selected_dopant}'
+                            )
+                            st.pyplot(fig)
+                        else:
+                            st.info("No transition temperatures found in phase data")
+                    else:
+                        st.info("Dopant concentration variables not available")
+                    
+                    # NEW PLOT 2: Number of phase transitions vs dopant concentration
+                    st.subheader("Number of Phase Transitions vs Dopant Concentration")
+                    
+                    if available_dopants:
+                        selected_dopant2 = st.selectbox("Select dopant variable for count plot", available_dopants, key="pt_count_dopant")
+                        
+                        fig2 = ScientificVisualizer.plot_transition_count_vs_dopant(
+                            phase_df, chem_df_full, selected_dopant2,
+                            title=f'Phase Transition Count vs {selected_dopant2}'
+                        )
+                        st.pyplot(fig2)
+                    
+                    # NEW PLOT 3: Symmetry type vs composition (scatter with colors)
+                    st.subheader("Crystal Symmetry vs Composition")
+                    
+                    # Merge phase and chemical data
+                    merge_cols = ['A', 'B', '[D1]', '[D2]', 'δ']
+                    available_merge = [c for c in merge_cols if c in phase_df.columns and c in chem_df_full.columns]
+                    
+                    if available_merge:
+                        try:
+                            merged = pd.merge(phase_df, chem_df_full, on=available_merge, how='inner')
+                            if len(merged) > 0:
+                                # Get symmetry column
+                                sym_col = 'Symmetry'
+                                if sym_col in merged.columns:
+                                    plot_df = merged[[sym_col, 'total_dopant_B']].dropna()
+                                    plot_df = plot_df[plot_df[sym_col] != '-']
+                                    
+                                    if len(plot_df) > 0:
+                                        fig3, ax = plt.subplots(figsize=(12, 6))
+                                        
+                                        # Create grouped boxplot or scatter
+                                        unique_sym = plot_df[sym_col].unique()
+                                        colors = plt.cm.Set3(np.linspace(0, 1, len(unique_sym)))
+                                        
+                                        for i, sym in enumerate(unique_sym):
+                                            subset = plot_df[plot_df[sym_col] == sym]['total_dopant_B'].dropna()
+                                            if len(subset) > 0:
+                                                # Jittered scatter
+                                                x_jitter = np.random.normal(i, 0.05, len(subset))
+                                                ax.scatter(x_jitter, subset, alpha=0.6, s=40,
+                                                          c=[colors[i]], edgecolors='black', linewidth=0.5,
+                                                          label=sym)
+                                        
+                                        ax.set_xticks(range(len(unique_sym)))
+                                        ax.set_xticklabels(unique_sym, rotation=45, ha='right')
+                                        ax.set_ylabel('Total Dopant Concentration (D1+D2)', fontsize=11, fontweight='bold')
+                                        ax.set_title('Symmetry Distribution vs Dopant Concentration', fontsize=12, fontweight='bold')
+                                        ax.legend(loc='upper right', fontsize=8)
+                                        ax.grid(True, alpha=0.3, axis='y')
+                                        st.pyplot(fig3)
+                                    else:
+                                        st.info("No valid symmetry data for plotting")
+                                else:
+                                    st.info("Symmetry column not found")
+                            else:
+                                st.info("No matching samples between phase and chemical data")
+                        except Exception as e:
+                            st.warning(f"Could not create symmetry plot: {str(e)[:100]}")
             else:
                 st.info("Upload phase transition data to enable this analysis")
         
@@ -2156,17 +2643,17 @@ def main():
         with tabs[7]:
             st.header("🎯 Clustering & Dimensionality Reduction")
             
-            # Select features for clustering
-            cluster_options = ['tolerance_factor', 'chiB_avg', 'delta_chi_AB', 'rB_avg', 'variance_rB', 'S_config_B']
+            # Select features for clustering (expanded)
+            cluster_options = ['tolerance_factor', 'chiB_avg', 'delta_chi_AB', 'rB_avg', 
+                               'variance_rB', 'S_config_B', 'conc_B_prime', 'total_dopant_B',
+                               'Vo_proxy', 'VB_avg']
             cluster_features = st.multiselect("Select features for clustering",
                                              [c for c in cluster_options if c in df.columns],
                                              default=[c for c in ['tolerance_factor', 'chiB_avg', 'delta_chi_AB'] if c in df.columns][:3])
             
             if len(cluster_features) >= 2 and len(df) > 0:
-                # Prepare data - exclude rows with zeros in any feature
+                # Prepare data - drop rows with NaN in any feature
                 cluster_df = df[cluster_features].dropna()
-                for col in cluster_features:
-                    cluster_df = cluster_df[cluster_df[col] != 0]
                 
                 if len(cluster_df) >= 5:
                     scaler = StandardScaler()
@@ -2180,8 +2667,8 @@ def main():
                     target_for_color = 'alpha_true' if 'alpha_true' in df.columns else None
                     if target_for_color and target_for_color in df.columns:
                         y_colors = df.loc[cluster_df.index, target_for_color].values
-                        # Filter out zeros
-                        valid_mask = y_colors != 0
+                        # Filter out NaN
+                        valid_mask = ~np.isnan(y_colors)
                         X_pca_valid = X_pca[valid_mask]
                         y_colors_valid = y_colors[valid_mask]
                         if len(X_pca_valid) > 0:
@@ -2312,7 +2799,7 @@ def main():
                 
                 alpha_col = 'alpha_true'
                 if alpha_col in df.columns:
-                    alpha_vals = df[alpha_col][df[alpha_col] != 0]
+                    alpha_vals = df[alpha_col].dropna()
                     if len(alpha_vals) > 0:
                         report.append(f"\n### Thermal Expansion (α)")
                         report.append(f"- Mean: {alpha_vals.mean():.3f} ×10⁻⁶ K⁻¹")
@@ -2326,7 +2813,7 @@ def main():
                 
                 beta_col = 'beta'
                 if beta_col in df.columns:
-                    beta_vals = df[beta_col][df[beta_col] != 0]
+                    beta_vals = df[beta_col].dropna()
                     if len(beta_vals) > 0:
                         report.append(f"\n### Chemical Expansion (β)")
                         report.append(f"- Mean: {beta_vals.mean():.4f}")
@@ -2341,10 +2828,8 @@ def main():
                     numeric_cols = st.session_state.descriptor_names + [alpha_col]
                     numeric_cols = [c for c in numeric_cols if c in df.columns]
                     if len(numeric_cols) > 1:
-                        # Filter out rows with zeros
-                        temp_df = df[numeric_cols].copy()
-                        for col in numeric_cols:
-                            temp_df = temp_df[temp_df[col] != 0]
+                        # Filter out rows with NaN
+                        temp_df = df[numeric_cols].dropna()
                         if len(temp_df) > 5:
                             corrs = temp_df.corr()[alpha_col].abs().sort_values(ascending=False)
                             top_corrs = corrs.head(10)

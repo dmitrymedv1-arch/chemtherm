@@ -1338,18 +1338,20 @@ class ScientificVisualizer:
         if size_col and size_col in df.columns:
             base_cols.append(size_col)
         
-        plot_df = df[base_cols].dropna()
+        # Create a copy and reset index to avoid duplicate index issues
+        plot_df = df[base_cols].copy().reset_index(drop=True)
+        plot_df = plot_df.dropna()
         
         # Filter out zeros in y_col (target property)
         if y_col in plot_df.columns:
             plot_df = plot_df[plot_df[y_col] != 0]
         
         # Also filter out zeros in x_col if needed
-        if x_col in plot_df.columns:
+        if x_col in plot_df.columns and len(plot_df) > 0:
             plot_df = plot_df[plot_df[x_col] != 0]
         
         # Filter out zeros in color_col if it's being used for coloring
-        if color_col and color_col in plot_df.columns:
+        if color_col and color_col in plot_df.columns and len(plot_df) > 0:
             plot_df = plot_df[plot_df[color_col] != 0]
         
         if len(plot_df) == 0:

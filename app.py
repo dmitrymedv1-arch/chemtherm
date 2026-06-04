@@ -1329,31 +1329,44 @@ class ScientificVisualizer:
         """Create 2D scatter plot with optional color and size mapping"""
         fig, ax = plt.subplots(figsize=(9, 7))
         
-        # Prepare data - filter out zeros that indicate missing data for y_col
-        plot_df = df[[x_col, y_col]].dropna()
+        # Prepare data - start with all three columns if color_col provided
+        if color_col and color_col in df.columns:
+            base_cols = [x_col, y_col, color_col]
+        else:
+            base_cols = [x_col, y_col]
+        
+        if size_col and size_col in df.columns:
+            base_cols.append(size_col)
+        
+        plot_df = df[base_cols].dropna()
+        
+        # Filter out zeros in y_col (target property)
         if y_col in plot_df.columns:
             plot_df = plot_df[plot_df[y_col] != 0]
         
-        if color_col and color_col in df.columns:
-            plot_df = plot_df.join(df[color_col])
-        if size_col and size_col in df.columns:
-            plot_df = plot_df.join(df[size_col])
+        # Also filter out zeros in x_col if needed
+        if x_col in plot_df.columns:
+            plot_df = plot_df[plot_df[x_col] != 0]
+        
+        # Filter out zeros in color_col if it's being used for coloring
+        if color_col and color_col in plot_df.columns:
+            plot_df = plot_df[plot_df[color_col] != 0]
         
         if len(plot_df) == 0:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
             return fig
         
         if color_col:
-            scatter = ax.scatter(plot_df[x_col], plot_df[y_col], 
-                                c=plot_df[color_col] if color_col else None,
-                                s=plot_df[size_col]*50 if size_col else 50,
+            scatter = ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
+                                c=plot_df[color_col].values,
+                                s=plot_df[size_col].values * 50 if size_col else 50,
                                 cmap=ScientificVisualizer.CMAPS['thermal'],
                                 alpha=0.7, edgecolors='black', linewidth=0.5)
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(color_col, fontsize=10)
         else:
-            ax.scatter(plot_df[x_col], plot_df[y_col], 
-                      s=plot_df[size_col]*50 if size_col else 50,
+            ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
+                      s=plot_df[size_col].values * 50 if size_col else 50,
                       c=ScientificVisualizer.COLORS['primary'],
                       alpha=0.7, edgecolors='black', linewidth=0.5)
         

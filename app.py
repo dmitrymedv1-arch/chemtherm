@@ -1339,45 +1339,57 @@ class ScientificVisualizer:
         if size_col and size_col in df.columns:
             base_cols.append(size_col)
         
-        # Используем .loc с булевой маской вместо прямой индексации
-        plot_df = df[base_cols].copy()
-        
-        # Создаем маску для фильтрации
-        mask = pd.Series([True] * len(plot_df), index=plot_df.index)
-        
-        # Filter out NaN
-        mask = mask & plot_df.notna().all(axis=1)
-        
-        # Filter out zeros in y_col (target property)
-        if y_col in plot_df.columns:
-            mask = mask & (plot_df[y_col] != 0)
-        
-        # Filter out zeros in x_col if needed
-        if x_col in plot_df.columns:
-            mask = mask & (plot_df[x_col] != 0)
-        
-        # Filter out zeros in color_col if it's being used for coloring
-        if color_col and color_col in plot_df.columns:
-            mask = mask & (plot_df[color_col] != 0)
-        
-        # Применяем маску
-        plot_df = plot_df.loc[mask]
+        # Создаем копию и сразу удаляем NaN
+        plot_df = df[base_cols].dropna().copy()
         
         if len(plot_df) == 0:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
             return fig
         
-        if color_col:
+        # Последовательная фильтрация с созданием новых DataFrame
+        # (это безопаснее, но может быть медленнее)
+        if y_col in plot_df.columns:
+            plot_df = plot_df[plot_df[y_col] != 0]
+        
+        if len(plot_df) == 0:
+            ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        if x_col in plot_df.columns:
+            plot_df = plot_df[plot_df[x_col] != 0]
+        
+        if len(plot_df) == 0:
+            ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        if color_col and color_col in plot_df.columns:
+            plot_df = plot_df[plot_df[color_col] != 0]
+        
+        if len(plot_df) == 0:
+            ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        if size_col and size_col in plot_df.columns:
+            plot_df = plot_df[plot_df[size_col] != 0]
+        
+        if len(plot_df) == 0:
+            ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
+            return fig
+        
+        # Reset index to avoid potential issues
+        plot_df = plot_df.reset_index(drop=True)
+        
+        if color_col and color_col in plot_df.columns:
             scatter = ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
                                 c=plot_df[color_col].values,
-                                s=plot_df[size_col].values * 50 if size_col else 50,
+                                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
                                 cmap=ScientificVisualizer.CMAPS['thermal'],
                                 alpha=0.7, edgecolors='black', linewidth=0.5)
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(color_col, fontsize=10)
         else:
             ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
-                      s=plot_df[size_col].values * 50 if size_col else 50,
+                      s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
                       c=ScientificVisualizer.COLORS['primary'],
                       alpha=0.7, edgecolors='black', linewidth=0.5)
         

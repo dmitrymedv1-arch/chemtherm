@@ -1345,15 +1345,15 @@ class ScientificVisualizer:
         
         # Filter out zeros in y_col (target property)
         if y_col in plot_df.columns:
-            plot_df = plot_df[plot_df[y_col] != 0]
+            plot_df = plot_df[plot_df[y_col] != 0].reset_index(drop=True)  # ИСПРАВЛЕНО
         
         # Also filter out zeros in x_col if needed
         if x_col in plot_df.columns and len(plot_df) > 0:
-            plot_df = plot_df[plot_df[x_col] != 0]
+            plot_df = plot_df[plot_df[x_col] != 0].reset_index(drop=True)  # ИСПРАВЛЕНО
         
         # Filter out zeros in color_col if it's being used for coloring
         if color_col and color_col in plot_df.columns and len(plot_df) > 0:
-            plot_df = plot_df[plot_df[color_col] != 0]
+            plot_df = plot_df[plot_df[color_col] != 0].reset_index(drop=True)  # ИСПРАВЛЕНО
         
         if len(plot_df) == 0:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')

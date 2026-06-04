@@ -659,7 +659,15 @@ class PerovskiteDescriptorCalculator:
         descriptors['delta'] = delta
         
         # Water partial pressure (log scale for better correlation)
-        pH2O = float(row.get('pH2O', 0)) if not pd.isna(row.get('pH2O', 0)) else 0
+        pH2O_raw = row.get('pH2O', 0)
+        # Handle various possible values: '-', '—', '', None, NaN
+        if pd.isna(pH2O_raw) or pH2O_raw == '-' or pH2O_raw == '—' or pH2O_raw == '':
+            pH2O = 0.0
+        else:
+            try:
+                pH2O = float(pH2O_raw)
+            except (ValueError, TypeError):
+                pH2O = 0.0
         descriptors['log_pH2O'] = np.log10(pH2O) if pH2O > 0 else -10
         
         # Temperature range span

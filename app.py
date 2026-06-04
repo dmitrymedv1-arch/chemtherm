@@ -2,14 +2,14 @@
 Streamlit Application for Analysis of Thermal and Chemical Expansion
 of Proton-Conducting Perovskite Oxides
 
-Version: 2.0
+Version: 2.1 (with text/csv input support)
 Author: Materials Informatics Research
 Description: Comprehensive analysis tool for understanding composition-structure-property
              relationships in proton-conducting perovskites with focus on thermal
              expansion (α), chemical expansion (β), and phase transitions.
              
 Features:
-- Upload and process two independent datasets (chem/therm expansion + phase transitions)
+- Upload and process two independent datasets via text/CSV/TSV input
 - Calculate 35+ structural, electronegativity, and thermodynamic descriptors
 - Interactive visualizations with scientific styling
 - Machine learning models for property prediction
@@ -54,6 +54,8 @@ from sklearn.impute import SimpleImputer
 import xgboost as xgb
 import shap
 from io import BytesIO
+import csv
+from io import StringIO
 
 # Suppress warnings for cleaner output
 warnings.filterwarnings('ignore')
@@ -250,6 +252,12 @@ def apply_scientific_css():
         padding: 1rem;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         margin: 1rem 0;
+    }
+    
+    /* Text area styling */
+    .stTextArea textarea {
+        font-family: 'Courier New', monospace;
+        font-size: 12px;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1298,6 +1306,35 @@ class MLModelManager:
 # 8. ОСНОВНОЕ ПРИЛОЖЕНИЕ STREAMLIT
 # ============================================================================
 
+def parse_text_data(text_data: str) -> Optional[pd.DataFrame]:
+    """Parse text data (CSV or TSV) into DataFrame"""
+    if not text_data.strip():
+        return None
+    
+    try:
+        # Detect separator
+        first_line = text_data.strip().split('\n')[0]
+        if '\t' in first_line:
+            sep = '\t'
+        elif ',' in first_line:
+            sep = ','
+        else:
+            # Try space-separated
+            sep = None
+        
+        if sep:
+            df = pd.read_csv(StringIO(text_data), sep=sep)
+        else:
+            df = pd.read_csv(StringIO(text_data), sep=r'\s+', engine='python')
+        
+        # Clean column names (strip whitespace)
+        df.columns = df.columns.str.strip()
+        
+        return df
+    except Exception as e:
+        st.error(f"Error parsing data: {e}")
+        return None
+
 def main():
     """Main application entry point"""
     
@@ -1324,32 +1361,100 @@ def main():
         st.session_state.chem_with_descriptors = None
     if 'descriptor_names' not in st.session_state:
         st.session_state.descriptor_names = []
+    if 'chem_data_text' not in st.session_state:
+        st.session_state.chem_data_text = ""
+    if 'phase_data_text' not in st.session_state:
+        st.session_state.phase_data_text = ""
     
-    # Sidebar for file upload and filters
+    # Sidebar for data input
     with st.sidebar:
-        st.header("📁 Data Upload")
+        st.header("📁 Data Input")
         
-        st.markdown("---")
-        st.subheader("Dataset 1: Chemical & Thermal Expansion")
-        chem_file = st.file_uploader(
-            "Upload chem and therm expansion.xlsx",
-            type=["xlsx"],
-            key="chem_upload"
-        )
+        # Dataset 1: Chemical & Thermal Expansion
+        with st.expander("📊 Dataset 1: Chemical & Thermal Expansion", expanded=True):
+            st.markdown("""
+            <div class="info-box" style="font-size: 0.8rem; padding: 0.5rem;">
+            <b>Format:</b> CSV (comma) or TSV (tab). First row must be headers.<br>
+            <b>Required columns:</b> №, A, A', B, B', D1, D2, [A'], [B'], [D1], [D2], δ, method, β, ∆T, °C, α·106 (K-1), T(bends), °C, αav·106 (K-1), pH2O, Ref
+            </div>
+            """, unsafe_allow_html=True)
+            
+            chem_text_input = st.text_area(
+                "Paste Chemical Data (CSV/TSV):",
+                height=250,
+                key="chem_text_area",
+                placeholder="""№,A,A',B,B',D1,D2,[A'],[B'],[D1],[D2],δ,method,β,∆T,°C,α·106 (K-1),T(bends),°C,αav·106 (K-1),pH2O,Ref
+1,Ba,-,Ce,Zr,Y,Yb,0,0.1,0.1,0.1,0.1,dilatometry,0.0073,27-1000,10.6,400;600,10.6;4.73;10.1,0.0001,10.15826/chimtech.2024.11.4.22
+2,Ba,-,Ce,Zr,Y,Yb,0,0.1,0.1,0.1,0.1,HT XRD,0.0317,27-1000,10.6,300,10.7;8.7,0.02,10.15826/chimtech.2024.11.4.22
+3,Ba,-,Ce,Zr,Y,-,0,0.1,0.1,0,0.05,HT ND,-,20-900,11.2,-,-,0.00106,10.1021/acs.jpcc.1c08334"""
+            )
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("📊 Load Chemical Data", key="load_chem_btn", use_container_width=True):
+                    if chem_text_input.strip():
+                        chem_df = parse_text_data(chem_text_input)
+                        if chem_df is not None:
+                            st.session_state.chem_df = chem_df
+                            st.session_state.chem_data_text = chem_text_input
+                            st.success(f"✅ Loaded {len(chem_df)} samples with {len(chem_df.columns)} columns")
+                        else:
+                            st.error("Failed to parse chemical data")
+                    else:
+                        st.warning("Please paste chemical data first")
+            
+            with col2:
+                if st.button("📋 Load Example Chem Data", key="load_example_chem_btn", use_container_width=True):
+                    example_chem = """№,A,A',B,B',D1,D2,[A'],[B'],[D1],[D2],δ,method,β,∆T,°C,α·106 (K-1),T(bends),°C,αav·106 (K-1),pH2O,Ref
+1,Ba,-,Ce,Zr,Y,Yb,0,0.1,0.1,0.1,0.1,dilatometry,0.0073,27-1000,10.6,400;600,10.6;4.73;10.1,0.0001,10.15826/chimtech.2024.11.4.22
+2,Ba,-,Ce,Zr,Y,Yb,0,0.1,0.1,0.1,0.1,HT XRD,0.0317,27-1000,10.6,300,10.7;8.7,0.02,10.15826/chimtech.2024.11.4.22
+3,Ba,-,Ce,Zr,Y,-,0,0.1,0.1,0,0.05,HT ND,-,20-900,11.2,-,-,0.00106,10.1021/acs.jpcc.1c08334
+4,Ba,-,Ce,Zr,Y,-,0,0,0.1,0,0.05,dilatometry,0.019,430-630,-,450,-,0.00106,10.1021/acs.jpcc.1c08334"""
+                    st.session_state.chem_text_area = example_chem
+                    st.rerun()
         
-        st.subheader("Dataset 2: Phase Transitions")
-        phase_file = st.file_uploader(
-            "Upload phase transition.xlsx",
-            type=["xlsx"],
-            key="phase_upload"
-        )
-        
-        st.markdown("---")
-        
-        # Example data button
-        if st.button("📋 Load Example Data", use_container_width=True):
-            # Here you would load example data
-            st.info("Example data loading - implement with sample files")
+        # Dataset 2: Phase Transitions
+        with st.expander("🔬 Dataset 2: Phase Transitions", expanded=False):
+            st.markdown("""
+            <div class="info-box" style="font-size: 0.8rem; padding: 0.5rem;">
+            <b>Format:</b> CSV (comma) or TSV (tab). First row must be headers.<br>
+            <b>Required columns:</b> №, A, A', B, B', D1, D2, [A], [B'], [D1], [D2], δ, pH2O, ∆T, °C, Symmetry, Phase transitions (PT), T (PT), °C, Ref
+            </div>
+            """, unsafe_allow_html=True)
+            
+            phase_text_input = st.text_area(
+                "Paste Phase Transition Data (CSV/TSV):",
+                height=200,
+                key="phase_text_area",
+                placeholder="""№,A,A',B,B',D1,D2,[A],[B'],[D1],[D2],δ,pH2O,∆T,°C,Symmetry,Phase transitions (PT),T (PT),°C,Ref
+1,Ba,-,Ce,Zr,Y,-,0,0.36,0.1,0,0.05,-,30-1000,-,-,-,10.1063/1.5066970
+2,Ba,-,Zr,-,Y,-,0,0,0,0,0,-,25,Cubic,Pm-3m,-,10.1088/1742-6596/1967/1/012015
+3,Ba,-,Zr,-,Y,-,0,0,0.055,0,0.0275,-,25,Cubic,Pm-3m,-,10.1088/1742-6596/1967/1/012015"""
+            )
+            
+            col3, col4 = st.columns(2)
+            with col3:
+                if st.button("📊 Load Phase Data", key="load_phase_btn", use_container_width=True):
+                    if phase_text_input.strip():
+                        phase_df = parse_text_data(phase_text_input)
+                        if phase_df is not None:
+                            st.session_state.phase_df = phase_df
+                            st.session_state.phase_data_text = phase_text_input
+                            st.success(f"✅ Loaded {len(phase_df)} phase transition records")
+                        else:
+                            st.error("Failed to parse phase transition data")
+                    else:
+                        st.warning("Please paste phase transition data first")
+            
+            with col4:
+                if st.button("📋 Load Example Phase Data", key="load_example_phase_btn", use_container_width=True):
+                    example_phase = """№,A,A',B,B',D1,D2,[A],[B'],[D1],[D2],δ,pH2O,∆T,°C,Symmetry,Phase transitions (PT),T (PT),°C,Ref
+1,Ba,-,Zr,-,Y,-,0,0,0,0,0,-,25,Cubic,Pm-3m,-,10.1088/1742-6596/1967/1/012015
+2,Ba,-,Zr,-,Y,-,0,0,0.055,0,0.0275,-,25,Cubic,Pm-3m,-,10.1088/1742-6596/1967/1/012015
+3,Ba,-,Zr,-,Y,-,0,0,0.17,0,0.085,-,25,Cubic,Pm-3m,-,10.1088/1742-6596/1967/1/012015
+4,Ba,-,Sn,-,Y,-,0,0,0,0,0,-,-,Orthorombic;Rhombohedral;Cubic,Pm-3m, R-3c, Imma,352;476;711,10.1111/jace.12990"""
+                    st.session_state.phase_text_area = example_phase
+                    st.rerun()
         
         st.markdown("---")
         
@@ -1360,28 +1465,57 @@ def main():
             df = st.session_state.chem_with_descriptors
             
             # A-site filter
-            a_sites = df['A'].unique().tolist()
-            selected_a = st.multiselect("A-site elements", a_sites, default=a_sites[:3] if len(a_sites) > 3 else a_sites)
+            if 'A' in df.columns:
+                a_sites = df['A'].dropna().unique().tolist()
+                if a_sites:
+                    selected_a = st.multiselect("A-site elements", a_sites, default=a_sites[:3] if len(a_sites) > 3 else a_sites)
+                else:
+                    selected_a = []
+            else:
+                selected_a = []
             
             # B-site filter
-            b_sites = df['B'].unique().tolist()
-            selected_b = st.multiselect("B-site elements", b_sites, default=b_sites[:3] if len(b_sites) > 3 else b_sites)
+            if 'B' in df.columns:
+                b_sites = df['B'].dropna().unique().tolist()
+                if b_sites:
+                    selected_b = st.multiselect("B-site elements", b_sites, default=b_sites[:3] if len(b_sites) > 3 else b_sites)
+                else:
+                    selected_b = []
+            else:
+                selected_b = []
             
             # Method filter
-            methods = df['method'].unique().tolist()
-            selected_methods = st.multiselect("Measurement method", methods, default=methods)
+            if 'method' in df.columns:
+                methods = df['method'].dropna().unique().tolist()
+                if methods:
+                    selected_methods = st.multiselect("Measurement method", methods, default=methods)
+                else:
+                    selected_methods = []
+            else:
+                selected_methods = []
             
             # pH2O range
             if 'log_pH2O' in df.columns:
                 pH2O_min = float(df['log_pH2O'].min())
                 pH2O_max = float(df['log_pH2O'].max())
-                pH2O_range = st.slider("log(pH₂O)", pH2O_min, pH2O_max, (pH2O_min, pH2O_max))
+                if pH2O_min < pH2O_max:
+                    pH2O_range = st.slider("log(pH₂O)", pH2O_min, pH2O_max, (pH2O_min, pH2O_max))
+                else:
+                    pH2O_range = (pH2O_min, pH2O_max)
+            else:
+                pH2O_range = (-10, 0)
             
             # Alpha range
-            if 'α·106 (K-1)' in df.columns:
-                alpha_min = float(df['α·106 (K-1)'].min())
-                alpha_max = float(df['α·106 (K-1)'].max())
-                alpha_range = st.slider("α (×10⁶ K⁻¹)", alpha_min, alpha_max, (alpha_min, alpha_max))
+            alpha_col = 'α·106 (K-1)'
+            if alpha_col in df.columns:
+                alpha_min = float(df[alpha_col].min())
+                alpha_max = float(df[alpha_col].max())
+                if alpha_min < alpha_max:
+                    alpha_range = st.slider("α (×10⁶ K⁻¹)", alpha_min, alpha_max, (alpha_min, alpha_max))
+                else:
+                    alpha_range = (alpha_min, alpha_max)
+            else:
+                alpha_range = (0, 20)
             
             # Apply filters button
             if st.button("Apply Filters", use_container_width=True):
@@ -1397,61 +1531,46 @@ def main():
                         (filtered_df['log_pH2O'] >= pH2O_range[0]) & 
                         (filtered_df['log_pH2O'] <= pH2O_range[1])
                     ]
-                if 'α·106 (K-1)' in df.columns:
+                if alpha_col in df.columns:
                     filtered_df = filtered_df[
-                        (filtered_df['α·106 (K-1)'] >= alpha_range[0]) & 
-                        (filtered_df['α·106 (K-1)'] <= alpha_range[1])
+                        (filtered_df[alpha_col] >= alpha_range[0]) & 
+                        (filtered_df[alpha_col] <= alpha_range[1])
                     ]
                 st.session_state.filtered_df = filtered_df
                 st.success(f"Filtered to {len(filtered_df)} samples")
     
-    # Load and process data
-    if chem_file is not None:
-        with st.spinner("Loading and processing data..."):
-            pb = ModernProgressBar(100, "Processing chemical data")
-            
-            # Load Excel
-            pb.update(10, "Reading Excel file...")
-            chem_df = pd.read_excel(chem_file, sheet_name=0)
-            
-            # Clean column names
-            chem_df.columns = chem_df.columns.str.strip()
+    # Process chemical data if loaded
+    if st.session_state.chem_df is not None:
+        chem_df = st.session_state.chem_df
+        
+        with st.spinner("Processing chemical data and calculating descriptors..."):
+            pb = ModernProgressBar(len(chem_df), "Calculating descriptors")
             
             # Initialize descriptor calculator
             calculator = PerovskiteDescriptorCalculator()
-            pb.update(20, "Calculating descriptors...")
             
             # Calculate descriptors for each row
             descriptors_list = []
             for idx, row in chem_df.iterrows():
                 desc = calculator.calculate_all_descriptors(row)
                 descriptors_list.append(desc)
-                if idx % 10 == 0:
+                if idx % 5 == 0:
                     pb.update(1, f"Processing row {idx+1}/{len(chem_df)}")
             
-            pb.update(60, "Combining data...")
+            pb.update(len(chem_df) - pb.current, "Finalizing...")
             
             # Combine with original data
             desc_df = pd.DataFrame(descriptors_list)
-            chem_df_full = pd.concat([chem_df, desc_df], axis=1)
+            chem_df_full = pd.concat([chem_df.reset_index(drop=True), desc_df], axis=1)
             
             # Store in session state
-            st.session_state.chem_df = chem_df
             st.session_state.chem_with_descriptors = chem_df_full
             st.session_state.descriptor_names = list(desc_df.columns)
             st.session_state.filtered_df = chem_df_full
             
             pb.finish()
             
-            st.success(f"✅ Loaded {len(chem_df)} samples with {len(desc_df.columns)} descriptors")
-    
-    # Phase transition data processing
-    if phase_file is not None:
-        with st.spinner("Processing phase transition data..."):
-            phase_df = pd.read_excel(phase_file, sheet_name=0)
-            phase_df.columns = phase_df.columns.str.strip()
-            st.session_state.phase_df = phase_df
-            st.success(f"✅ Loaded {len(phase_df)} phase transition records")
+            st.success(f"✅ Processed {len(chem_df)} samples with {len(desc_df.columns)} descriptors")
     
     # Main content with tabs
     if st.session_state.chem_with_descriptors is not None:
@@ -1525,13 +1644,14 @@ def main():
                 fig3, ax = plt.subplots(figsize=(10, 6))
                 data_to_plot = [df[df['A'] == a][selected_target].dropna().values 
                                for a in df['A'].unique()]
-                violin_parts = ax.violinplot(data_to_plot, positions=range(len(df['A'].unique())), 
-                                            showmeans=True, showmedians=True)
-                ax.set_xticks(range(len(df['A'].unique())))
-                ax.set_xticklabels(df['A'].unique())
-                ax.set_ylabel(selected_target)
-                ax.set_title(f'{selected_target} by A-site')
-                st.pyplot(fig3)
+                if data_to_plot:
+                    violin_parts = ax.violinplot(data_to_plot, positions=range(len(df['A'].unique())), 
+                                                showmeans=True, showmedians=True)
+                    ax.set_xticks(range(len(df['A'].unique())))
+                    ax.set_xticklabels(df['A'].unique())
+                    ax.set_ylabel(selected_target)
+                    ax.set_title(f'{selected_target} by A-site')
+                    st.pyplot(fig3)
         
         # Tab 3: Correlation Analysis
         with tabs[2]:
@@ -1560,8 +1680,9 @@ def main():
                     st.pyplot(fig)
                 else:
                     st.info(f"Using {len(pairplot_df)} samples for pairplot")
-                    fig = sns.pairplot(pairplot_df.head(200), diag_kind='kde')
-                    st.pyplot(fig)
+                    if len(pairplot_df) > 0:
+                        fig = sns.pairplot(pairplot_df.head(200), diag_kind='kde')
+                        st.pyplot(fig)
         
         # Tab 4: Concentration Maps
         with tabs[3]:
@@ -1569,19 +1690,19 @@ def main():
             
             col1, col2 = st.columns(2)
             with col1:
+                x_options = ['[D1]', '[D2]', 'total_dopant_B', 'tolerance_factor', 'chiB_avg', 'rB_avg']
                 x_axis = st.selectbox("X-axis (concentration/descriptor)", 
-                                      [c for c in ['[D1]', '[D2]', 'total_dopant_B', 'tolerance_factor', 
-                                                  'chiB_avg', 'rB_avg'] if c in df.columns],
+                                      [c for c in x_options if c in df.columns],
                                       key="conc_x")
             with col2:
+                y_options = ['[D2]', '[D1]', 'total_dopant_B', 'variance_rB', 'S_config_B', 'VB_avg']
                 y_axis = st.selectbox("Y-axis (concentration/descriptor)",
-                                      [c for c in ['[D2]', '[D1]', 'total_dopant_B', 'variance_rB',
-                                                  'S_config_B', 'VB_avg'] if c in df.columns],
+                                      [c for c in y_options if c in df.columns],
                                       key="conc_y")
             
+            z_options = ['α·106 (K-1)', 'αav·106 (K-1)', 'β', 'tolerance_factor']
             z_axis = st.selectbox("Color by (property)", 
-                                  [c for c in ['α·106 (K-1)', 'αav·106 (K-1)', 'β', 'tolerance_factor'] 
-                                   if c in df.columns])
+                                  [c for c in z_options if c in df.columns])
             
             # 2D Scatter
             st.subheader("2D Concentration Map")
@@ -1614,23 +1735,26 @@ def main():
             """, unsafe_allow_html=True)
             
             # Select Y-axis (target property)
+            bubble_y_options = ['α·106 (K-1)', 'αav·106 (K-1)', 'β']
             y_bubble = st.selectbox("Y-axis (target property)",
-                                    [c for c in ['α·106 (K-1)', 'αav·106 (K-1)', 'β'] if c in df.columns],
+                                    [c for c in bubble_y_options if c in df.columns],
                                     key="bubble_y")
             
             col1, col2, col3 = st.columns(3)
             with col1:
+                x_options = ['tolerance_factor', 'chiB_avg', 'rB_avg', 'delta_chi_AB', '[D1]', '[D2]']
                 x_bubble = st.selectbox("X-axis", 
-                                        [c for c in ['tolerance_factor', 'chiB_avg', 'rB_avg', 
-                                                    'delta_chi_AB', '[D1]', '[D2]'] if c in df.columns],
+                                        [c for c in x_options if c in df.columns],
                                         key="bubble_x")
             with col2:
+                size_options = ['δ', 'total_dopant_B', 'S_config_B', 'β']
                 size_bubble = st.selectbox("Bubble size",
-                                           [c for c in ['δ', 'total_dopant_B', 'S_config_B', 'β'] if c in df.columns],
+                                           [c for c in size_options if c in df.columns],
                                            key="bubble_size")
             with col3:
+                color_options = ['method', 'A', 'B', 'α·106 (K-1)', 'β']
                 color_bubble = st.selectbox("Color",
-                                            [c for c in ['method', 'A', 'B', 'α·106 (K-1)', 'β'] if c in df.columns],
+                                            [c for c in color_options if c in df.columns],
                                             key="bubble_color")
             
             # Create plotly bubble chart
@@ -1654,8 +1778,9 @@ def main():
             st.header("🧠 Machine Learning Models")
             
             # Select target for prediction
+            ml_target_options = ['α·106 (K-1)', 'αav·106 (K-1)', 'β']
             ml_target = st.selectbox("Predict target property",
-                                     [c for c in ['α·106 (K-1)', 'αav·106 (K-1)', 'β'] if c in df.columns],
+                                     [c for c in ml_target_options if c in df.columns],
                                      key="ml_target")
             
             # Select features
@@ -1719,13 +1844,14 @@ def main():
             st.header("🔬 Phase Transition Analysis")
             
             if st.session_state.phase_df is not None:
+                phase_df = st.session_state.phase_df
                 st.subheader("Phase Transition Data")
-                st.dataframe(st.session_state.phase_df, use_container_width=True)
+                st.dataframe(phase_df, use_container_width=True)
                 
                 # Analyze phase transitions
                 st.subheader("Transition Temperatures Distribution")
                 phase_temps = []
-                for _, row in st.session_state.phase_df.iterrows():
+                for _, row in phase_df.iterrows():
                     temps = DataParser.parse_bends_temperatures(row.get('T (PT), °C', ''))
                     phase_temps.extend(temps)
                 
@@ -1741,7 +1867,7 @@ def main():
                 # Symmetry distribution
                 st.subheader("Symmetry Types")
                 symmetries = []
-                for _, row in st.session_state.phase_df.iterrows():
+                for _, row in phase_df.iterrows():
                     sym = row.get('Symmetry', '')
                     if sym and sym != '-':
                         symmetries.extend(sym.split(';'))
@@ -1763,9 +1889,9 @@ def main():
             st.header("🎯 Clustering & Dimensionality Reduction")
             
             # Select features for clustering
+            cluster_options = ['tolerance_factor', 'chiB_avg', 'delta_chi_AB', 'rB_avg', 'variance_rB', 'S_config_B']
             cluster_features = st.multiselect("Select features for clustering",
-                                             [c for c in ['tolerance_factor', 'chiB_avg', 'delta_chi_AB',
-                                                         'rB_avg', 'variance_rB', 'S_config_B'] if c in df.columns],
+                                             [c for c in cluster_options if c in df.columns],
                                              default=[c for c in ['tolerance_factor', 'chiB_avg', 'delta_chi_AB'] if c in df.columns][:3])
             
             if len(cluster_features) >= 2 and len(df) > 0:
@@ -1779,7 +1905,13 @@ def main():
                 X_pca = pca.fit_transform(X_scaled)
                 
                 st.subheader("PCA Projection")
-                fig = ScientificVisualizer.plot_pca_2d(X_pca, df.loc[cluster_df.index, 'α·106 (K-1)'].values if 'α·106 (K-1)' in df.columns else None,
+                target_for_color = 'α·106 (K-1)' if 'α·106 (K-1)' in df.columns else None
+                if target_for_color and target_for_color in df.columns:
+                    y_colors = df.loc[cluster_df.index, target_for_color].values
+                else:
+                    y_colors = np.zeros(len(cluster_df))
+                
+                fig = ScientificVisualizer.plot_pca_2d(X_pca, y_colors,
                                                        title='PCA of Composition Space')
                 st.pyplot(fig)
                 
@@ -1809,15 +1941,16 @@ def main():
                 
                 # Cluster characteristics
                 st.subheader("Cluster Characteristics")
-                cluster_df['Cluster'] = clusters
-                cluster_means = cluster_df.groupby('Cluster')[cluster_features].mean()
+                cluster_df_copy = cluster_df.copy()
+                cluster_df_copy['Cluster'] = clusters
+                cluster_means = cluster_df_copy.groupby('Cluster')[cluster_features].mean()
                 st.dataframe(cluster_means, use_container_width=True)
                 
                 # Dendrogram
                 if len(cluster_df) < 200:
                     st.subheader("Hierarchical Clustering Dendrogram")
                     fig3, ax = plt.subplots(figsize=(12, 6))
-                    linkage_matrix = linkage(X_scaled[:100], method='ward')
+                    linkage_matrix = linkage(X_scaled[:min(100, len(X_scaled))], method='ward')
                     dendrogram(linkage_matrix, ax=ax, truncate_mode='lastp', p=30)
                     ax.set_title('Dendrogram (top 30 samples)', fontsize=12, fontweight='bold')
                     ax.set_xlabel('Sample index', fontsize=11)
@@ -1843,16 +1976,16 @@ def main():
                         
                         # Create SHAP explainer
                         explainer = shap.TreeExplainer(rf_model)
-                        shap_values = explainer.shap_values(X_train[:100])  # Limit for performance
+                        shap_values = explainer.shap_values(X_train[:min(100, len(X_train))])  # Limit for performance
                         
                         # SHAP summary plot
                         fig, ax = plt.subplots(figsize=(10, 6))
-                        shap.summary_plot(shap_values, X_train[:100], feature_names=features, show=False)
+                        shap.summary_plot(shap_values, X_train[:min(100, len(X_train))], feature_names=features, show=False)
                         st.pyplot(fig)
                         
                         # SHAP bar plot
                         fig2, ax2 = plt.subplots(figsize=(10, 6))
-                        shap.summary_plot(shap_values, X_train[:100], feature_names=features, 
+                        shap.summary_plot(shap_values, X_train[:min(100, len(X_train))], feature_names=features, 
                                          plot_type="bar", show=False)
                         st.pyplot(fig2)
                         
@@ -1886,29 +2019,32 @@ def main():
                 report.append(f"\n- Total samples: {len(df)}")
                 report.append(f"- Descriptors calculated: {len(st.session_state.descriptor_names)}")
                 
-                if 'α·106 (K-1)' in df.columns:
+                alpha_col = 'α·106 (K-1)'
+                if alpha_col in df.columns:
                     report.append(f"\n### Thermal Expansion (α)")
-                    report.append(f"- Mean: {df['α·106 (K-1)'].mean():.3f} ×10⁻⁶ K⁻¹")
-                    report.append(f"- Std: {df['α·106 (K-1)'].std():.3f}")
-                    report.append(f"- Min: {df['α·106 (K-1)'].min():.3f}")
-                    report.append(f"- Max: {df['α·106 (K-1)'].max():.3f}")
+                    report.append(f"- Mean: {df[alpha_col].mean():.3f} ×10⁻⁶ K⁻¹")
+                    report.append(f"- Std: {df[alpha_col].std():.3f}")
+                    report.append(f"- Min: {df[alpha_col].min():.3f}")
+                    report.append(f"- Max: {df[alpha_col].max():.3f}")
                 
-                if 'β' in df.columns:
+                beta_col = 'β'
+                if beta_col in df.columns:
                     report.append(f"\n### Chemical Expansion (β)")
-                    report.append(f"- Mean: {df['β'].mean():.4f}")
-                    report.append(f"- Std: {df['β'].std():.4f}")
+                    report.append(f"- Mean: {df[beta_col].mean():.4f}")
+                    report.append(f"- Std: {df[beta_col].std():.4f}")
                 
                 # Top correlations
-                if 'α·106 (K-1)' in df.columns and len(st.session_state.descriptor_names) > 0:
-                    numeric_cols = st.session_state.descriptor_names + ['α·106 (K-1)']
+                if alpha_col in df.columns and len(st.session_state.descriptor_names) > 0:
+                    numeric_cols = st.session_state.descriptor_names + [alpha_col]
                     numeric_cols = [c for c in numeric_cols if c in df.columns]
-                    corrs = df[numeric_cols].corr()['α·106 (K-1)'].abs().sort_values(ascending=False)
-                    top_corrs = corrs.head(10)
-                    
-                    report.append(f"\n### Top 10 Correlations with α")
-                    for feat, corr in top_corrs.items():
-                        if feat != 'α·106 (K-1)':
-                            report.append(f"- {feat}: {corr:.3f}")
+                    if len(numeric_cols) > 1:
+                        corrs = df[numeric_cols].corr()[alpha_col].abs().sort_values(ascending=False)
+                        top_corrs = corrs.head(10)
+                        
+                        report.append(f"\n### Top 10 Correlations with {alpha_col}")
+                        for feat, corr in top_corrs.items():
+                            if feat != alpha_col:
+                                report.append(f"- {feat}: {corr:.3f}")
                 
                 # Save report
                 report_text = "\n".join(report)
@@ -1924,7 +2060,7 @@ def main():
     
     else:
         # No data loaded yet
-        st.info("👈 Please upload Excel files in the sidebar to begin analysis")
+        st.info("👈 Please paste chemical data in the sidebar to begin analysis")
         
         # Show expected format
         with st.expander("📖 Expected Data Format"):
@@ -1951,6 +2087,7 @@ def main():
             Required columns:
             - `№` - Identifier
             - `A`, `A'`, `B`, `B'`, `D1`, `D2` - Composition
+            - `[A]`, `[B']`, `[D1]`, `[D2]` - Concentrations
             - `Symmetry` - Crystal symmetry
             - `Phase transitions (PT)` - Phase sequence
             - `T (PT), °C` - Transition temperature(s)

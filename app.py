@@ -2,8 +2,7 @@
 Streamlit Application for Analysis of Thermal and Chemical Expansion
 of Proton-Conducting Perovskite Oxides
 
-Version: 2.3 (with enhanced visualizations: expanded pairplot, concentration maps,
-             bubble charts, phase transition analysis, regplot, PDP, elbow/silhouette)
+Version: 2.2 (with full handling of '-' and missing values)
 Author: Materials Informatics Research
 Description: Comprehensive analysis tool for understanding composition-structure-property
              relationships in proton-conducting perovskites with focus on thermal
@@ -16,8 +15,8 @@ Features:
 - Interactive visualizations with scientific styling
 - Machine learning models for property prediction
 - SHAP analysis for interpretability
-- Phase transition impact analysis with multiple plots
-- Clustering and dimensionality reduction with elbow/silhouette
+- Phase transition impact analysis
+- Clustering and dimensionality reduction
 """
 
 import streamlit as st
@@ -53,7 +52,6 @@ from sklearn.cluster import KMeans, DBSCAN
 from sklearn.neighbors import NearestNeighbors
 from sklearn.ensemble import IsolationForest
 from sklearn.impute import SimpleImputer
-from sklearn.inspection import partial_dependence, PartialDependenceDisplay
 import xgboost as xgb
 import shap
 from io import BytesIO
@@ -809,18 +807,7 @@ class PerovskiteDescriptorCalculator:
         descriptors['method_dilatometry'] = 1 if 'dilatometry' in str(method) else 0
         descriptors['method_HT_ND'] = 1 if 'HT ND' in str(method) else 0
         
-        # Avoid column name conflicts with original data columns
-        # Rename descriptors that might conflict with original column names
-        conflict_names = ['beta', 'delta', 'alpha_true', 'alpha_apparent', 
-                          'alpha', 'beta_chem', 'delta_o']
-        final_descriptors = {}
-        for key, value in descriptors.items():
-            if key in conflict_names:
-                final_descriptors[f'desc_{key}'] = value
-            else:
-                final_descriptors[key] = value
-        
-        return final_descriptors
+        return descriptors
 
 # ============================================================================
 # 4. ПАРСЕРЫ ДЛЯ СПЕЦИАЛЬНЫХ ПОЛЕЙ
@@ -965,27 +952,6 @@ class ScientificVisualizer:
         'sequential': 'YlOrRd'
     }
     
-    # Extended list of available descriptors for axis selection
-    AVAILABLE_DESCRIPTORS = [
-        # Concentrations
-        '[D1]', '[D2]', "[B']", 'total_dopant_A', 'total_dopant_B', 'total_dopant', 'sum_B_site_dopants',
-        # Geometric
-        'tolerance_factor', 'tolerance_deviation', 'octahedral_factor', 'delta_r_AB', 'delta_r_AB_norm',
-        'rA_rB_ratio', 'rA_avg', 'rB_avg', 'variance_rA', 'variance_rB',
-        # Electronegativity
-        'chiA_avg', 'chiB_avg', 'delta_chi_AB', 'chi_ratio_AB', 'chi_total_avg',
-        'ionicity_AO', 'ionicity_BO',
-        # Thermodynamic
-        'S_config_A', 'S_config_B', 'S_config_total', 'VB_avg', 'Vo_proxy',
-        # Combined
-        'delta_chi_div_t', 'delta_chi_mul_t', 'disorder_over_distortion',
-        'ionic_x_octa', 'chi_ratio_t', 'rB_x_chiB',
-        # Experimental conditions
-        'log_pH2O', 'T_min', 'T_max', 'T_span', 'T_mid',
-        # Targets
-        'alpha_true', 'alpha_apparent', 'beta', 'delta'
-    ]
-    
     @staticmethod
     def apply_style():
         """Apply matplotlib style for scientific plots"""
@@ -1031,10 +997,6 @@ class ScientificVisualizer:
     @staticmethod
     def plot_distribution(df: pd.DataFrame, column: str, title: str = None, bins: int = 30):
         """Plot histogram with KDE and statistics"""
-        # Защита от дублирующихся колонок
-        if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='last')]
-        
         fig, ax = plt.subplots(figsize=(8, 5))
         
         # Filter out zeros and NaNs for distribution (zeros may be from missing data)
@@ -1084,16 +1046,11 @@ class ScientificVisualizer:
     def plot_boxplot_comparison(df: pd.DataFrame, x_col: str, y_col: str, 
                                  title: str = None, palette: str = 'Set2'):
         """Create boxplot for categorical comparison"""
-        # Защита от дублирующихся колонок
-        if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='last')]
-        
         fig, ax = plt.subplots(figsize=(10, 6))
         
         # Filter valid data (exclude zeros that may come from missing data)
         plot_df = df[[x_col, y_col]].dropna()
-        plot_df = plot_df.reset_index(drop=True)
-        plot_df = plot_df[plot_df[y_col] != 0]  
+        plot_df = plot_df[plot_df[y_col] != 0]
         
         if len(plot_df) > 0:
             groups = plot_df.groupby(x_col)[y_col].apply(list).to_dict()
@@ -1126,10 +1083,6 @@ class ScientificVisualizer:
         """
         Create enhanced correlation matrix highlighting top correlations with target
         """
-        # Защита от дублирующихся колонок
-        if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='last')]
-        
         # Filter features that exist and have valid data
         valid_features = [f for f in features if f in df.columns and df[f].notna().sum() > 5]
         
@@ -1170,87 +1123,6 @@ class ScientificVisualizer:
         ax.set_title('Feature Correlation Matrix', fontsize=14, fontweight='bold', pad=20)
         ax.tick_params(axis='x', rotation=45, labelsize=9)
         ax.tick_params(axis='y', labelsize=9)
-        
-        return fig
-    
-    @staticmethod
-    def plot_regplot(df: pd.DataFrame, x_col: str, y_col: str, 
-                     title: str = None, ci: float = 0.95):
-        """Create regression plot with confidence interval (regplot)"""
-        # Защита от дублирующихся колонок
-        if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='last')]
-        
-        fig, ax = plt.subplots(figsize=(9, 7))
-        
-        # Filter valid data (exclude zeros)
-        plot_df = df[[x_col, y_col]].dropna()
-        plot_df = plot_df[(plot_df[x_col] != 0) & (plot_df[y_col] != 0)]
-        
-        if len(plot_df) < 3:
-            ax.text(0.5, 0.5, f"Not enough data points for regression (n={len(plot_df)})", 
-                   transform=ax.transAxes, ha='center', va='center')
-            return fig
-        
-        # Create regplot
-        sns.regplot(data=plot_df, x=x_col, y=y_col, ax=ax, 
-                   scatter_kws={'alpha': 0.6, 's': 50, 'color': ScientificVisualizer.COLORS['primary'],
-                               'edgecolor': 'black', 'linewidth': 0.5},
-                   line_kws={'color': ScientificVisualizer.COLORS['secondary'], 'linewidth': 2},
-                   ci=ci)
-        
-        # Calculate R²
-        from scipy import stats
-        slope, intercept, r_value, p_value, std_err = stats.linregress(plot_df[x_col], plot_df[y_col])
-        r2 = r_value ** 2
-        
-        # Add R² text
-        textstr = f'R² = {r2:.3f}\nSlope = {slope:.3f}\np-value = {p_value:.2e}'
-        props = dict(boxstyle='round', facecolor='wheat', alpha=0.8)
-        ax.text(0.05, 0.95, textstr, transform=ax.transAxes, fontsize=9,
-                verticalalignment='top', bbox=props)
-        
-        ax.set_xlabel(x_col, fontsize=11, fontweight='bold')
-        ax.set_ylabel(y_col, fontsize=11, fontweight='bold')
-        ax.set_title(title or f'Regression: {y_col} vs {x_col}', fontsize=12, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        
-        return fig
-    
-    @staticmethod
-    def plot_pairplot_custom(df: pd.DataFrame, features: List[str], 
-                              diag_kind: str = 'kde', title: str = None):
-        """Create custom pairplot with user-selected features"""
-        # Защита от дублирующихся колонок
-        if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='last')]
-        
-        if len(features) < 2:
-            fig, ax = plt.subplots(figsize=(8, 6))
-            ax.text(0.5, 0.5, "Select at least 2 features for pairplot", 
-                   transform=ax.transAxes, ha='center', va='center')
-            return fig
-        
-        # Filter data
-        plot_df = df[features].dropna()
-        for col in features:
-            plot_df = plot_df[plot_df[col] != 0]
-        
-        if len(plot_df) < 3:
-            fig, ax = plt.subplots(figsize=(8, 6))
-            ax.text(0.5, 0.5, f"Not enough data (n={len(plot_df)})", 
-                   transform=ax.transAxes, ha='center', va='center')
-            return fig
-        
-        # Create pairplot
-        fig = sns.pairplot(plot_df, diag_kind=diag_kind,
-                          plot_kws={'alpha': 0.6, 's': 40, 
-                                   'color': ScientificVisualizer.COLORS['primary'],
-                                   'edgecolor': 'black', 'linewidth': 0.5},
-                          diag_kws={'color': ScientificVisualizer.COLORS['secondary']})
-        
-        if title:
-            fig.fig.suptitle(title, fontsize=14, fontweight='bold', y=1.02)
         
         return fig
     
@@ -1354,70 +1226,38 @@ class ScientificVisualizer:
         
         plt.tight_layout()
         return fig
-
+    
     @staticmethod
     def plot_scatter_2d(df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None,
                          size_col: str = None, title: str = None):
         """Create 2D scatter plot with optional color and size mapping"""
         fig, ax = plt.subplots(figsize=(9, 7))
         
-        # Принудительно создаем копию и удаляем все дубликаты колонок
-        df_work = df.copy()
-        if df_work.columns.duplicated().any():
-            df_work = df_work.loc[:, ~df_work.columns.duplicated(keep='first')]
+        # Prepare data - filter out zeros that indicate missing data for y_col
+        plot_df = df[[x_col, y_col]].dropna()
+        if y_col in plot_df.columns:
+            plot_df = plot_df[plot_df[y_col] != 0]
         
-        # Проверяем наличие необходимых колонок
-        required_cols = [x_col, y_col]
-        if color_col:
-            required_cols.append(color_col)
-        if size_col:
-            required_cols.append(size_col)
-        
-        # Проверяем, что все колонки существуют
-        missing_cols = [col for col in required_cols if col not in df_work.columns]
-        if missing_cols:
-            ax.text(0.5, 0.5, f"Missing columns: {missing_cols}", transform=ax.transAxes, ha='center', va='center')
-            return fig
-        
-        # Подготовка данных: берем только нужные колонки
-        plot_df = df_work[required_cols].copy()
-        
-        # Удаляем строки с NaN
-        plot_df = plot_df.dropna()
-        
-        # Фильтруем нулевые значения (кроме color_col, если это категориальная переменная)
-        # Для числовых колонок удаляем нули
-        for col in [x_col, y_col]:
-            if col in plot_df.columns:
-                plot_df = plot_df[plot_df[col] != 0]
-        
-        if color_col and color_col in plot_df.columns:
-            # Для color_col проверяем, является ли он числовым
-            if pd.api.types.is_numeric_dtype(plot_df[color_col]):
-                plot_df = plot_df[plot_df[color_col] != 0]
-        
-        if size_col and size_col in plot_df.columns:
-            if pd.api.types.is_numeric_dtype(plot_df[size_col]):
-                plot_df = plot_df[plot_df[size_col] != 0]
+        if color_col and color_col in df.columns:
+            plot_df = plot_df.join(df[color_col])
+        if size_col and size_col in df.columns:
+            plot_df = plot_df.join(df[size_col])
         
         if len(plot_df) == 0:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
             return fig
         
-        # Сбрасываем индекс для чистоты
-        plot_df = plot_df.reset_index(drop=True)
-        
-        if color_col and color_col in plot_df.columns:
-            scatter = ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
-                                c=plot_df[color_col].values,
-                                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
+        if color_col:
+            scatter = ax.scatter(plot_df[x_col], plot_df[y_col], 
+                                c=plot_df[color_col] if color_col else None,
+                                s=plot_df[size_col]*50 if size_col else 50,
                                 cmap=ScientificVisualizer.CMAPS['thermal'],
                                 alpha=0.7, edgecolors='black', linewidth=0.5)
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(color_col, fontsize=10)
         else:
-            ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
-                      s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
+            ax.scatter(plot_df[x_col], plot_df[y_col], 
+                      s=plot_df[size_col]*50 if size_col else 50,
                       c=ScientificVisualizer.COLORS['primary'],
                       alpha=0.7, edgecolors='black', linewidth=0.5)
         
@@ -1427,50 +1267,38 @@ class ScientificVisualizer:
         ax.grid(True, alpha=0.3)
         
         return fig
-
+    
     @staticmethod
-    def plot_hexbin_heatmap(df: pd.DataFrame, x_col: str, y_col: str, 
-                             z_col: str = None, gridsize: int = 30,
-                             title: str = None):
-        """Create hexbin heatmap (2D density plot with optional color mapping)"""
-        # Защита от дублирующихся колонок
-        if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='last')]
-        
+    def plot_pca_2d(X_pca: np.ndarray, y: np.ndarray, 
+                    labels: List[str] = None, title: str = 'PCA Projection'):
+        """Create 2D PCA scatter plot with color mapping"""
         fig, ax = plt.subplots(figsize=(10, 8))
         
-        # Filter data
-        plot_df = df[[x_col, y_col]].dropna()
-        if z_col and z_col in df.columns:
-            plot_df = plot_df.join(df[z_col])
-            plot_df = plot_df[(plot_df[x_col] != 0) & (plot_df[y_col] != 0) & (plot_df[z_col] != 0)]
-        else:
-            plot_df = plot_df[(plot_df[x_col] != 0) & (plot_df[y_col] != 0)]
+        # Filter out invalid points
+        valid_mask = ~np.isnan(y)
+        X_valid = X_pca[valid_mask]
+        y_valid = y[valid_mask]
         
-        if len(plot_df) < 5:
-            ax.text(0.5, 0.5, f"Not enough data for hexbin (n={len(plot_df)})", 
-                   transform=ax.transAxes, ha='center', va='center')
+        if len(X_valid) == 0:
+            ax.text(0.5, 0.5, "No valid PCA data", transform=ax.transAxes, ha='center', va='center')
             return fig
         
-        if z_col and z_col in plot_df.columns:
-            # Colored hexbin
-            hb = ax.hexbin(plot_df[x_col], plot_df[y_col], C=plot_df[z_col],
-                          gridsize=gridsize, cmap=ScientificVisualizer.CMAPS['thermal'],
-                          edgecolors='none', alpha=0.8)
-            cbar = plt.colorbar(hb, ax=ax)
-            cbar.set_label(z_col, fontsize=10)
-        else:
-            # Density hexbin
-            hb = ax.hexbin(plot_df[x_col], plot_df[y_col], gridsize=gridsize,
-                          cmap=ScientificVisualizer.CMAPS['thermal'],
-                          edgecolors='none', alpha=0.8)
-            cbar = plt.colorbar(hb, ax=ax)
-            cbar.set_label('Density (points per bin)', fontsize=10)
+        scatter = ax.scatter(X_valid[:, 0], X_valid[:, 1], c=y_valid, cmap=ScientificVisualizer.CMAPS['thermal'],
+                            alpha=0.7, edgecolors='black', linewidth=0.5, s=60)
         
-        ax.set_xlabel(x_col, fontsize=11, fontweight='bold')
-        ax.set_ylabel(y_col, fontsize=11, fontweight='bold')
-        ax.set_title(title or f'2D Hexbin Heatmap: {y_col} vs {x_col}', fontsize=12, fontweight='bold')
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label('Target Property', fontsize=10)
+        
+        ax.set_xlabel('PC1', fontsize=11, fontweight='bold')
+        ax.set_ylabel('PC2', fontsize=11, fontweight='bold')
+        ax.set_title(title, fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
+        
+        # Annotate points if labels provided and not too many
+        if labels and len(labels) < 50:
+            labels_valid = [labels[i] for i in range(len(labels)) if valid_mask[i]]
+            for i, label in enumerate(labels_valid[:min(50, len(labels_valid))]):
+                ax.annotate(label, (X_valid[i, 0], X_valid[i, 1]), fontsize=7, alpha=0.7)
         
         return fig
     
@@ -1478,10 +1306,6 @@ class ScientificVisualizer:
     def plot_concentration_heatmap(df: pd.DataFrame, x_col: str, y_col: str, 
                                     z_col: str, bins: int = 20):
         """Create 2D heatmap for concentration dependence"""
-        # Защита от дублирующихся колонок
-        if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='last')]
-        
         fig, ax = plt.subplots(figsize=(10, 8))
         
         # Create grid
@@ -1529,102 +1353,6 @@ class ScientificVisualizer:
         ax.set_xlabel(x_col, fontsize=11, fontweight='bold')
         ax.set_ylabel(y_col, fontsize=11, fontweight='bold')
         ax.set_title(f'{z_col} concentration map', fontsize=12, fontweight='bold')
-        
-        return fig
-    
-    @staticmethod
-    def plot_pca_2d(X_pca: np.ndarray, y: np.ndarray, 
-                    labels: List[str] = None, title: str = 'PCA Projection'):
-        """Create 2D PCA scatter plot with color mapping"""
-        fig, ax = plt.subplots(figsize=(10, 8))
-        
-        # Filter out invalid points
-        valid_mask = ~np.isnan(y)
-        X_valid = X_pca[valid_mask]
-        y_valid = y[valid_mask]
-        
-        if len(X_valid) == 0:
-            ax.text(0.5, 0.5, "No valid PCA data", transform=ax.transAxes, ha='center', va='center')
-            return fig
-        
-        scatter = ax.scatter(X_valid[:, 0], X_valid[:, 1], c=y_valid, cmap=ScientificVisualizer.CMAPS['thermal'],
-                            alpha=0.7, edgecolors='black', linewidth=0.5, s=60)
-        
-        cbar = plt.colorbar(scatter, ax=ax)
-        cbar.set_label('Target Property', fontsize=10)
-        
-        ax.set_xlabel('PC1', fontsize=11, fontweight='bold')
-        ax.set_ylabel('PC2', fontsize=11, fontweight='bold')
-        ax.set_title(title, fontsize=12, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        
-        # Annotate points if labels provided and not too many
-        if labels and len(labels) < 50:
-            labels_valid = [labels[i] for i in range(len(labels)) if valid_mask[i]]
-            for i, label in enumerate(labels_valid[:min(50, len(labels_valid))]):
-                ax.annotate(label, (X_valid[i, 0], X_valid[i, 1]), fontsize=7, alpha=0.7)
-        
-        return fig
-    
-    @staticmethod
-    def plot_elbow_curve(X_scaled: np.ndarray, max_k: int = 15):
-        """Plot elbow curve for KMeans clustering (inertia vs k)"""
-        inertias = []
-        K = range(1, max_k + 1)
-        
-        for k in K:
-            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-            kmeans.fit(X_scaled)
-            inertias.append(kmeans.inertia_)
-        
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(K, inertias, 'o-', color=ScientificVisualizer.COLORS['primary'], 
-               linewidth=2, markersize=8, markeredgecolor='black', markeredgewidth=0.5)
-        ax.set_xlabel('Number of clusters (k)', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Inertia', fontsize=11, fontweight='bold')
-        ax.set_title('Elbow Method for Optimal k', fontsize=12, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        
-        return fig
-    
-    @staticmethod
-    def plot_silhouette_analysis(X_scaled: np.ndarray, k: int):
-        """Plot silhouette analysis for KMeans clustering"""
-        from sklearn.metrics import silhouette_samples, silhouette_score
-        
-        kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
-        cluster_labels = kmeans.fit_predict(X_scaled)
-        silhouette_avg = silhouette_score(X_scaled, cluster_labels)
-        
-        # Compute silhouette scores for each sample
-        sample_silhouette_values = silhouette_samples(X_scaled, cluster_labels)
-        
-        fig, ax = plt.subplots(figsize=(10, 7))
-        y_lower = 10
-        
-        for i in range(k):
-            # Aggregate silhouette scores for samples in cluster i
-            ith_cluster_silhouette_values = sample_silhouette_values[cluster_labels == i]
-            ith_cluster_silhouette_values.sort()
-            
-            size_cluster_i = ith_cluster_silhouette_values.shape[0]
-            y_upper = y_lower + size_cluster_i
-            
-            color = plt.cm.viridis(i / k)
-            ax.fill_betweenx(np.arange(y_lower, y_upper), 0, ith_cluster_silhouette_values,
-                             facecolor=color, edgecolor=color, alpha=0.7)
-            
-            # Label the silhouette plots with their cluster numbers
-            ax.text(-0.05, y_lower + 0.5 * size_cluster_i, str(i))
-            y_lower = y_upper + 10
-        
-        ax.set_xlabel('Silhouette coefficient', fontsize=11, fontweight='bold')
-        ax.set_ylabel('Cluster label', fontsize=11, fontweight='bold')
-        ax.set_title(f'Silhouette plot for k={k} (avg silhouette: {silhouette_avg:.3f})', 
-                    fontsize=12, fontweight='bold')
-        ax.axvline(x=silhouette_avg, color='red', linestyle='--', linewidth=1.5)
-        ax.set_yticks([])
-        ax.grid(True, alpha=0.3)
         
         return fig
 
@@ -1773,18 +1501,6 @@ class MLModelManager:
         }).sort_values('importance', ascending=False)
         
         return importance_df
-    
-    def compute_partial_dependence(self, model, X: np.ndarray, feature_idx: int,
-                                    feature_names: List[str], grid_resolution: int = 50):
-        """Compute partial dependence for a single feature"""
-        try:
-            results = partial_dependence(
-                model, X, [feature_idx], grid_resolution=grid_resolution,
-                kind='average'
-            )
-            return results['values'][0], results['average'][0]
-        except Exception as e:
-            return None, None
 
 # ============================================================================
 # 8. ОСНОВНОЕ ПРИЛОЖЕНИЕ STREAMLIT
@@ -2057,18 +1773,13 @@ def main():
             # Combine with original data
             desc_df = pd.DataFrame(descriptors_list) if descriptors_list else pd.DataFrame()
             if len(desc_df) > 0:
-                # Сбрасываем индексы, чтобы избежать конфликтов
-                chem_df_reset = chem_df.reset_index(drop=True)
-                chem_df_full = pd.concat([chem_df_reset, desc_df], axis=1)
-                
-                # Удаляем дубликаты колонок: оставляем последнее вхождение (дескрипторы более новые)
-                chem_df_full = chem_df_full.loc[:, ~chem_df_full.columns.duplicated(keep='last')]
+                chem_df_full = pd.concat([chem_df.reset_index(drop=True), desc_df], axis=1)
             else:
                 chem_df_full = chem_df.copy()
             
             # Store in session state
             st.session_state.chem_with_descriptors = chem_df_full
-            st.session_state.descriptor_names = [c for c in desc_df.columns if c in chem_df_full.columns]
+            st.session_state.descriptor_names = list(desc_df.columns) if len(desc_df) > 0 else []
             st.session_state.filtered_df = chem_df_full
             
             pb.finish()
@@ -2086,10 +1797,10 @@ def main():
             "🔥 Correlation Analysis",
             "🗺️ Concentration Maps",
             "💨 Bubble Charts",
-            "🔬 Phase Transition Analysis",
             "🧠 Machine Learning",
+            "🔬 Phase Transitions",
             "🎯 Clustering & PCA",
-            "📉 Advanced ML (SHAP & PDP)",
+            "📉 Advanced ML (SHAP)",
             "📤 Export"
         ])
         
@@ -2188,106 +1899,79 @@ def main():
         with tabs[2]:
             st.header("🔥 Correlation Analysis")
             
-            # Sub-tabs for different correlation views
-            corr_tab1, corr_tab2, corr_tab3 = st.tabs(["📊 Correlation Matrix", "📈 Pairplot", "📉 Regression Plots"])
+            # Select features for correlation
+            default_features = ['rB_avg', 'tolerance_factor', 'chiB_avg', 'delta_chi_AB',
+                               'variance_rB', 'S_config_B', 'VB_avg', 'Vo_proxy',
+                               'alpha_true', 'beta']
+            available_features = [f for f in default_features if f in df.columns]
             
-            with corr_tab1:
-                # Select features for correlation
-                default_features = ['rB_avg', 'tolerance_factor', 'chiB_avg', 'delta_chi_AB',
-                                   'variance_rB', 'S_config_B', 'VB_avg', 'Vo_proxy',
-                                   'alpha_true', 'beta']
-                available_features = [f for f in default_features if f in df.columns]
-                
-                if len(available_features) > 2:
-                    fig = ScientificVisualizer.plot_correlation_matrix(df, available_features, 
-                                                                        target='alpha_true' if 'alpha_true' in df.columns else None)
+            if len(available_features) > 2:
+                fig = ScientificVisualizer.plot_correlation_matrix(df, available_features, 
+                                                                    target='alpha_true' if 'alpha_true' in df.columns else None)
+                st.pyplot(fig)
+            else:
+                st.warning("Not enough features for correlation analysis")
+            
+            # Pairplot (limited to avoid performance issues)
+            st.subheader("Pairplot of Top Features")
+            if len(available_features) >= 4:
+                import seaborn as sns
+                pairplot_df = df[available_features[:5]].dropna()
+                # Filter out zeros that indicate missing data
+                for col in pairplot_df.columns:
+                    pairplot_df = pairplot_df[pairplot_df[col] != 0]
+                if len(pairplot_df) > 0 and len(pairplot_df) < 500:
+                    fig = sns.pairplot(pairplot_df, diag_kind='kde')
                     st.pyplot(fig)
                 else:
-                    st.warning("Not enough features for correlation analysis")
-            
-            with corr_tab2:
-                st.subheader("Custom Pairplot")
-                
-                # Select features for pairplot
-                all_numeric_features = [f for f in ScientificVisualizer.AVAILABLE_DESCRIPTORS if f in df.columns]
-                
-                if len(all_numeric_features) >= 2:
-                    selected_pair_features = st.multiselect(
-                        "Select features for pairplot (2-6 features):",
-                        all_numeric_features,
-                        default=all_numeric_features[:4] if len(all_numeric_features) >= 4 else all_numeric_features
-                    )
-                    
-                    if len(selected_pair_features) >= 2:
-                        diag_type = st.radio("Diagonal plot type:", ["kde", "hist"], horizontal=True)
-                        fig = ScientificVisualizer.plot_pairplot_custom(
-                            df, selected_pair_features, 
-                            diag_kind=diag_type,
-                            title=f'Pairplot: {", ".join(selected_pair_features)}'
-                        )
+                    if len(pairplot_df) > 0:
+                        st.info(f"Using {min(200, len(pairplot_df))} samples for pairplot")
+                        fig = sns.pairplot(pairplot_df.head(200), diag_kind='kde')
                         st.pyplot(fig)
-                    else:
-                        st.info("Select at least 2 features for pairplot")
-                else:
-                    st.warning(f"Not enough numeric features (found {len(all_numeric_features)})")
-            
-            with corr_tab3:
-                st.subheader("Regression Plots with Confidence Intervals")
-                
-                # Select X and Y for regression
-                regression_features = [f for f in ['alpha_true', 'beta', 'tolerance_factor', 'chiB_avg', 
-                                                   'delta_chi_AB', 'rB_avg', 'Vo_proxy'] if f in df.columns]
-                
-                if len(regression_features) >= 2:
-                    col1_reg, col2_reg = st.columns(2)
-                    with col1_reg:
-                        x_reg = st.selectbox("X-axis for regression:", regression_features, key="reg_x")
-                    with col2_reg:
-                        y_options = [f for f in ['alpha_true', 'beta', 'alpha_apparent'] if f in df.columns]
-                        y_reg = st.selectbox("Y-axis for regression:", y_options if y_options else regression_features, key="reg_y")
-                    
-                    if x_reg != y_reg:
-                        ci_level = st.slider("Confidence interval:", 0.8, 0.99, 0.95, 0.01)
-                        fig = ScientificVisualizer.plot_regplot(df, x_reg, y_reg, ci=ci_level)
-                        st.pyplot(fig)
-                else:
-                    st.warning("Not enough features for regression analysis")
         
         # Tab 4: Concentration Maps
         with tabs[3]:
             st.header("🗺️ Concentration Maps")
             
-            # Get available descriptors for axis selection (excluding targets for X/Y)
-            axis_options = [d for d in ScientificVisualizer.AVAILABLE_DESCRIPTORS 
-                           if d in df.columns and d not in ['alpha_true', 'alpha_apparent', 'beta']]
-            
             col1, col2 = st.columns(2)
             with col1:
-                x_axis = st.selectbox("X-axis (descriptor):", axis_options, key="conc_x")
+                x_options = ['[D1]', '[D2]', 'total_dopant_B', 'tolerance_factor', 'chiB_avg', 'rB_avg']
+                x_axis = st.selectbox("X-axis (concentration/descriptor)", 
+                                      [c for c in x_options if c in df.columns],
+                                      key="conc_x")
             with col2:
-                y_axis = st.selectbox("Y-axis (descriptor):", axis_options, key="conc_y")
+                y_options = ['[D2]', '[D1]', 'total_dopant_B', 'variance_rB', 'S_config_B', 'VB_avg']
+                y_axis = st.selectbox("Y-axis (concentration/descriptor)",
+                                      [c for c in y_options if c in df.columns],
+                                      key="conc_y")
             
-            # Color options (target properties)
-            color_options = [d for d in ['alpha_true', 'alpha_apparent', 'beta', 'tolerance_factor', 'delta_chi_AB'] 
-                            if d in df.columns]
-            z_axis = st.selectbox("Color by (property):", color_options, key="conc_z")
+            z_options = ['alpha_true', 'alpha_apparent', 'beta', 'tolerance_factor']
+            z_axis = st.selectbox("Color by (property)", 
+                                  [c for c in z_options if c in df.columns])
             
             # 2D Scatter
-            st.subheader("2D Concentration Map (Scatter)")
-            # Создаем копию и сразу удаляем все дубликаты колонок
-            df_clean = df.copy().reset_index(drop=True)
-            # Принудительно удаляем дублирующиеся колонки (оставляем первые)
-            df_clean = df_clean.loc[:, ~df_clean.columns.duplicated(keep='first')]
-            # Дополнительная очистка: удаляем колонки с полностью нулевыми значениями (кроме целевых)
-            cols_to_keep = [x_axis, y_axis, z_axis] + [c for c in df_clean.columns if c not in [x_axis, y_axis, z_axis]]
-            df_clean = df_clean[cols_to_keep]
-            fig = ScientificVisualizer.plot_scatter_2d(df_clean, x_axis, y_axis, color_col=z_axis)
+            st.subheader("2D Concentration Map")
+            fig = ScientificVisualizer.plot_scatter_2d(df, x_axis, y_axis, color_col=z_axis)
             st.pyplot(fig)
             
-            # 2D Heatmap
-            st.subheader("2D Concentration Map (Heatmap)")
+            # Heatmap
+            st.subheader("2D Heatmap")
             fig2 = ScientificVisualizer.plot_concentration_heatmap(df, x_axis, y_axis, z_axis)
             st.pyplot(fig2)
+            
+            # 3D Scatter (plotly)
+            st.subheader("3D Interactive Scatter")
+            if len(df) > 0:
+                # Filter out zeros for z_axis
+                plot_df = df[df[z_axis] != 0].copy()
+                if len(plot_df) > 0:
+                    fig3 = px.scatter_3d(plot_df, x=x_axis, y=y_axis, z=z_axis,
+                                         color=z_axis,
+                                         hover_data=['A', 'B', '[D1]', '[D2]'],
+                                         title=f'3D Visualization: {z_axis} vs {x_axis} and {y_axis}')
+                    st.plotly_chart(fig3, use_container_width=True)
+                else:
+                    st.info("No valid data for 3D scatter plot")
         
         # Tab 5: Bubble Charts
         with tabs[4]:
@@ -2296,356 +1980,56 @@ def main():
             st.markdown("""
             <div class="info-box">
             <b>Interactive bubble charts:</b> Y-axis shows target property (α, αav, or β),<br>
-            while X-axis, bubble size, and color can be customized from 35+ descriptors.
+            while X-axis, bubble size, and color can be customized.
             </div>
             """, unsafe_allow_html=True)
             
-            # Bubble chart sub-tabs
-            bubble_tab1, bubble_tab2 = st.tabs(["🫧 Bubble Scatter", "🔥 2D Bubble Heatmap (Hexbin)"])
+            # Select Y-axis (target property)
+            bubble_y_options = ['alpha_true', 'alpha_apparent', 'beta']
+            y_bubble = st.selectbox("Y-axis (target property)",
+                                    [c for c in bubble_y_options if c in df.columns],
+                                    key="bubble_y")
             
-            with bubble_tab1:
-                # Select Y-axis (target property)
-                bubble_y_options = ['alpha_true', 'alpha_apparent', 'beta']
-                y_bubble = st.selectbox("Y-axis (target property):",
-                                        [c for c in bubble_y_options if c in df.columns],
-                                        key="bubble_y")
-                
-                # X-axis options (all descriptors)
-                x_options = [d for d in ScientificVisualizer.AVAILABLE_DESCRIPTORS if d in df.columns]
-                x_bubble = st.selectbox("X-axis:", x_options, key="bubble_x")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    size_options = [d for d in ['delta', 'total_dopant_B', 'S_config_B', 'beta', 'Vo_proxy'] 
-                                   if d in df.columns]
-                    size_bubble = st.selectbox("Bubble size:", size_options, key="bubble_size")
-                with col2:
-                    color_options_bubble = [d for d in ['method', 'A', 'B', 'alpha_true', 'beta', 'tolerance_factor'] 
-                                           if d in df.columns]
-                    color_bubble = st.selectbox("Color:", color_options_bubble, key="bubble_color")
-                
-                # Create plotly bubble chart
-                if len(df) > 0:
-                    # Filter out zeros for y-axis
-                    plot_df = df[df[y_bubble] != 0].copy()
-                    if len(plot_df) > 0:
-                        fig = px.scatter(plot_df, x=x_bubble, y=y_bubble,
-                                         size=size_bubble if size_bubble else None,
-                                         color=color_bubble,
-                                         hover_data=['A', 'B', '[D1]', '[D2]', 'method', 'alpha_true', 'beta'],
-                                         title=f'Bubble Chart: {y_bubble} vs {x_bubble}',
-                                         size_max=30)
-                        fig.update_layout(
-                            template='plotly_white',
-                            font=dict(family='Times New Roman', size=12),
-                            xaxis_title=x_bubble,
-                            yaxis_title=y_bubble
-                        )
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.info("No valid data for bubble chart")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                x_options = ['tolerance_factor', 'chiB_avg', 'rB_avg', 'delta_chi_AB', '[D1]', '[D2]']
+                x_bubble = st.selectbox("X-axis", 
+                                        [c for c in x_options if c in df.columns],
+                                        key="bubble_x")
+            with col2:
+                size_options = ['delta', 'total_dopant_B', 'S_config_B', 'beta']
+                size_bubble = st.selectbox("Bubble size",
+                                           [c for c in size_options if c in df.columns],
+                                           key="bubble_size")
+            with col3:
+                color_options = ['method', 'A', 'B', 'alpha_true', 'beta']
+                color_bubble = st.selectbox("Color",
+                                            [c for c in color_options if c in df.columns],
+                                            key="bubble_color")
             
-            with bubble_tab2:
-                st.subheader("2D Bubble Heatmap (Hexbin)")
-                st.markdown("Hexbin plot showing point density with optional color mapping.")
-                
-                # X and Y selection
-                x_hex = st.selectbox("X-axis:", [d for d in ScientificVisualizer.AVAILABLE_DESCRIPTORS if d in df.columns], key="hex_x")
-                y_hex = st.selectbox("Y-axis:", [d for d in ['alpha_true', 'alpha_apparent', 'beta'] if d in df.columns], key="hex_y")
-                
-                # Optional color mapping
-                z_hex_options = [d for d in ['beta', 'delta', 'total_dopant_B', 'Vo_proxy', 'tolerance_factor'] if d in df.columns]
-                z_hex = st.selectbox("Color mapping (optional):", [None] + z_hex_options, key="hex_z")
-                
-                gridsize = st.slider("Grid size (resolution):", 20, 60, 30, 5)
-                
-                if y_hex in df.columns:
-                    fig = ScientificVisualizer.plot_hexbin_heatmap(
-                        df, x_hex, y_hex, 
-                        z_col=z_hex if z_hex != "None" else None,
-                        gridsize=gridsize,
-                        title=f'Hexbin Heatmap: {y_hex} vs {x_hex}'
+            # Create plotly bubble chart
+            if len(df) > 0:
+                # Filter out zeros for y-axis
+                plot_df = df[df[y_bubble] != 0].copy()
+                if len(plot_df) > 0:
+                    fig = px.scatter(plot_df, x=x_bubble, y=y_bubble,
+                                     size=size_bubble if size_bubble else None,
+                                     color=color_bubble,
+                                     hover_data=['A', 'B', '[D1]', '[D2]', 'method'],
+                                     title=f'Bubble Chart: {y_bubble} vs {x_bubble}',
+                                     size_max=30)
+                    fig.update_layout(
+                        template='plotly_white',
+                        font=dict(family='Times New Roman', size=12),
+                        xaxis_title=x_bubble,
+                        yaxis_title=y_bubble
                     )
-                    st.pyplot(fig)
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No valid data for bubble chart")
         
-        # Tab 6: Phase Transition Analysis
+        # Tab 6: Machine Learning
         with tabs[5]:
-            st.header("🔬 Phase Transition Analysis")
-            
-            if st.session_state.phase_df is not None:
-                phase_df = st.session_state.phase_df
-                
-                # Create sub-tabs for phase transition plots
-                pt_tab1, pt_tab2, pt_tab3, pt_tab4 = st.tabs([
-                    "📋 Data Overview", 
-                    "📊 Temperature Analysis", 
-                    "🔗 Correlation Plots",
-                    "📈 Composition Dependence"
-                ])
-                
-                with pt_tab1:
-                    st.subheader("Phase Transition Data")
-                    st.dataframe(phase_df, use_container_width=True)
-                    
-                    # Basic statistics
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Total Records", len(phase_df))
-                    with col2:
-                        # Count unique symmetries
-                        all_sym = []
-                        for _, row in phase_df.iterrows():
-                            sym = row.get('Symmetry', '')
-                            if sym and sym != '-':
-                                all_sym.extend(sym.split(';'))
-                        st.metric("Unique Symmetries", len(set(all_sym)))
-                    with col3:
-                        # Count transitions with temperatures
-                        temp_count = 0
-                        for _, row in phase_df.iterrows():
-                            temps = DataParser.parse_bends_temperatures(row.get('T (PT), °C', ''))
-                            if temps:
-                                temp_count += 1
-                        st.metric("Records with T(PT)", temp_count)
-                
-                with pt_tab2:
-                    st.subheader("Transition Temperatures Distribution")
-                    
-                    # Extract all transition temperatures
-                    phase_temps = []
-                    for _, row in phase_df.iterrows():
-                        temps = DataParser.parse_bends_temperatures(row.get('T (PT), °C', ''))
-                        phase_temps.extend(temps)
-                    
-                    if phase_temps:
-                        fig, ax = plt.subplots(figsize=(10, 5))
-                        ax.hist(phase_temps, bins=20, color=ScientificVisualizer.COLORS['primary'],
-                               edgecolor='black', alpha=0.7)
-                        ax.set_xlabel('Transition Temperature (°C)', fontsize=11, fontweight='bold')
-                        ax.set_ylabel('Frequency', fontsize=11, fontweight='bold')
-                        ax.set_title('Distribution of Phase Transition Temperatures', fontsize=12, fontweight='bold')
-                        st.pyplot(fig)
-                    else:
-                        st.info("No valid transition temperatures found")
-                    
-                    st.subheader("Symmetry Types Distribution")
-                    symmetries = []
-                    for _, row in phase_df.iterrows():
-                        sym = row.get('Symmetry', '')
-                        if sym and sym != '-':
-                            symmetries.extend(sym.split(';'))
-                    
-                    if symmetries:
-                        sym_counts = pd.Series(symmetries).value_counts()
-                        fig, ax = plt.subplots(figsize=(10, 6))
-                        sym_counts.plot(kind='bar', ax=ax, color=ScientificVisualizer.COLORS['secondary'])
-                        ax.set_xlabel('Symmetry', fontsize=11, fontweight='bold')
-                        ax.set_ylabel('Count', fontsize=11, fontweight='bold')
-                        ax.set_title('Phase Symmetry Distribution', fontsize=12, fontweight='bold')
-                        plt.xticks(rotation=45, ha='right')
-                        st.pyplot(fig)
-                    else:
-                        st.info("No symmetry information found")
-                    
-                    st.subheader("Transition Type Distribution")
-                    transition_types = []
-                    for _, row in phase_df.iterrows():
-                        pt_str = row.get('Phase transitions (PT)', '')
-                        if pt_str and pt_str != '-':
-                            # Count number of transitions (number of arrows between phases)
-                            if ';' in pt_str:
-                                parts = pt_str.split(';')
-                                transition_types.append(f"{len(parts)}-phase sequence")
-                            else:
-                                transition_types.append("Single phase")
-                    
-                    if transition_types:
-                        type_counts = pd.Series(transition_types).value_counts()
-                        fig, ax = plt.subplots(figsize=(8, 5))
-                        type_counts.plot(kind='bar', ax=ax, color=ScientificVisualizer.COLORS['primary'])
-                        ax.set_xlabel('Transition Type', fontsize=11, fontweight='bold')
-                        ax.set_ylabel('Count', fontsize=11, fontweight='bold')
-                        ax.set_title('Phase Transition Types', fontsize=12, fontweight='bold')
-                        plt.xticks(rotation=45, ha='right')
-                        st.pyplot(fig)
-                
-                with pt_tab3:
-                    st.subheader("Correlation: Phase Transitions vs Composition")
-                    
-                    # Create combined dataset from phase_df and chemical data
-                    # For each phase record, try to match with chemical data by composition
-                    if st.session_state.chem_with_descriptors is not None:
-                        chem_df_pt = st.session_state.chem_with_descriptors
-                        
-                        # Try to match by A, B, D1, [D1] approximately
-                        matched_data = []
-                        for _, pt_row in phase_df.iterrows():
-                            pt_a = pt_row.get('A', '')
-                            pt_b = pt_row.get('B', '')
-                            pt_d1 = pt_row.get('D1', '')
-                            pt_d1_conc = safe_float_conversion(pt_row.get('[D1]', 0), 0)
-                            
-                            # Find matching chem rows
-                            matches = chem_df_pt[
-                                (chem_df_pt['A'] == pt_a) & 
-                                (chem_df_pt['B'] == pt_b) &
-                                (abs(chem_df_pt.get('[D1]', 0) - pt_d1_conc) < 0.02)
-                            ]
-                            
-                            if len(matches) > 0:
-                                for _, match in matches.iterrows():
-                                    temps = DataParser.parse_bends_temperatures(pt_row.get('T (PT), °C', ''))
-                                    for t_pt in temps:
-                                        matched_data.append({
-                                            'T_PT': t_pt,
-                                            'alpha_true': match.get('alpha_true', 0),
-                                            'beta': match.get('beta', 0),
-                                            'total_dopant_B': match.get('total_dopant_B', 0),
-                                            'tolerance_factor': match.get('tolerance_factor', 0),
-                                            'delta_chi_AB': match.get('delta_chi_AB', 0),
-                                            'symmetry': pt_row.get('Symmetry', 'Unknown')
-                                        })
-                        
-                        if matched_data:
-                            match_df = pd.DataFrame(matched_data)
-                            match_df = match_df[match_df['T_PT'] > 0]
-                            
-                            if len(match_df) > 0:
-                                # α vs T(PT) plot
-                                st.subheader("Thermal Expansion vs Transition Temperature")
-                                fig, ax = plt.subplots(figsize=(10, 6))
-                                scatter = ax.scatter(match_df['T_PT'], match_df['alpha_true'], 
-                                                   c=match_df['beta'] if 'beta' in match_df.columns else 'blue',
-                                                   cmap='plasma', alpha=0.7, s=80,
-                                                   edgecolors='black', linewidth=0.5)
-                                ax.set_xlabel('Phase Transition Temperature (°C)', fontsize=11, fontweight='bold')
-                                ax.set_ylabel('α (×10⁶ K⁻¹)', fontsize=11, fontweight='bold')
-                                ax.set_title('α vs T(PT)', fontsize=12, fontweight='bold')
-                                cbar = plt.colorbar(scatter, ax=ax)
-                                cbar.set_label('β (Chemical Expansion)', fontsize=10)
-                                ax.grid(True, alpha=0.3)
-                                st.pyplot(fig)
-                                
-                                # β vs T(PT)
-                                if 'beta' in match_df.columns:
-                                    fig2, ax2 = plt.subplots(figsize=(10, 6))
-                                    scatter2 = ax2.scatter(match_df['T_PT'], match_df['beta'],
-                                                          c=match_df['alpha_true'], cmap='viridis',
-                                                          alpha=0.7, s=80,
-                                                          edgecolors='black', linewidth=0.5)
-                                    ax2.set_xlabel('Phase Transition Temperature (°C)', fontsize=11, fontweight='bold')
-                                    ax2.set_ylabel('β (Chemical Expansion)', fontsize=11, fontweight='bold')
-                                    ax2.set_title('β vs T(PT)', fontsize=12, fontweight='bold')
-                                    cbar2 = plt.colorbar(scatter2, ax=ax2)
-                                    cbar2.set_label('α (×10⁶ K⁻¹)', fontsize=10)
-                                    ax2.grid(True, alpha=0.3)
-                                    st.pyplot(fig2)
-                            else:
-                                st.info("No matched data with valid temperatures")
-                        else:
-                            st.info("No matching compositions found between phase transition and chemical data")
-                    else:
-                        st.info("Load chemical data first to enable correlation plots")
-                
-                with pt_tab4:
-                    st.subheader("Composition Dependence of Phase Transitions")
-                    
-                    # Extract composition data from phase_df
-                    comp_data = []
-                    for _, row in phase_df.iterrows():
-                        # Get dopant concentrations
-                        d1_conc = safe_float_conversion(row.get('[D1]', 0), 0)
-                        d2_conc = safe_float_conversion(row.get('[D2]', 0), 0)
-                        b_prime_conc = safe_float_conversion(row.get("[B']", 0), 0)
-                        total_dopant = d1_conc + d2_conc + b_prime_conc
-                        
-                        # Get temperatures
-                        temps = DataParser.parse_bends_temperatures(row.get('T (PT), °C', ''))
-                        num_transitions = len(temps)
-                        
-                        # Get tolerance factor if available (approximate from A/B)
-                        a_elem = row.get('A', '')
-                        b_elem = row.get('B', '')
-                        
-                        for t_pt in temps:
-                            comp_data.append({
-                                'T_PT': t_pt,
-                                'num_transitions': num_transitions,
-                                'total_dopant_B': total_dopant,
-                                '[D1]': d1_conc,
-                                '[D2]': d2_conc,
-                                "[B']": b_prime_conc,
-                                'A': a_elem,
-                                'B': b_elem
-                            })
-                    
-                    if comp_data:
-                        comp_df = pd.DataFrame(comp_data)
-                        comp_df = comp_df[comp_df['T_PT'] > 0]
-                        
-                        if len(comp_df) > 0:
-                            # T(PT) vs total_dopant_B
-                            st.subheader("Transition Temperature vs Total B-site Doping")
-                            fig, ax = plt.subplots(figsize=(10, 6))
-                            ax.scatter(comp_df['total_dopant_B'], comp_df['T_PT'], 
-                                      alpha=0.7, s=60, c=ScientificVisualizer.COLORS['primary'],
-                                      edgecolors='black', linewidth=0.5)
-                            ax.set_xlabel('Total B-site Doping Concentration', fontsize=11, fontweight='bold')
-                            ax.set_ylabel('Phase Transition Temperature (°C)', fontsize=11, fontweight='bold')
-                            ax.set_title('T(PT) vs Total B-site Doping', fontsize=12, fontweight='bold')
-                            ax.grid(True, alpha=0.3)
-                            st.pyplot(fig)
-                            
-                            # T(PT) vs [B']
-                            st.subheader("Transition Temperature vs B' Concentration")
-                            fig2, ax2 = plt.subplots(figsize=(10, 6))
-                            ax2.scatter(comp_df["[B']"], comp_df['T_PT'], 
-                                       alpha=0.7, s=60, c=ScientificVisualizer.COLORS['secondary'],
-                                       edgecolors='black', linewidth=0.5)
-                            ax2.set_xlabel("[B'] Concentration", fontsize=11, fontweight='bold')
-                            ax2.set_ylabel('Phase Transition Temperature (°C)', fontsize=11, fontweight='bold')
-                            ax2.set_title('T(PT) vs [B\']', fontsize=12, fontweight='bold')
-                            ax2.grid(True, alpha=0.3)
-                            st.pyplot(fig2)
-                            
-                            # Number of transitions vs total_dopant
-                            st.subheader("Number of Phase Transitions vs Total Doping")
-                            unique_comp = comp_df.groupby('total_dopant_B')['num_transitions'].first().reset_index()
-                            fig3, ax3 = plt.subplots(figsize=(10, 6))
-                            ax3.scatter(unique_comp['total_dopant_B'], unique_comp['num_transitions'],
-                                       alpha=0.7, s=100, c=ScientificVisualizer.COLORS['quaternary'],
-                                       edgecolors='black', linewidth=0.5)
-                            ax3.set_xlabel('Total B-site Doping Concentration', fontsize=11, fontweight='bold')
-                            ax3.set_ylabel('Number of Phase Transitions', fontsize=11, fontweight='bold')
-                            ax3.set_title('Number of PT vs Total Doping', fontsize=12, fontweight='bold')
-                            ax3.grid(True, alpha=0.3)
-                            st.pyplot(fig3)
-                            
-                            # T(PT) boxplot by A-site
-                            if 'A' in comp_df.columns:
-                                st.subheader("Transition Temperature by A-site Element")
-                                fig4, ax4 = plt.subplots(figsize=(10, 6))
-                                valid_a = [a for a in comp_df['A'].unique() if a not in [None, '-', '']]
-                                data_by_a = [comp_df[comp_df['A'] == a]['T_PT'].dropna().values for a in valid_a]
-                                data_by_a = [d for d in data_by_a if len(d) > 0]
-                                if data_by_a:
-                                    bp = ax4.boxplot(data_by_a, labels=valid_a[:len(data_by_a)],
-                                                    patch_artist=True, showmeans=True)
-                                    for patch in bp['boxes']:
-                                        patch.set_facecolor(ScientificVisualizer.COLORS['primary'])
-                                        patch.set_alpha(0.7)
-                                    ax4.set_xlabel('A-site Element', fontsize=11, fontweight='bold')
-                                    ax4.set_ylabel('Phase Transition Temperature (°C)', fontsize=11, fontweight='bold')
-                                    ax4.set_title('T(PT) by A-site', fontsize=12, fontweight='bold')
-                                    ax4.grid(True, alpha=0.3)
-                                    st.pyplot(fig4)
-                    else:
-                        st.info("No valid composition data extracted from phase transitions")
-            else:
-                st.info("Upload phase transition data to enable this analysis")
-        
-        # Tab 7: Machine Learning
-        with tabs[6]:
             st.header("🧠 Machine Learning Models")
             
             # Select target for prediction
@@ -2655,10 +2039,14 @@ def main():
                                      key="ml_target")
             
             # Select features
-            all_numeric_features = [f for f in ScientificVisualizer.AVAILABLE_DESCRIPTORS if f in df.columns]
+            default_ml_features = ['tolerance_factor', 'chiB_avg', 'delta_chi_AB', 'rB_avg',
+                                   'variance_rB', 'S_config_B', 'VB_avg', 'Vo_proxy',
+                                   'log_pH2O', 'T_span']
+            available_ml_features = [f for f in default_ml_features if f in df.columns]
+            
             selected_features = st.multiselect("Select features for ML", 
-                                               all_numeric_features,
-                                               default=all_numeric_features[:5] if len(all_numeric_features) > 5 else all_numeric_features)
+                                               available_ml_features,
+                                               default=available_ml_features[:5] if len(available_ml_features) > 5 else available_ml_features)
             
             if len(selected_features) > 0 and len(df) > 10:
                 if st.button("Train Model", type="primary", use_container_width=True):
@@ -2707,8 +2095,6 @@ def main():
                                     # Store model results
                                     st.session_state.ml_results = results
                                     st.session_state.ml_features = selected_features
-                                    st.session_state.ml_model = rf_model
-                                    st.session_state.ml_X_train = results['X_train']
                         else:
                             if len(X_scaled) < 10:
                                 st.warning("Not enough valid data for training (need at least 10 samples)")
@@ -2717,218 +2103,186 @@ def main():
             else:
                 st.info("Select at least one feature and ensure sufficient data")
         
+        # Tab 7: Phase Transitions
+        with tabs[6]:
+            st.header("🔬 Phase Transition Analysis")
+            
+            if st.session_state.phase_df is not None:
+                phase_df = st.session_state.phase_df
+                st.subheader("Phase Transition Data")
+                st.dataframe(phase_df, use_container_width=True)
+                
+                # Analyze phase transitions
+                st.subheader("Transition Temperatures Distribution")
+                phase_temps = []
+                for _, row in phase_df.iterrows():
+                    temps = DataParser.parse_bends_temperatures(row.get('T (PT), °C', ''))
+                    phase_temps.extend(temps)
+                
+                if phase_temps:
+                    fig, ax = plt.subplots(figsize=(10, 5))
+                    ax.hist(phase_temps, bins=20, color=ScientificVisualizer.COLORS['primary'],
+                           edgecolor='black', alpha=0.7)
+                    ax.set_xlabel('Transition Temperature (°C)', fontsize=11, fontweight='bold')
+                    ax.set_ylabel('Frequency', fontsize=11, fontweight='bold')
+                    ax.set_title('Distribution of Phase Transition Temperatures', fontsize=12, fontweight='bold')
+                    st.pyplot(fig)
+                else:
+                    st.info("No valid transition temperatures found")
+                
+                # Symmetry distribution
+                st.subheader("Symmetry Types")
+                symmetries = []
+                for _, row in phase_df.iterrows():
+                    sym = row.get('Symmetry', '')
+                    if sym and sym != '-':
+                        symmetries.extend(sym.split(';'))
+                
+                if symmetries:
+                    sym_counts = pd.Series(symmetries).value_counts()
+                    fig, ax = plt.subplots(figsize=(10, 6))
+                    sym_counts.plot(kind='bar', ax=ax, color=ScientificVisualizer.COLORS['secondary'])
+                    ax.set_xlabel('Symmetry', fontsize=11, fontweight='bold')
+                    ax.set_ylabel('Count', fontsize=11, fontweight='bold')
+                    ax.set_title('Phase Symmetry Distribution', fontsize=12, fontweight='bold')
+                    plt.xticks(rotation=45, ha='right')
+                    st.pyplot(fig)
+                else:
+                    st.info("No symmetry information found")
+            else:
+                st.info("Upload phase transition data to enable this analysis")
+        
         # Tab 8: Clustering & PCA
         with tabs[7]:
             st.header("🎯 Clustering & Dimensionality Reduction")
             
-            # Sub-tabs for clustering analysis
-            cluster_tab1, cluster_tab2, cluster_tab3 = st.tabs(["📊 PCA & Projections", "🔬 K-Means Clustering", "📈 Cluster Quality"])
+            # Select features for clustering
+            cluster_options = ['tolerance_factor', 'chiB_avg', 'delta_chi_AB', 'rB_avg', 'variance_rB', 'S_config_B']
+            cluster_features = st.multiselect("Select features for clustering",
+                                             [c for c in cluster_options if c in df.columns],
+                                             default=[c for c in ['tolerance_factor', 'chiB_avg', 'delta_chi_AB'] if c in df.columns][:3])
             
-            with cluster_tab1:
-                # Select features for PCA
-                pca_features = st.multiselect("Select features for PCA",
-                                             [f for f in ScientificVisualizer.AVAILABLE_DESCRIPTORS if f in df.columns],
-                                             default=[f for f in ['tolerance_factor', 'chiB_avg', 'delta_chi_AB', 'rB_avg'] if f in df.columns])
+            if len(cluster_features) >= 2 and len(df) > 0:
+                # Prepare data - exclude rows with zeros in any feature
+                cluster_df = df[cluster_features].dropna()
+                for col in cluster_features:
+                    cluster_df = cluster_df[cluster_df[col] != 0]
                 
-                if len(pca_features) >= 2 and len(df) > 0:
-                    # Prepare data
-                    pca_df = df[pca_features].dropna()
-                    for col in pca_features:
-                        pca_df = pca_df[pca_df[col] != 0]
+                if len(cluster_df) >= 5:
+                    scaler = StandardScaler()
+                    X_scaled = scaler.fit_transform(cluster_df)
                     
-                    if len(pca_df) >= 5:
-                        scaler = StandardScaler()
-                        X_scaled = scaler.fit_transform(pca_df)
-                        
-                        # PCA
-                        pca = PCA(n_components=2)
-                        X_pca = pca.fit_transform(X_scaled)
-                        
-                        st.subheader("PCA Projection")
-                        target_for_color = 'alpha_true' if 'alpha_true' in df.columns else None
-                        if target_for_color and target_for_color in df.columns:
-                            y_colors = df.loc[pca_df.index, target_for_color].values
-                            valid_mask = y_colors != 0
-                            if np.any(valid_mask):
-                                X_pca_valid = X_pca[valid_mask]
-                                y_colors_valid = y_colors[valid_mask]
-                                fig = ScientificVisualizer.plot_pca_2d(X_pca_valid, y_colors_valid,
-                                                                       title='PCA of Composition Space')
-                                st.pyplot(fig)
-                        else:
-                            fig = ScientificVisualizer.plot_pca_2d(X_pca, np.zeros(len(X_pca)),
+                    # PCA
+                    pca = PCA(n_components=2)
+                    X_pca = pca.fit_transform(X_scaled)
+                    
+                    st.subheader("PCA Projection")
+                    target_for_color = 'alpha_true' if 'alpha_true' in df.columns else None
+                    if target_for_color and target_for_color in df.columns:
+                        y_colors = df.loc[cluster_df.index, target_for_color].values
+                        # Filter out zeros
+                        valid_mask = y_colors != 0
+                        X_pca_valid = X_pca[valid_mask]
+                        y_colors_valid = y_colors[valid_mask]
+                        if len(X_pca_valid) > 0:
+                            fig = ScientificVisualizer.plot_pca_2d(X_pca_valid, y_colors_valid,
                                                                    title='PCA of Composition Space')
                             st.pyplot(fig)
-                        
-                        st.write(f"Explained variance: PC1 = {pca.explained_variance_ratio_[0]:.2%}, PC2 = {pca.explained_variance_ratio_[1]:.2%}")
-                        
-                        # PCA loadings
-                        st.subheader("PCA Loadings")
-                        loadings_df = pd.DataFrame(pca.components_.T, columns=['PC1', 'PC2'], index=pca_features)
-                        st.dataframe(loadings_df, use_container_width=True)
                     else:
-                        st.warning(f"Not enough valid data for PCA (need at least 5 samples, have {len(pca_df)})")
-            
-            with cluster_tab2:
-                # Select features for clustering
-                cluster_features = st.multiselect("Select features for clustering",
-                                                 [f for f in ScientificVisualizer.AVAILABLE_DESCRIPTORS if f in df.columns],
-                                                 default=[f for f in ['tolerance_factor', 'chiB_avg', 'delta_chi_AB'] if f in df.columns])
-                
-                if len(cluster_features) >= 2:
-                    # Prepare data
-                    cluster_df = df[cluster_features].dropna()
-                    for col in cluster_features:
-                        cluster_df = cluster_df[cluster_df[col] != 0]
-                    
-                    if len(cluster_df) >= 5:
-                        scaler = StandardScaler()
-                        X_scaled = scaler.fit_transform(cluster_df)
-                        
-                        # PCA for visualization
-                        pca = PCA(n_components=2)
-                        X_pca = pca.fit_transform(X_scaled)
-                        
-                        # K-Means clustering
-                        n_clusters = st.slider("Number of clusters", 2, 10, 3, key="cluster_k")
-                        
-                        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-                        clusters = kmeans.fit_predict(X_scaled)
-                        
-                        # Visualize clusters
-                        fig, ax = plt.subplots(figsize=(10, 7))
-                        scatter = ax.scatter(X_pca[:, 0], X_pca[:, 1], c=clusters, cmap='viridis',
-                                            alpha=0.7, edgecolors='black', linewidth=0.5, s=60)
-                        ax.scatter(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1], 
-                                  c='red', marker='X', s=200, edgecolors='black', linewidth=1.5,
-                                  label='Centroids')
-                        ax.set_xlabel('PC1', fontsize=11, fontweight='bold')
-                        ax.set_ylabel('PC2', fontsize=11, fontweight='bold')
-                        ax.set_title(f'K-Means Clustering (k={n_clusters})', fontsize=12, fontweight='bold')
-                        ax.legend()
-                        cbar = plt.colorbar(scatter, ax=ax)
-                        cbar.set_label('Cluster', fontsize=10)
+                        fig = ScientificVisualizer.plot_pca_2d(X_pca, np.zeros(len(X_pca)),
+                                                               title='PCA of Composition Space')
                         st.pyplot(fig)
-                        
-                        # Cluster characteristics
-                        st.subheader("Cluster Characteristics")
-                        cluster_df_copy = cluster_df.copy()
-                        cluster_df_copy['Cluster'] = clusters
-                        cluster_means = cluster_df_copy.groupby('Cluster')[cluster_features].mean()
-                        st.dataframe(cluster_means, use_container_width=True)
-                        
-                        # Store for quality plots
-                        st.session_state.cluster_X_scaled = X_scaled
-                        st.session_state.cluster_labels = clusters
-                        st.session_state.cluster_k = n_clusters
-                    else:
-                        st.warning(f"Not enough valid data for clustering (need at least 5 samples, have {len(cluster_df)})")
-            
-            with cluster_tab3:
-                st.subheader("Cluster Quality Assessment")
-                
-                if 'cluster_X_scaled' in st.session_state and 'cluster_labels' in st.session_state:
-                    X_scaled = st.session_state.cluster_X_scaled
-                    labels = st.session_state.cluster_labels
-                    k = st.session_state.cluster_k
                     
-                    # Elbow plot
-                    st.subheader("Elbow Curve for Optimal k")
-                    fig_elbow = ScientificVisualizer.plot_elbow_curve(X_scaled, max_k=15)
-                    st.pyplot(fig_elbow)
+                    st.write(f"Explained variance: PC1 = {pca.explained_variance_ratio_[0]:.2%}, PC2 = {pca.explained_variance_ratio_[1]:.2%}")
                     
-                    # Silhouette plot for current k
-                    st.subheader(f"Silhouette Analysis (k={k})")
-                    fig_sil = ScientificVisualizer.plot_silhouette_analysis(X_scaled, k)
-                    st.pyplot(fig_sil)
+                    # K-Means clustering
+                    st.subheader("K-Means Clustering")
+                    n_clusters = st.slider("Number of clusters", 2, 10, 3)
+                    
+                    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+                    clusters = kmeans.fit_predict(X_scaled)
+                    
+                    # Visualize clusters
+                    fig2, ax = plt.subplots(figsize=(10, 7))
+                    scatter = ax.scatter(X_pca[:, 0], X_pca[:, 1], c=clusters, cmap='viridis',
+                                        alpha=0.7, edgecolors='black', linewidth=0.5, s=60)
+                    ax.scatter(kmeans.cluster_centers_[:, 0], kmeans.cluster_centers_[:, 1], 
+                              c='red', marker='X', s=200, edgecolors='black', linewidth=1.5,
+                              label='Centroids')
+                    ax.set_xlabel('PC1', fontsize=11, fontweight='bold')
+                    ax.set_ylabel('PC2', fontsize=11, fontweight='bold')
+                    ax.set_title(f'K-Means Clustering (k={n_clusters})', fontsize=12, fontweight='bold')
+                    ax.legend()
+                    cbar = plt.colorbar(scatter, ax=ax)
+                    cbar.set_label('Cluster', fontsize=10)
+                    st.pyplot(fig2)
+                    
+                    # Cluster characteristics
+                    st.subheader("Cluster Characteristics")
+                    cluster_df_copy = cluster_df.copy()
+                    cluster_df_copy['Cluster'] = clusters
+                    cluster_means = cluster_df_copy.groupby('Cluster')[cluster_features].mean()
+                    st.dataframe(cluster_means, use_container_width=True)
                     
                     # Dendrogram
-                    if len(X_scaled) < 200 and len(X_scaled) >= 10:
+                    if len(cluster_df) < 200 and len(cluster_df) >= 10:
                         st.subheader("Hierarchical Clustering Dendrogram")
-                        fig_dendro, ax_dendro = plt.subplots(figsize=(12, 6))
+                        fig3, ax = plt.subplots(figsize=(12, 6))
                         linkage_matrix = linkage(X_scaled[:min(100, len(X_scaled))], method='ward')
-                        dendrogram(linkage_matrix, ax=ax_dendro, truncate_mode='lastp', p=30)
-                        ax_dendro.set_title('Dendrogram (top 30 samples)', fontsize=12, fontweight='bold')
-                        ax_dendro.set_xlabel('Sample index', fontsize=11)
-                        ax_dendro.set_ylabel('Distance', fontsize=11)
-                        st.pyplot(fig_dendro)
+                        dendrogram(linkage_matrix, ax=ax, truncate_mode='lastp', p=30)
+                        ax.set_title('Dendrogram (top 30 samples)', fontsize=12, fontweight='bold')
+                        ax.set_xlabel('Sample index', fontsize=11)
+                        ax.set_ylabel('Distance', fontsize=11)
+                        st.pyplot(fig3)
                 else:
-                    st.info("Run K-Means clustering first in the Clustering tab")
+                    st.warning(f"Not enough valid data for clustering (need at least 5 samples, have {len(cluster_df)})")
+            else:
+                st.info("Select at least 2 features for clustering")
         
-        # Tab 9: Advanced ML (SHAP & PDP)
+        # Tab 9: Advanced ML (SHAP)
         with tabs[8]:
-            st.header("📉 Advanced ML Analysis")
+            st.header("📉 Advanced ML Analysis with SHAP")
             
-            adv_tab1, adv_tab2 = st.tabs(["📊 SHAP Analysis", "📈 Partial Dependence Plots (PDP)"])
-            
-            with adv_tab1:
-                if 'ml_results' in st.session_state and st.session_state.ml_results and 'error' not in st.session_state.ml_results:
-                    st.subheader("SHAP Analysis for Model Interpretability")
-                    
-                    if st.button("Run SHAP Analysis", use_container_width=True):
-                        with st.spinner("Computing SHAP values..."):
-                            try:
-                                results = st.session_state.ml_results
-                                features = st.session_state.ml_features
+            if 'ml_results' in st.session_state and st.session_state.ml_results and 'error' not in st.session_state.ml_results:
+                st.subheader("SHAP Analysis for Model Interpretability")
+                
+                if st.button("Run SHAP Analysis", use_container_width=True):
+                    with st.spinner("Computing SHAP values..."):
+                        try:
+                            # Get the best model
+                            results = st.session_state.ml_results
+                            features = st.session_state.ml_features
+                            
+                            # Use Random Forest model for SHAP
+                            if 'Random Forest' in results['models'] and 'model' in results['models']['Random Forest']:
+                                rf_model = results['models']['Random Forest']['model']
+                                X_train = results['X_train']
                                 
-                                if 'Random Forest' in results['models'] and 'model' in results['models']['Random Forest']:
-                                    rf_model = results['models']['Random Forest']['model']
-                                    X_train = results['X_train']
+                                if len(X_train) > 0 and len(features) > 0:
+                                    # Create SHAP explainer
+                                    explainer = shap.TreeExplainer(rf_model)
+                                    shap_values = explainer.shap_values(X_train[:min(100, len(X_train))])  # Limit for performance
                                     
-                                    if len(X_train) > 0 and len(features) > 0:
-                                        explainer = shap.TreeExplainer(rf_model)
-                                        shap_values = explainer.shap_values(X_train[:min(100, len(X_train))])
-                                        
-                                        fig, ax = plt.subplots(figsize=(10, 6))
-                                        shap.summary_plot(shap_values, X_train[:min(100, len(X_train))], 
-                                                        feature_names=features, show=False)
-                                        st.pyplot(fig)
-                                        
-                                        fig2, ax2 = plt.subplots(figsize=(10, 6))
-                                        shap.summary_plot(shap_values, X_train[:min(100, len(X_train))], 
-                                                         feature_names=features, plot_type="bar", show=False)
-                                        st.pyplot(fig2)
-                                        
-                                        st.success("SHAP analysis completed")
-                                    else:
-                                        st.warning("Insufficient data for SHAP analysis")
-                                else:
-                                    st.warning("Random Forest model not available for SHAP analysis")
-                            except Exception as e:
-                                st.error(f"SHAP analysis failed: {str(e)[:100]}")
-                else:
-                    st.info("Train a model in the Machine Learning tab first")
-            
-            with adv_tab2:
-                if 'ml_model' in st.session_state and 'ml_X_train' in st.session_state and 'ml_features' in st.session_state:
-                    st.subheader("Partial Dependence Plots (PDP)")
-                    st.markdown("PDP shows how the predicted target changes with a single feature, averaging out other features.")
-                    
-                    model = st.session_state.ml_model
-                    X_train = st.session_state.ml_X_train
-                    features = st.session_state.ml_features
-                    
-                    if len(features) > 0:
-                        selected_pdp_feature = st.selectbox("Select feature for PDP:", features)
-                        
-                        if st.button(f"Generate PDP for {selected_pdp_feature}", use_container_width=True):
-                            with st.spinner("Computing partial dependence..."):
-                                try:
-                                    from sklearn.inspection import PartialDependenceDisplay
-                                    
-                                    fig, ax = plt.subplots(figsize=(9, 6))
-                                    PartialDependenceDisplay.from_estimator(
-                                        model, X_train, [features.index(selected_pdp_feature)],
-                                        feature_names=features, ax=ax, grid_resolution=50
-                                    )
-                                    ax.set_title(f'Partial Dependence: {selected_pdp_feature}', fontsize=12, fontweight='bold')
+                                    # SHAP summary plot
+                                    fig, ax = plt.subplots(figsize=(10, 6))
+                                    shap.summary_plot(shap_values, X_train[:min(100, len(X_train))], feature_names=features, show=False)
                                     st.pyplot(fig)
-                                except Exception as e:
-                                    st.error(f"PDP computation failed: {str(e)[:100]}")
-                    else:
-                        st.warning("No features available for PDP")
-                else:
-                    st.info("Train a model in the Machine Learning tab first")
+                                    
+                                    # SHAP bar plot
+                                    fig2, ax2 = plt.subplots(figsize=(10, 6))
+                                    shap.summary_plot(shap_values, X_train[:min(100, len(X_train))], feature_names=features, 
+                                                     plot_type="bar", show=False)
+                                    st.pyplot(fig2)
+                                    
+                                    st.success("SHAP analysis completed")
+                                else:
+                                    st.warning("Insufficient data for SHAP analysis")
+                            else:
+                                st.warning("Random Forest model not available for SHAP analysis")
+                        except Exception as e:
+                            st.error(f"SHAP analysis failed: {str(e)[:100]}")
+            else:
+                st.info("Train a model in the Machine Learning tab first")
         
         # Tab 10: Export
         with tabs[9]:
@@ -2987,6 +2341,7 @@ def main():
                     numeric_cols = st.session_state.descriptor_names + [alpha_col]
                     numeric_cols = [c for c in numeric_cols if c in df.columns]
                     if len(numeric_cols) > 1:
+                        # Filter out rows with zeros
                         temp_df = df[numeric_cols].copy()
                         for col in numeric_cols:
                             temp_df = temp_df[temp_df[col] != 0]
@@ -2998,29 +2353,6 @@ def main():
                             for feat, corr in top_corrs.items():
                                 if feat != alpha_col and not pd.isna(corr):
                                     report.append(f"- {feat}: {corr:.3f}")
-                
-                report.append(f"\n## Phase Transition Summary")
-                if st.session_state.phase_df is not None:
-                    phase_df_local = st.session_state.phase_df
-                    report.append(f"- Total phase transition records: {len(phase_df_local)}")
-                    
-                    # Count transitions with temperatures
-                    temp_count_local = 0
-                    for _, row in phase_df_local.iterrows():
-                        temps = DataParser.parse_bends_temperatures(row.get('T (PT), °C', ''))
-                        if temps:
-                            temp_count_local += 1
-                    report.append(f"- Records with temperature data: {temp_count_local}")
-                    
-                    # Unique symmetries
-                    all_sym_local = []
-                    for _, row in phase_df_local.iterrows():
-                        sym = row.get('Symmetry', '')
-                        if sym and sym != '-':
-                            all_sym_local.extend(sym.split(';'))
-                    report.append(f"- Unique symmetries: {len(set(all_sym_local))}")
-                else:
-                    report.append(f"- No phase transition data loaded")
                 
                 # Save report
                 report_text = "\n".join(report)

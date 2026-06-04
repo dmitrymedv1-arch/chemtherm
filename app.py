@@ -1330,68 +1330,61 @@ class ScientificVisualizer:
         """Create 2D scatter plot with optional color and size mapping"""
         fig, ax = plt.subplots(figsize=(9, 7))
         
-        # Prepare data - start with all three columns if color_col provided
-        if color_col and color_col in df.columns:
-            base_cols = [x_col, y_col, color_col]
-        else:
-            base_cols = [x_col, y_col]
+        # === ИСПРАВЛЕНИЕ: Убираем дубликаты колонок ===
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated(keep='last')]  # оставляем последнее вхождение
         
-        if size_col and size_col in df.columns:
-            base_cols.append(size_col)
+        # Подготовка нужных колонок
+        base_cols = [col for col in [x_col, y_col, color_col, size_col] if col is not None]
+        plot_df = df[base_cols].copy()
         
-        # Создаем копию и сразу удаляем NaN
-        plot_df = df[base_cols].dropna().copy()
+        # Фильтрация
+        mask = pd.Series(True, index=plot_df.index)
         
-        if len(plot_df) == 0:
-            ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
-            return fig
+        # Убираем NaN
+        mask = mask & plot_df.notna().all(axis=1)
         
-        # Последовательная фильтрация с созданием новых DataFrame
-        # (это безопаснее, но может быть медленнее)
-        if y_col in plot_df.columns:
-            plot_df = plot_df[plot_df[y_col] != 0]
-        
-        if len(plot_df) == 0:
-            ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
-            return fig
-        
-        if x_col in plot_df.columns:
-            plot_df = plot_df[plot_df[x_col] != 0]
-        
-        if len(plot_df) == 0:
-            ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
-            return fig
+        # Убираем нули (missing data)
+        for col in [y_col, x_col]:
+            if col in plot_df.columns:
+                mask = mask & (plot_df[col] != 0)
         
         if color_col and color_col in plot_df.columns:
-            plot_df = plot_df[plot_df[color_col] != 0]
-        
-        if len(plot_df) == 0:
-            ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
-            return fig
-        
+            mask = mask & (plot_df[color_col] != 0)
         if size_col and size_col in plot_df.columns:
-            plot_df = plot_df[plot_df[size_col] != 0]
+            mask = mask & (plot_df[size_col] != 0)
+        
+        plot_df = plot_df.loc[mask]
         
         if len(plot_df) == 0:
-            ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
+            ax.text(0.5, 0.5, "No valid data for scatter plot", 
+                   transform=ax.transAxes, ha='center', va='center')
             return fig
         
-        # Reset index to avoid potential issues
-        plot_df = plot_df.reset_index(drop=True)
-        
+        # Построение графика
         if color_col and color_col in plot_df.columns:
-            scatter = ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
-                                c=plot_df[color_col].values,
-                                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
-                                cmap=ScientificVisualizer.CMAPS['thermal'],
-                                alpha=0.7, edgecolors='black', linewidth=0.5)
+            scatter = ax.scatter(
+                plot_df[x_col].values, 
+                plot_df[y_col].values,
+                c=plot_df[color_col].values,
+                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
+                cmap=ScientificVisualizer.CMAPS['thermal'],
+                alpha=0.7, 
+                edgecolors='black', 
+                linewidth=0.5
+            )
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(color_col, fontsize=10)
         else:
-            ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
-                      s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
-                      c=ScientificVisualizer.COLORS['primary'],
-                      alpha=0.7, edgecolors='black', linewidth=0.5)
+            ax.scatter(
+                plot_df[x_col].values, 
+                plot_df[y_col].values,
+                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
+                c=ScientificVisualizer.COLORS['primary'],
+                alpha=0.7, 
+                edgecolors='black', 
+                linewidth=0.5
+            )
         
         ax.set_xlabel(x_col, fontsize=11, fontweight='bold')
         ax.set_ylabel(y_col, fontsize=11, fontweight='bold')

@@ -1339,21 +1339,21 @@ class ScientificVisualizer:
         if size_col and size_col in df.columns:
             base_cols.append(size_col)
         
-        # Create a copy and reset index to avoid duplicate index issues
-        plot_df = df[base_cols].copy().reset_index(drop=True)
+        # Создаем копию - df уже должен иметь уникальные индексы
+        plot_df = df[base_cols].copy()
         plot_df = plot_df.dropna()
         
         # Filter out zeros in y_col (target property)
         if y_col in plot_df.columns:
-            plot_df = plot_df[plot_df[y_col] != 0].reset_index(drop=True)  # ИСПРАВЛЕНО
+            plot_df = plot_df[plot_df[y_col] != 0]
         
         # Also filter out zeros in x_col if needed
         if x_col in plot_df.columns and len(plot_df) > 0:
-            plot_df = plot_df[plot_df[x_col] != 0].reset_index(drop=True)  # ИСПРАВЛЕНО
+            plot_df = plot_df[plot_df[x_col] != 0]
         
         # Filter out zeros in color_col if it's being used for coloring
         if color_col and color_col in plot_df.columns and len(plot_df) > 0:
-            plot_df = plot_df[plot_df[color_col] != 0].reset_index(drop=True)  # ИСПРАВЛЕНО
+            plot_df = plot_df[plot_df[color_col] != 0]
         
         if len(plot_df) == 0:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
@@ -2213,7 +2213,8 @@ def main():
             
             # 2D Scatter
             st.subheader("2D Concentration Map (Scatter)")
-            fig = ScientificVisualizer.plot_scatter_2d(df, x_axis, y_axis, color_col=z_axis)
+            df_clean = df.copy().reset_index(drop=True)
+            fig = ScientificVisualizer.plot_scatter_2d(df_clean, x_axis, y_axis, color_col=z_axis)
             st.pyplot(fig)
             
             # 2D Heatmap

@@ -1622,7 +1622,17 @@ def main():
             st.dataframe(df.head(20), use_container_width=True)
             
             st.subheader("Descriptor Summary")
-            desc_stats = df[st.session_state.descriptor_names].describe()
+            
+            # Ensure numeric columns are properly converted before describe
+            desc_cols = st.session_state.descriptor_names.copy()
+            
+            # Convert any string/non-numeric columns to numeric where possible
+            for col in desc_cols:
+                if col in df.columns:
+                    # Attempt to convert to numeric, coerce errors to NaN
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+            
+            desc_stats = df[desc_cols].describe()
             st.dataframe(desc_stats, use_container_width=True)
         
         # Tab 2: EDA & Distributions

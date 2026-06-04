@@ -809,7 +809,18 @@ class PerovskiteDescriptorCalculator:
         descriptors['method_dilatometry'] = 1 if 'dilatometry' in str(method) else 0
         descriptors['method_HT_ND'] = 1 if 'HT ND' in str(method) else 0
         
-        return descriptors
+        # Avoid column name conflicts with original data columns
+        # Rename descriptors that might conflict with original column names
+        conflict_names = ['beta', 'delta', 'alpha_true', 'alpha_apparent', 
+                          'alpha', 'beta_chem', 'delta_o']
+        final_descriptors = {}
+        for key, value in descriptors.items():
+            if key in conflict_names:
+                final_descriptors[f'desc_{key}'] = value
+            else:
+                final_descriptors[key] = value
+        
+        return final_descriptors
 
 # ============================================================================
 # 4. ПАРСЕРЫ ДЛЯ СПЕЦИАЛЬНЫХ ПОЛЕЙ
@@ -1020,6 +1031,10 @@ class ScientificVisualizer:
     @staticmethod
     def plot_distribution(df: pd.DataFrame, column: str, title: str = None, bins: int = 30):
         """Plot histogram with KDE and statistics"""
+        # Защита от дублирующихся колонок
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated(keep='last')]
+        
         fig, ax = plt.subplots(figsize=(8, 5))
         
         # Filter out zeros and NaNs for distribution (zeros may be from missing data)
@@ -1069,6 +1084,10 @@ class ScientificVisualizer:
     def plot_boxplot_comparison(df: pd.DataFrame, x_col: str, y_col: str, 
                                  title: str = None, palette: str = 'Set2'):
         """Create boxplot for categorical comparison"""
+        # Защита от дублирующихся колонок
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated(keep='last')]
+        
         fig, ax = plt.subplots(figsize=(10, 6))
         
         # Filter valid data (exclude zeros that may come from missing data)
@@ -1107,6 +1126,10 @@ class ScientificVisualizer:
         """
         Create enhanced correlation matrix highlighting top correlations with target
         """
+        # Защита от дублирующихся колонок
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated(keep='last')]
+        
         # Filter features that exist and have valid data
         valid_features = [f for f in features if f in df.columns and df[f].notna().sum() > 5]
         
@@ -1154,6 +1177,10 @@ class ScientificVisualizer:
     def plot_regplot(df: pd.DataFrame, x_col: str, y_col: str, 
                      title: str = None, ci: float = 0.95):
         """Create regression plot with confidence interval (regplot)"""
+        # Защита от дублирующихся колонок
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated(keep='last')]
+        
         fig, ax = plt.subplots(figsize=(9, 7))
         
         # Filter valid data (exclude zeros)
@@ -1194,6 +1221,10 @@ class ScientificVisualizer:
     def plot_pairplot_custom(df: pd.DataFrame, features: List[str], 
                               diag_kind: str = 'kde', title: str = None):
         """Create custom pairplot with user-selected features"""
+        # Защита от дублирующихся колонок
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated(keep='last')]
+        
         if len(features) < 2:
             fig, ax = plt.subplots(figsize=(8, 6))
             ax.text(0.5, 0.5, "Select at least 2 features for pairplot", 
@@ -1328,63 +1359,50 @@ class ScientificVisualizer:
     def plot_scatter_2d(df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None,
                          size_col: str = None, title: str = None):
         """Create 2D scatter plot with optional color and size mapping"""
+        # Защита от дублирующихся колонок
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated(keep='last')]
+        
         fig, ax = plt.subplots(figsize=(9, 7))
         
-        # === ИСПРАВЛЕНИЕ: Убираем дубликаты колонок ===
-        if df.columns.duplicated().any():
-            df = df.loc[:, ~df.columns.duplicated(keep='last')]  # оставляем последнее вхождение
+        # Prepare data - start with all three columns if color_col provided
+        if color_col and color_col in df.columns:
+            base_cols = [x_col, y_col, color_col]
+        else:
+            base_cols = [x_col, y_col]
         
-        # Подготовка нужных колонок
-        base_cols = [col for col in [x_col, y_col, color_col, size_col] if col is not None]
-        plot_df = df[base_cols].copy()
+        if size_col and size_col in df.columns:
+            base_cols.append(size_col)
         
-        # Фильтрация
-        mask = pd.Series(True, index=plot_df.index)
+        # Создаём копию и удаляем NaN
+        plot_df = df[base_cols].dropna().copy()
         
-        # Убираем NaN
-        mask = mask & plot_df.notna().all(axis=1)
-        
-        # Убираем нули (missing data)
-        for col in [y_col, x_col]:
+        # Последовательная фильтрация с reset_index после каждой операции
+        for col in base_cols:
             if col in plot_df.columns:
-                mask = mask & (plot_df[col] != 0)
-        
-        if color_col and color_col in plot_df.columns:
-            mask = mask & (plot_df[color_col] != 0)
-        if size_col and size_col in plot_df.columns:
-            mask = mask & (plot_df[size_col] != 0)
-        
-        plot_df = plot_df.loc[mask]
+                plot_df = plot_df[plot_df[col] != 0]
+                if len(plot_df) == 0:
+                    ax.text(0.5, 0.5, "No valid data after filtering", transform=ax.transAxes, ha='center', va='center')
+                    return fig
+                plot_df = plot_df.reset_index(drop=True)
         
         if len(plot_df) == 0:
-            ax.text(0.5, 0.5, "No valid data for scatter plot", 
-                   transform=ax.transAxes, ha='center', va='center')
+            ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
             return fig
         
-        # Построение графика
-        if color_col and color_col in plot_df.columns:
-            scatter = ax.scatter(
-                plot_df[x_col].values, 
-                plot_df[y_col].values,
-                c=plot_df[color_col].values,
-                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
-                cmap=ScientificVisualizer.CMAPS['thermal'],
-                alpha=0.7, 
-                edgecolors='black', 
-                linewidth=0.5
-            )
+        if color_col:
+            scatter = ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
+                                c=plot_df[color_col].values,
+                                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
+                                cmap=ScientificVisualizer.CMAPS['thermal'],
+                                alpha=0.7, edgecolors='black', linewidth=0.5)
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(color_col, fontsize=10)
         else:
-            ax.scatter(
-                plot_df[x_col].values, 
-                plot_df[y_col].values,
-                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
-                c=ScientificVisualizer.COLORS['primary'],
-                alpha=0.7, 
-                edgecolors='black', 
-                linewidth=0.5
-            )
+            ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
+                      s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
+                      c=ScientificVisualizer.COLORS['primary'],
+                      alpha=0.7, edgecolors='black', linewidth=0.5)
         
         ax.set_xlabel(x_col, fontsize=11, fontweight='bold')
         ax.set_ylabel(y_col, fontsize=11, fontweight='bold')
@@ -1392,12 +1410,16 @@ class ScientificVisualizer:
         ax.grid(True, alpha=0.3)
         
         return fig
-    
+
     @staticmethod
     def plot_hexbin_heatmap(df: pd.DataFrame, x_col: str, y_col: str, 
                              z_col: str = None, gridsize: int = 30,
                              title: str = None):
         """Create hexbin heatmap (2D density plot with optional color mapping)"""
+        # Защита от дублирующихся колонок
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated(keep='last')]
+        
         fig, ax = plt.subplots(figsize=(10, 8))
         
         # Filter data
@@ -1439,6 +1461,10 @@ class ScientificVisualizer:
     def plot_concentration_heatmap(df: pd.DataFrame, x_col: str, y_col: str, 
                                     z_col: str, bins: int = 20):
         """Create 2D heatmap for concentration dependence"""
+        # Защита от дублирующихся колонок
+        if df.columns.duplicated().any():
+            df = df.loc[:, ~df.columns.duplicated(keep='last')]
+        
         fig, ax = plt.subplots(figsize=(10, 8))
         
         # Create grid
@@ -2014,13 +2040,18 @@ def main():
             # Combine with original data
             desc_df = pd.DataFrame(descriptors_list) if descriptors_list else pd.DataFrame()
             if len(desc_df) > 0:
-                chem_df_full = pd.concat([chem_df.reset_index(drop=True), desc_df], axis=1)
+                # Сбрасываем индексы, чтобы избежать конфликтов
+                chem_df_reset = chem_df.reset_index(drop=True)
+                chem_df_full = pd.concat([chem_df_reset, desc_df], axis=1)
+                
+                # Удаляем дубликаты колонок: оставляем последнее вхождение (дескрипторы более новые)
+                chem_df_full = chem_df_full.loc[:, ~chem_df_full.columns.duplicated(keep='last')]
             else:
                 chem_df_full = chem_df.copy()
             
             # Store in session state
             st.session_state.chem_with_descriptors = chem_df_full
-            st.session_state.descriptor_names = list(desc_df.columns) if len(desc_df) > 0 else []
+            st.session_state.descriptor_names = [c for c in desc_df.columns if c in chem_df_full.columns]
             st.session_state.filtered_df = chem_df_full
             
             pb.finish()

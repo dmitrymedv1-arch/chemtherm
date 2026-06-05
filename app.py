@@ -1425,43 +1425,46 @@ class ScientificVisualizer:
         """Create 2D scatter plot with optional color and size mapping (ignores NaN)"""
         fig, ax = plt.subplots(figsize=(9, 7))
         
-        # Prepare data - start with x and y
-        plot_df = df[[x_col, y_col]].dropna()
+        # Start with x and y only
+        plot_df = df[[x_col, y_col]].copy()
         
-        # Add color column if specified - use direct assignment to preserve index alignment
+        # Add optional columns one by one, dropping NaN after each addition
         if color_col and color_col in df.columns:
-            plot_df[color_col] = df.loc[plot_df.index, color_col]
-        
-        # Add size column if specified - use direct assignment to preserve index alignment
-        if size_col and size_col in df.columns:
-            plot_df[size_col] = df.loc[plot_df.index, size_col]
-        
-        # Drop any rows with NaN in color column if it exists
-        if color_col and color_col in plot_df.columns:
+            plot_df[color_col] = df[color_col]
             plot_df = plot_df.dropna(subset=[color_col])
+        
+        if size_col and size_col in df.columns:
+            plot_df[size_col] = df[size_col]
+            plot_df = plot_df.dropna(subset=[size_col])
+        
+        # Also drop NaN in x and y (already done by dropna earlier, but ensure)
+        plot_df = plot_df.dropna(subset=[x_col, y_col])
         
         if len(plot_df) == 0:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
             return fig
         
+        # Extract clean arrays of equal length
+        x_vals = plot_df[x_col].values
+        y_vals = plot_df[y_col].values
+        
         if color_col and color_col in plot_df.columns:
-            scatter = ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
-                                c=plot_df[color_col].values,
+            c_vals = plot_df[color_col].values
+            scatter = ax.scatter(x_vals, y_vals, 
+                                c=c_vals,
                                 s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
                                 cmap=cmap,
                                 alpha=0.7, edgecolors='black', linewidth=0.5)
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(color_col, fontsize=10)
         else:
-            ax.scatter(plot_df[x_col], plot_df[y_col], 
-                      s=plot_df[size_col]*50 if size_col and size_col in plot_df.columns else 50,
+            ax.scatter(x_vals, y_vals, 
+                      s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
                       c=ScientificVisualizer.COLORS['primary'],
                       alpha=0.7, edgecolors='black', linewidth=0.5)
         
         # Add trend line if requested
         if show_trendline and len(plot_df) > 3:
-            x_vals = plot_df[x_col].values
-            y_vals = plot_df[y_col].values
             z = np.polyfit(x_vals, y_vals, 1)
             p = np.poly1d(z)
             x_trend = np.linspace(x_vals.min(), x_vals.max(), 100)

@@ -1417,67 +1417,7 @@ class ScientificVisualizer:
         
         plt.tight_layout()
         return fig
-    
-    @staticmethod
-    def plot_scatter_2d(df: pd.DataFrame, x_col: str, y_col: str, color_col: str = None,
-                         size_col: str = None, title: str = None, cmap: str = 'viridis',
-                         show_trendline: bool = False):
-        """Create 2D scatter plot with optional color and size mapping (ignores NaN)"""
-        fig, ax = plt.subplots(figsize=(9, 7))
-        
-        # Start with x and y only
-        plot_df = df[[x_col, y_col]].copy()
-        
-        # Add optional columns one by one, dropping NaN after each addition
-        if color_col and color_col in df.columns:
-            plot_df[color_col] = df[color_col]
-            plot_df = plot_df.dropna(subset=[color_col])
-        
-        if size_col and size_col in df.columns:
-            plot_df[size_col] = df[size_col]
-            plot_df = plot_df.dropna(subset=[size_col])
-        
-        # Also drop NaN in x and y (already done by dropna earlier, but ensure)
-        plot_df = plot_df.dropna(subset=[x_col, y_col])
-        
-        if len(plot_df) == 0:
-            ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
-            return fig
-        
-        # Extract clean arrays of equal length
-        x_vals = plot_df[x_col].values
-        y_vals = plot_df[y_col].values
-        
-        if color_col and color_col in plot_df.columns:
-            c_vals = plot_df[color_col].values
-            scatter = ax.scatter(x_vals, y_vals, 
-                                c=c_vals,
-                                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
-                                cmap=cmap,
-                                alpha=0.7, edgecolors='black', linewidth=0.5)
-            cbar = plt.colorbar(scatter, ax=ax)
-            cbar.set_label(color_col, fontsize=10)
-        else:
-            ax.scatter(x_vals, y_vals, 
-                      s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
-                      c=ScientificVisualizer.COLORS['primary'],
-                      alpha=0.7, edgecolors='black', linewidth=0.5)
-        
-        # Add trend line if requested
-        if show_trendline and len(plot_df) > 3:
-            z = np.polyfit(x_vals, y_vals, 1)
-            p = np.poly1d(z)
-            x_trend = np.linspace(x_vals.min(), x_vals.max(), 100)
-            ax.plot(x_trend, p(x_trend), 'r--', alpha=0.7, linewidth=1.5,
-                   label=f'Trend: {z[0]:.3f}·x + {z[1]:.3f}')
-            ax.legend()
-        
-        ax.set_xlabel(x_col, fontsize=11, fontweight='bold')
-        ax.set_ylabel(y_col, fontsize=11, fontweight='bold')
-        ax.set_title(title or f'{y_col} vs {x_col}', fontsize=12, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        
-        return fig
+  
     
     @staticmethod
     def plot_bubble_with_density(df: pd.DataFrame, x_col: str, y_col: str, 

@@ -1425,22 +1425,29 @@ class ScientificVisualizer:
         """Create 2D scatter plot with optional color and size mapping (ignores NaN)"""
         fig, ax = plt.subplots(figsize=(9, 7))
         
-        # Prepare data - drop NaN in x and y
+        # Prepare data - start with x and y
         plot_df = df[[x_col, y_col]].dropna()
         
+        # Add color column if specified - use direct assignment to preserve index alignment
         if color_col and color_col in df.columns:
-            plot_df = plot_df.join(df[color_col])
+            plot_df[color_col] = df.loc[plot_df.index, color_col]
+        
+        # Add size column if specified - use direct assignment to preserve index alignment
         if size_col and size_col in df.columns:
-            plot_df = plot_df.join(df[size_col])
+            plot_df[size_col] = df.loc[plot_df.index, size_col]
+        
+        # Drop any rows with NaN in color column if it exists
+        if color_col and color_col in plot_df.columns:
+            plot_df = plot_df.dropna(subset=[color_col])
         
         if len(plot_df) == 0:
             ax.text(0.5, 0.5, "No valid data for scatter plot", transform=ax.transAxes, ha='center', va='center')
             return fig
         
         if color_col and color_col in plot_df.columns:
-            scatter = ax.scatter(plot_df[x_col], plot_df[y_col], 
-                                c=plot_df[color_col],
-                                s=plot_df[size_col]*50 if size_col and size_col in plot_df.columns else 50,
+            scatter = ax.scatter(plot_df[x_col].values, plot_df[y_col].values, 
+                                c=plot_df[color_col].values,
+                                s=plot_df[size_col].values * 50 if size_col and size_col in plot_df.columns else 50,
                                 cmap=cmap,
                                 alpha=0.7, edgecolors='black', linewidth=0.5)
             cbar = plt.colorbar(scatter, ax=ax)

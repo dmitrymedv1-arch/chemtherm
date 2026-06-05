@@ -2177,7 +2177,7 @@ def main():
             
             col1, col2 = st.columns(2)
             with col1:
-                if st.button("📊 Load Chemical Data", key="load_chem_btn", use_container_width=True):
+                if st.button("📊 Load Chemical Data", key="load_chem_btn", width='stretch'):
                     if chem_text_input.strip():
                         chem_df = parse_text_data(chem_text_input)
                         if chem_df is not None:
@@ -2190,7 +2190,7 @@ def main():
                         st.warning("Please paste chemical data first")
             
             with col2:
-                if st.button("📋 Load Example Chem Data", key="load_example_chem_btn", use_container_width=True):
+                if st.button("📋 Load Example Chem Data", key="load_example_chem_btn", width='stretch'):
                     example_chem = """№,A,A',B,B',D1,D2,[A'],[B'],[D1],[D2],δ,method,β,∆T,°C,α·106 (K-1),T(bends),°C,αav·106 (K-1),pH2O,Ref
 1,Ba,-,Ce,Zr,Y,Yb,0,0.1,0.1,0.1,0.1,dilatometry,0.0073,27-1000,10.6,400;600,10.6;4.73;10.1,0.0001,10.15826/chimtech.2024.11.4.22
 2,Ba,-,Ce,Zr,Y,Yb,0,0.1,0.1,0.1,0.1,HT XRD,0.0317,27-1000,10.6,300,10.7;8.7,0.02,10.15826/chimtech.2024.11.4.22
@@ -2219,7 +2219,7 @@ def main():
             
             col3, col4 = st.columns(2)
             with col3:
-                if st.button("📊 Load Phase Data", key="load_phase_btn", use_container_width=True):
+                if st.button("📊 Load Phase Data", key="load_phase_btn", width='stretch'):
                     if phase_text_input.strip():
                         phase_df = parse_text_data(phase_text_input)
                         if phase_df is not None:
@@ -2232,7 +2232,7 @@ def main():
                         st.warning("Please paste phase transition data first")
             
             with col4:
-                if st.button("📋 Load Example Phase Data", key="load_example_phase_btn", use_container_width=True):
+                if st.button("📋 Load Example Phase Data", key="load_example_phase_btn", width='stretch'):
                     example_phase = """№,A,A',B,B',D1,D2,[A],[B'],[D1],[D2],δ,pH2O,∆T,°C,Symmetry,Phase transitions (PT),T (PT),°C,Ref
 1,Ba,-,Zr,-,Y,-,0,0,0,0,0,-,25,Cubic,Pm-3m,-,10.1088/1742-6596/1967/1/012015
 2,Ba,-,Zr,-,Y,-,0,0,0.055,0,0.0275,-,25,Cubic,Pm-3m,-,10.1088/1742-6596/1967/1/012015
@@ -2322,7 +2322,7 @@ def main():
                 alpha_range = (0, 20)
             
             # Apply filters button
-            if st.button("Apply Filters", use_container_width=True):
+            if st.button("Apply Filters", width='stretch'):
                 filtered_df = df.copy()
                 if selected_a:
                     filtered_df = filtered_df[filtered_df['A'].isin(selected_a)]
@@ -2373,6 +2373,13 @@ def main():
             # Combine with original data
             desc_df = pd.DataFrame(descriptors_list) if descriptors_list else pd.DataFrame()
             if len(desc_df) > 0:
+                # Find overlapping columns (excluding index)
+                overlap_cols = set(chem_df.columns).intersection(set(desc_df.columns))
+                if overlap_cols:
+                    # Rename overlapping columns in desc_df by adding '_desc' suffix
+                    rename_dict = {col: f'{col}_desc' for col in overlap_cols}
+                    desc_df = desc_df.rename(columns=rename_dict)
+                    st.info(f"Renamed duplicate columns: {', '.join(overlap_cols)} → added '_desc' suffix")
                 chem_df_full = pd.concat([chem_df.reset_index(drop=True), desc_df], axis=1)
             else:
                 chem_df_full = chem_df.copy()
@@ -2430,7 +2437,7 @@ def main():
             st.markdown("---")
             
             st.subheader("Sample Data Preview")
-            st.dataframe(df.head(20), use_container_width=True)
+            st.dataframe(df.head(20), width='stretch')
             
             st.subheader("Descriptor Summary")
             if len(st.session_state.descriptor_names) > 0:
@@ -2750,7 +2757,7 @@ def main():
                                                default=ml_descriptor_available[:5] if len(ml_descriptor_available) > 5 else ml_descriptor_available)
             
             if len(selected_features) > 0 and len(df) > 10:
-                if st.button("Train Model", type="primary", use_container_width=True):
+                if st.button("Train Model", type="primary", width='stretch'):
                     with st.spinner("Training ensemble model..."):
                         # Prepare data
                         ml_manager = MLModelManager()
@@ -3044,7 +3051,7 @@ def main():
             if 'ml_results' in st.session_state and st.session_state.ml_results and 'error' not in st.session_state.ml_results:
                 st.subheader("SHAP Analysis for Model Interpretability")
                 
-                if st.button("Run SHAP Analysis", use_container_width=True):
+                if st.button("Run SHAP Analysis", width='stretch'):
                     with st.spinner("Computing SHAP values..."):
                         try:
                             # Get the best model
@@ -3101,7 +3108,7 @@ def main():
             # Export report
             st.subheader("Generate Analysis Report")
             
-            if st.button("📊 Generate Summary Report", use_container_width=True):
+            if st.button("📊 Generate Summary Report", width='stretch'):
                 report = []
                 report.append("# Perovskite Expansion Analysis Report")
                 report.append(f"\n## Summary Statistics")

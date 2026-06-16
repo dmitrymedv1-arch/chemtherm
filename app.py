@@ -407,15 +407,15 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
     
     # Extract element names and concentrations
     for idx, row in df_desc.iterrows():
-        # A-site
+        # A-site - FIXED: use double quotes for column names with apostrophes
         A_elem = row.get('A', '')
-        A_prime_elem = row.get('A'', '')
-        A_prime_conc = row.get('[A'']', 0)
+        A_prime_elem = row.get("A'", '')
+        A_prime_conc = row.get("[A']", 0)
         
         # B-site
         B_elem = row.get('B', '')
-        B_prime_elem = row.get('B'', '')
-        B_prime_conc = row.get('[B'']', 0)
+        B_prime_elem = row.get("B'", '')
+        B_prime_conc = row.get("[B']", 0)
         D1_elem = row.get('D1', '')
         D1_conc = row.get('[D1]', 0)
         D2_elem = row.get('D2', '')
@@ -613,7 +613,7 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
             'r_ratio_AB': r_ratio_AB,
             
             # Compositional descriptors
-            'B'_conc': B_prime_conc,
+            "B'_conc": B_prime_conc,
             'D_total': D1_conc + D2_conc,
         }
         

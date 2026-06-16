@@ -3377,634 +3377,638 @@ def main():
     
     # --- MAIN AREA: Tabs ---
     if 'data_loaded' in st.session_state and st.session_state.data_loaded:
-        
-        # Получаем данные
-        df = st.session_state['filtered_df'] if 'filtered_df' in st.session_state else st.session_state['df_descriptors']
-        
-        # Инициализация визуализационного движка
-        viz = VisualizationEngine(df)
-        
-        # Получаем список дескрипторов
-        all_descriptors = [col for col in df.columns if col not in ['№', 'A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'Ref', 'method', '∆T, °C']]
-        all_descriptors = [col for col in all_descriptors if df[col].dtype in ['float64', 'int64']]
-        all_descriptors = [col for col in all_descriptors if df[col].isna().sum() / len(df) < 0.5]
-        
-        viz.set_features(all_descriptors)
-        
-        # Создание вкладок
-        tabs = st.tabs([
-            "📊 Обзор данных",
-            "🧮 Дескрипторы",
-            "📈 Корреляции",
-            "🗺️ Карты и кластеры",
-            "🎯 Визуализация",
-            "📤 Экспорт"
-        ])
-        
-        # --- TAB 1: Обзор данных ---
-        with tabs[0]:
-            st.header("📊 Обзор данных")
+        if 'df_descriptors' in st.session_state and 'filtered_df' in st.session_state:
             
-            # Статистика
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Всего записей", len(df))
-            with col2:
-                unique_compositions = df.groupby(['A', 'B']).ngroups if 'A' in df.columns and 'B' in df.columns else 0
-                st.metric("Уникальных составов", unique_compositions)
-            with col3:
-                methods = df['method'].nunique() if 'method' in df.columns else 0
-                st.metric("Методов измерения", methods)
-            with col4:
-                refs = df['Ref'].nunique() if 'Ref' in df.columns else 0
-                st.metric("Источников (Ref)", refs)
+            # Получаем данные
+            df = st.session_state['filtered_df'] if 'filtered_df' in st.session_state else st.session_state['df_descriptors']
             
-            # Предпросмотр данных
-            st.subheader("📄 Данные")
-            st.dataframe(df, use_container_width=True, height=400)
+            # Инициализация визуализационного движка
+            viz = VisualizationEngine(df)
             
-            # Статистика по колонкам
-            st.subheader("📊 Статистика числовых колонок")
-            numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-            if numeric_cols:
-                st.dataframe(df[numeric_cols].describe(), use_container_width=True)
+            # Получаем список дескрипторов
+            all_descriptors = [col for col in df.columns if col not in ['№', 'A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'Ref', 'method', '∆T, °C']]
+            all_descriptors = [col for col in all_descriptors if df[col].dtype in ['float64', 'int64']]
+            all_descriptors = [col for col in all_descriptors if df[col].isna().sum() / len(df) < 0.5]
             
-            # Распределение целевых переменных
-            st.subheader("📈 Распределение целевых переменных")
+            viz.set_features(all_descriptors)
             
-            target_cols = [t for t in TARGET_VARIABLES if t in df.columns]
-            if target_cols:
-                cols = st.columns(min(len(target_cols), 3))
-                for i, target in enumerate(target_cols[:3]):
-                    with cols[i]:
-                        fig, ax = plt.subplots(figsize=(6, 4))
-                        data = df[target].dropna()
+            # Создание вкладок
+            tabs = st.tabs([
+                "📊 Обзор данных",
+                "🧮 Дескрипторы",
+                "📈 Корреляции",
+                "🗺️ Карты и кластеры",
+                "🎯 Визуализация",
+                "📤 Экспорт"
+            ])
+            
+            # --- TAB 1: Обзор данных ---
+            with tabs[0]:
+                st.header("📊 Обзор данных")
+                
+                # Статистика
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Всего записей", len(df))
+                with col2:
+                    unique_compositions = df.groupby(['A', 'B']).ngroups if 'A' in df.columns and 'B' in df.columns else 0
+                    st.metric("Уникальных составов", unique_compositions)
+                with col3:
+                    methods = df['method'].nunique() if 'method' in df.columns else 0
+                    st.metric("Методов измерения", methods)
+                with col4:
+                    refs = df['Ref'].nunique() if 'Ref' in df.columns else 0
+                    st.metric("Источников (Ref)", refs)
+                
+                # Предпросмотр данных
+                st.subheader("📄 Данные")
+                st.dataframe(df, use_container_width=True, height=400)
+                
+                # Статистика по колонкам
+                st.subheader("📊 Статистика числовых колонок")
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                if numeric_cols:
+                    st.dataframe(df[numeric_cols].describe(), use_container_width=True)
+                
+                # Распределение целевых переменных
+                st.subheader("📈 Распределение целевых переменных")
+                
+                target_cols = [t for t in TARGET_VARIABLES if t in df.columns]
+                if target_cols:
+                    cols = st.columns(min(len(target_cols), 3))
+                    for i, target in enumerate(target_cols[:3]):
+                        with cols[i]:
+                            fig, ax = plt.subplots(figsize=(6, 4))
+                            data = df[target].dropna()
+                            if len(data) > 0:
+                                ax.hist(data, bins=20, edgecolor='black', alpha=0.7, color='#3498DB')
+                                ax.set_xlabel(target, fontsize=11, fontweight='bold')
+                                ax.set_ylabel('Frequency', fontsize=11, fontweight='bold')
+                                ax.grid(True, alpha=0.3)
+                                st.pyplot(fig)
+                            else:
+                                st.write("Нет данных")
+            
+            # --- TAB 2: Дескрипторы ---
+            with tabs[1]:
+                st.header("🧮 Расчёт дескрипторов")
+                
+                # Информация о дескрипторах
+                descriptor_cols = [col for col in df.columns if col not in ['№', 'A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'Ref', 'method', '∆T, °C']]
+                descriptor_cols = [col for col in descriptor_cols if df[col].dtype in ['float64', 'int64']]
+                
+                st.info(f"📊 Всего рассчитано: {len(descriptor_cols)} дескрипторов")
+                
+                # Категории дескрипторов
+                with st.expander("📋 Список всех дескрипторов по категориям"):
+                    categories = {
+                        "Геометрические": ['rAav', 'rBav', 't', 'D_t', 'octahedral_factor', 'Δr_AB', 'Δr_AB_norm', 'σ²_rA', 'σ²_rB', 'V_cell', 'r_ratio_AB'],
+                        "Электроотрицательные": ['χAav', 'χBav', 'Δχ_AB', 'χ_ratio_AB', 'ionicity_AO', 'ionicity_BO', 'acidity_AO', 'acidity_BO', 'Δacidity', 'χ_total', 'χ_ratio_t'],
+                        "Термодинамические": ['S_config_A', 'S_config_B', 'V_Bav', 'Vo_proxy', 'ΔH_hydr', 'E_BO', 'ρ'],
+                        "Массовые": ['M_Aav', 'M_Bav', 'M_total', 'M_ratio_AB', 'M_rA', 'M_χA'],
+                        "Дефектные": ['δ_actual', 'Z_eff_B', 'proton_affinity', 'E_vac'],
+                        "Специфические": ['alpha_beta_ratio', 'T_stab', 'δ_χB', 'δ_rB'],
+                        "Составные": ['B\'_conc', 'D_total', 'D_B_ratio', 'total_dopant']
+                    }
+                    
+                    for category, descs in categories.items():
+                        present = [d for d in descs if d in df.columns]
+                        st.write(f"**{category}**: {len(present)}/{len(descs)} дескрипторов")
+                        st.write(", ".join(present))
+                        st.write("")
+                
+                # Таблица с дескрипторами
+                st.subheader("📊 Таблица дескрипторов")
+                if descriptor_cols:
+                    display_cols = ['№' if '№' in df.columns else None, 'A' if 'A' in df.columns else None, 'B' if 'B' in df.columns else None] + descriptor_cols[:10]
+                    display_cols = [c for c in display_cols if c is not None]
+                    st.dataframe(df[display_cols], use_container_width=True, height=300)
+                
+                # Распределение дескрипторов
+                st.subheader("📈 Распределение дескрипторов")
+                
+                if descriptor_cols:
+                    selected_desc = st.selectbox("Выберите дескриптор для отображения:", descriptor_cols)
+                    if selected_desc:
+                        fig, ax = plt.subplots(figsize=(8, 6))
+                        data = df[selected_desc].dropna()
                         if len(data) > 0:
-                            ax.hist(data, bins=20, edgecolor='black', alpha=0.7, color='#3498DB')
-                            ax.set_xlabel(target, fontsize=11, fontweight='bold')
-                            ax.set_ylabel('Frequency', fontsize=11, fontweight='bold')
+                            ax.hist(data, bins=20, edgecolor='black', alpha=0.7, color='#2ECC71')
+                            ax.set_xlabel(selected_desc, fontsize=12, fontweight='bold')
+                            ax.set_ylabel('Frequency', fontsize=12, fontweight='bold')
                             ax.grid(True, alpha=0.3)
                             st.pyplot(fig)
                         else:
-                            st.write("Нет данных")
-        
-        # --- TAB 2: Дескрипторы ---
-        with tabs[1]:
-            st.header("🧮 Расчёт дескрипторов")
+                            st.warning("Нет данных для выбранного дескриптора")
             
-            # Информация о дескрипторах
-            descriptor_cols = [col for col in df.columns if col not in ['№', 'A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'Ref', 'method', '∆T, °C']]
-            descriptor_cols = [col for col in descriptor_cols if df[col].dtype in ['float64', 'int64']]
-            
-            st.info(f"📊 Всего рассчитано: {len(descriptor_cols)} дескрипторов")
-            
-            # Категории дескрипторов
-            with st.expander("📋 Список всех дескрипторов по категориям"):
-                categories = {
-                    "Геометрические": ['rAav', 'rBav', 't', 'D_t', 'octahedral_factor', 'Δr_AB', 'Δr_AB_norm', 'σ²_rA', 'σ²_rB', 'V_cell', 'r_ratio_AB'],
-                    "Электроотрицательные": ['χAav', 'χBav', 'Δχ_AB', 'χ_ratio_AB', 'ionicity_AO', 'ionicity_BO', 'acidity_AO', 'acidity_BO', 'Δacidity', 'χ_total', 'χ_ratio_t'],
-                    "Термодинамические": ['S_config_A', 'S_config_B', 'V_Bav', 'Vo_proxy', 'ΔH_hydr', 'E_BO', 'ρ'],
-                    "Массовые": ['M_Aav', 'M_Bav', 'M_total', 'M_ratio_AB', 'M_rA', 'M_χA'],
-                    "Дефектные": ['δ_actual', 'Z_eff_B', 'proton_affinity', 'E_vac'],
-                    "Специфические": ['alpha_beta_ratio', 'T_stab', 'δ_χB', 'δ_rB'],
-                    "Составные": ['B\'_conc', 'D_total', 'D_B_ratio', 'total_dopant']
-                }
+            # --- TAB 3: Корреляции ---
+            with tabs[2]:
+                st.header("📈 Расширенный корреляционный анализ")
                 
-                for category, descs in categories.items():
-                    present = [d for d in descs if d in df.columns]
-                    st.write(f"**{category}**: {len(present)}/{len(descs)} дескрипторов")
-                    st.write(", ".join(present))
-                    st.write("")
-            
-            # Таблица с дескрипторами
-            st.subheader("📊 Таблица дескрипторов")
-            if descriptor_cols:
-                display_cols = ['№' if '№' in df.columns else None, 'A' if 'A' in df.columns else None, 'B' if 'B' in df.columns else None] + descriptor_cols[:10]
-                display_cols = [c for c in display_cols if c is not None]
-                st.dataframe(df[display_cols], use_container_width=True, height=300)
-            
-            # Распределение дескрипторов
-            st.subheader("📈 Распределение дескрипторов")
-            
-            if descriptor_cols:
-                selected_desc = st.selectbox("Выберите дескриптор для отображения:", descriptor_cols)
-                if selected_desc:
-                    fig, ax = plt.subplots(figsize=(8, 6))
-                    data = df[selected_desc].dropna()
-                    if len(data) > 0:
-                        ax.hist(data, bins=20, edgecolor='black', alpha=0.7, color='#2ECC71')
-                        ax.set_xlabel(selected_desc, fontsize=12, fontweight='bold')
-                        ax.set_ylabel('Frequency', fontsize=12, fontweight='bold')
-                        ax.grid(True, alpha=0.3)
-                        st.pyplot(fig)
+                if len(all_descriptors) > 1:
+                    # Выбор целевой переменной
+                    target_options = [t for t in TARGET_VARIABLES if t in df.columns]
+                    if target_options:
+                        target = st.selectbox(
+                            "Выберите целевую переменную:",
+                            options=target_options
+                        )
+                        
+                        # Выбор топ-N
+                        n_features = st.slider("Количество топ-дескрипторов:", 5, 30, 20)
+                        
+                        # Анализ корреляций
+                        if st.button("🔍 Анализировать корреляции", use_container_width=True):
+                            with st.spinner("Анализ корреляций..."):
+                                analyzer = CorrelationAnalyzer(df)
+                                
+                                # Топ-дескрипторы
+                                top_features = analyzer.get_top_features(target, n=n_features)
+                                
+                                if top_features:
+                                    st.success(f"✅ Найдено {len(top_features)} значимых дескрипторов")
+                                    
+                                    # Таблица топ-дескрипторов
+                                    st.subheader(f"🏆 Топ-{len(top_features)} дескрипторов для {target}")
+                                    
+                                    pearson_results = analyzer.pearson_correlation(target=target)
+                                    if pearson_results is not None:
+                                        top_df = pearson_results[pearson_results['feature'].isin(top_features)]
+                                        st.dataframe(top_df[['feature', 'correlation', 'p_value', 'significant']], use_container_width=True)
+                                    
+                                    # Графики в колонках
+                                    col1, col2 = st.columns(2)
+                                    
+                                    with col1:
+                                        st.subheader("📊 Топ-20 корреляций")
+                                        if pearson_results is not None:
+                                            fig, ax = plt.subplots(figsize=(10, 8))
+                                            top_plot = pearson_results.head(20)
+                                            colors = ['red' if c < 0 else 'blue' for c in top_plot['correlation'].values]
+                                            ax.barh(top_plot['feature'], top_plot['correlation'], color=colors, alpha=0.7)
+                                            ax.axvline(0, color='black', linewidth=1.5, linestyle='--')
+                                            ax.set_xlabel(f'Correlation with {target}', fontsize=12, fontweight='bold')
+                                            ax.set_ylabel('Feature', fontsize=12, fontweight='bold')
+                                            ax.set_title(f'Top 20 Correlations with {target}', fontsize=14, fontweight='bold')
+                                            ax.grid(True, alpha=0.3)
+                                            plt.tight_layout()
+                                            st.pyplot(fig)
+                                    
+                                    with col2:
+                                        st.subheader("🔗 Сетевой граф")
+                                        G = analyzer.correlation_network(features=top_features[:15], threshold=0.4)
+                                        if G is not None and len(G.edges()) > 0:
+                                            fig, ax = plt.subplots(figsize=(10, 8))
+                                            pos = nx.spring_layout(G, k=1, seed=42)
+                                            nx.draw_networkx_nodes(G, pos, node_color='lightblue', 
+                                                                  node_size=500, alpha=0.8, ax=ax)
+                                            nx.draw_networkx_labels(G, pos, font_size=8, font_weight='bold', ax=ax)
+                                            nx.draw_networkx_edges(G, pos, edge_color='gray', alpha=0.5, ax=ax)
+                                            ax.set_title('Correlation Network', fontsize=14, fontweight='bold')
+                                            ax.axis('off')
+                                            plt.tight_layout()
+                                            st.pyplot(fig)
+                                        else:
+                                            st.warning("Недостаточно связей для построения сети")
+                                    
+                                    # Матрица корреляций
+                                    st.subheader("📊 Матрица корреляций топ-дескрипторов")
+                                    corr_fig = viz.plot_correlation_matrix(features=top_features[:10])
+                                    if corr_fig is not None:
+                                        st.pyplot(corr_fig)
+                                    
+                                    # Pairplot
+                                    st.subheader("🎨 Pairplot топ-5 дескрипторов")
+                                    pair_fig = viz.plot_pairplot_top5(features=top_features[:4], target=target)
+                                    if pair_fig is not None:
+                                        st.pyplot(pair_fig)
+                                else:
+                                    st.warning("Не удалось найти значимые корреляции")
                     else:
-                        st.warning("Нет данных для выбранного дескриптора")
-        
-        # --- TAB 3: Корреляции ---
-        with tabs[2]:
-            st.header("📈 Расширенный корреляционный анализ")
+                        st.warning("Нет целевых переменных в данных")
+                else:
+                    st.warning("Недостаточно дескрипторов для корреляционного анализа")
             
-            if len(all_descriptors) > 1:
-                # Выбор целевой переменной
-                target_options = [t for t in TARGET_VARIABLES if t in df.columns]
-                if target_options:
-                    target = st.selectbox(
-                        "Выберите целевую переменную:",
-                        options=target_options
+            # --- TAB 4: Карты и кластеры ---
+            with tabs[3]:
+                st.header("🗺️ Концентрационные карты и кластеризация")
+                
+                # Подвкладки
+                sub_tabs = st.tabs(["Концентрационные карты", "PCA", "Кластеризация"])
+                
+                with sub_tabs[0]:
+                    st.subheader("🗺️ Концентрационные карты")
+                    
+                    # Выбор параметров
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        x_options = ['δ', '[B\']', 'D_total', 'rAav', 'rBav', 't', 'χBav', 'r_ratio_AB', 'δ_actual', 'B\'_conc']
+                        x_options = [x for x in x_options if x in df.columns]
+                        x_axis = st.selectbox("X-axis:", options=x_options, index=0 if x_options else None)
+                    with col2:
+                        y_options = ['[B\']', 'D_total', 'δ', 'rAav', 'rBav', 't', 'χBav', 'r_ratio_AB', 'B\'_conc']
+                        y_options = [y for y in y_options if y in df.columns]
+                        y_axis = st.selectbox("Y-axis:", options=y_options, index=min(1, len(y_options)-1) if y_options else None)
+                    with col3:
+                        color_options = [t for t in TARGET_VARIABLES if t in df.columns]
+                        color_by = st.selectbox("Color (целевая переменная):", options=color_options, index=0 if color_options else None)
+                    
+                    # Тип карты
+                    map_type = st.radio(
+                        "Тип карты:",
+                        options=['Heatmap', 'Contour', 'Heatmap + точки'],
+                        horizontal=True
                     )
                     
-                    # Выбор топ-N
-                    n_features = st.slider("Количество топ-дескрипторов:", 5, 30, 20)
+                    if x_axis and y_axis and color_by:
+                        if st.button("🗺️ Построить карту", use_container_width=True):
+                            with st.spinner("Построение карты..."):
+                                if map_type == 'Heatmap':
+                                    fig = viz.plot_heatmap_2d(x_axis, y_axis, color_by)
+                                elif map_type == 'Contour':
+                                    fig = viz.plot_contour(x_axis, y_axis, color_by)
+                                else:
+                                    fig = viz.plot_heatmap_with_points(x_axis, y_axis, color_by)
+                                
+                                if fig is not None:
+                                    st.pyplot(fig)
+                                else:
+                                    st.warning("Недостаточно данных для построения карты")
                     
-                    # Анализ корреляций
-                    if st.button("🔍 Анализировать корреляции", use_container_width=True):
-                        with st.spinner("Анализ корреляций..."):
-                            analyzer = CorrelationAnalyzer(df)
-                            
-                            # Топ-дескрипторы
-                            top_features = analyzer.get_top_features(target, n=n_features)
-                            
-                            if top_features:
-                                st.success(f"✅ Найдено {len(top_features)} значимых дескрипторов")
+                    # Ternary plot
+                    st.subheader("📐 Ternary Plot")
+                    if '[B\']' in df.columns and '[D1]' in df.columns and '[D2]' in df.columns:
+                        ternary_target = st.selectbox(
+                            "Целевая переменная для Ternary Plot:",
+                            options=color_options,
+                            key="ternary_target"
+                        )
+                        if st.button("🔺 Построить Ternary Plot", use_container_width=True):
+                            fig = viz.plot_ternary('[B\']', '[D1]', '[D2]', ternary_target)
+                            if fig is not None:
+                                st.pyplot(fig)
+                            else:
+                                st.warning("Недостаточно данных для Ternary Plot")
+                
+                with sub_tabs[1]:
+                    st.subheader("📊 PCA анализ")
+                    
+                    # Выбор компонент
+                    pc_x = st.selectbox("PC X:", [1, 2, 3], index=0)
+                    pc_y = st.selectbox("PC Y:", [1, 2, 3], index=1)
+                    
+                    # Biplot
+                    if st.button("📊 Построить Biplot", use_container_width=True):
+                        with st.spinner("Построение Biplot..."):
+                            fig = viz.plot_pca_biplot()
+                            if fig is not None:
+                                st.pyplot(fig)
+                            else:
+                                st.warning("Недостаточно данных для PCA")
+                    
+                    # 3D PCA
+                    if st.button("🎯 Построить 3D PCA", use_container_width=True):
+                        with st.spinner("Построение 3D PCA..."):
+                            fig = viz.plot_pca_3d()
+                            if fig is not None:
+                                st.plotly_chart(fig, use_container_width=True)
+                            else:
+                                st.warning("Недостаточно данных для 3D PCA")
+                    
+                    # Elbow plot
+                    st.subheader("📉 Elbow Plot")
+                    max_components = st.slider("Максимальное число компонент:", 5, 20, 10)
+                    if st.button("📉 Построить Elbow Plot", use_container_width=True):
+                        fig = viz.plot_elbow(max_components=max_components)
+                        if fig is not None:
+                            st.pyplot(fig)
+                        else:
+                            st.warning("Недостаточно данных для Elbow Plot")
+                
+                with sub_tabs[2]:
+                    st.subheader("🔍 Кластеризация")
+                    
+                    # Выбор алгоритма
+                    algo = st.selectbox(
+                        "Алгоритм:",
+                        options=['K-means', 'DBSCAN', 'Иерархическая']
+                    )
+                    
+                    if algo == 'K-means':
+                        n_clusters = st.slider("K (количество кластеров):", 2, 10, 3)
+                        if st.button("🔍 Кластеризовать (K-means)", use_container_width=True):
+                            with st.spinner("Выполнение K-means кластеризации..."):
+                                # Выполняем кластеризацию
+                                features = all_descriptors[:20]  # Используем топ-20
+                                valid_features = []
+                                for feat in features:
+                                    if feat in df.columns and df[feat].isna().sum() / len(df) < 0.3:
+                                        valid_features.append(feat)
                                 
-                                # Таблица топ-дескрипторов
-                                st.subheader(f"🏆 Топ-{len(top_features)} дескрипторов для {target}")
-                                
-                                pearson_results = analyzer.pearson_correlation(target=target)
-                                if pearson_results is not None:
-                                    top_df = pearson_results[pearson_results['feature'].isin(top_features)]
-                                    st.dataframe(top_df[['feature', 'correlation', 'p_value', 'significant']], use_container_width=True)
-                                
-                                # Графики в колонках
-                                col1, col2 = st.columns(2)
-                                
-                                with col1:
-                                    st.subheader("📊 Топ-20 корреляций")
-                                    if pearson_results is not None:
+                                if len(valid_features) > 1:
+                                    data = df[valid_features].dropna()
+                                    if len(data) > 10:
+                                        scaler = StandardScaler()
+                                        data_scaled = scaler.fit_transform(data)
+                                        
+                                        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+                                        labels = kmeans.fit_predict(data_scaled)
+                                        
+                                        # Добавляем метки в DataFrame
+                                        df_clustered = data.copy()
+                                        df_clustered['Cluster'] = labels
+                                        
+                                        # Silhouette score
+                                        score = silhouette_score(data_scaled, labels)
+                                        st.success(f"✅ Silhouette Score: {score:.3f}")
+                                        
+                                        # Визуализация с помощью PCA
+                                        pca = PCA(n_components=2)
+                                        pca_result = pca.fit_transform(data_scaled)
+                                        
                                         fig, ax = plt.subplots(figsize=(10, 8))
-                                        top_plot = pearson_results.head(20)
-                                        colors = ['red' if c < 0 else 'blue' for c in top_plot['correlation'].values]
-                                        ax.barh(top_plot['feature'], top_plot['correlation'], color=colors, alpha=0.7)
-                                        ax.axvline(0, color='black', linewidth=1.5, linestyle='--')
-                                        ax.set_xlabel(f'Correlation with {target}', fontsize=12, fontweight='bold')
-                                        ax.set_ylabel('Feature', fontsize=12, fontweight='bold')
-                                        ax.set_title(f'Top 20 Correlations with {target}', fontsize=14, fontweight='bold')
+                                        scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], 
+                                                           c=labels, cmap='viridis', s=50, alpha=0.7)
+                                        ax.set_xlabel('PC1', fontsize=12, fontweight='bold')
+                                        ax.set_ylabel('PC2', fontsize=12, fontweight='bold')
+                                        ax.set_title(f'K-means Clustering (K={n_clusters})', fontsize=14, fontweight='bold')
+                                        plt.colorbar(scatter, ax=ax, label='Cluster')
                                         ax.grid(True, alpha=0.3)
                                         plt.tight_layout()
                                         st.pyplot(fig)
+                                    else:
+                                        st.warning("Недостаточно данных для кластеризации")
+                                else:
+                                    st.warning("Недостаточно признаков для кластеризации")
+                    
+                    elif algo == 'DBSCAN':
+                        eps = st.slider("eps (максимальное расстояние):", 0.1, 5.0, 0.5, 0.1)
+                        min_samples = st.slider("min_samples:", 2, 10, 5)
+                        if st.button("🔍 Кластеризовать (DBSCAN)", use_container_width=True):
+                            with st.spinner("Выполнение DBSCAN кластеризации..."):
+                                features = all_descriptors[:20]
+                                valid_features = []
+                                for feat in features:
+                                    if feat in df.columns and df[feat].isna().sum() / len(df) < 0.3:
+                                        valid_features.append(feat)
                                 
-                                with col2:
-                                    st.subheader("🔗 Сетевой граф")
-                                    G = analyzer.correlation_network(features=top_features[:15], threshold=0.4)
-                                    if G is not None and len(G.edges()) > 0:
+                                if len(valid_features) > 1:
+                                    data = df[valid_features].dropna()
+                                    if len(data) > 10:
+                                        scaler = StandardScaler()
+                                        data_scaled = scaler.fit_transform(data)
+                                        
+                                        dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+                                        labels = dbscan.fit_predict(data_scaled)
+                                        
+                                        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+                                        n_noise = list(labels).count(-1)
+                                        
+                                        st.info(f"📊 Найдено кластеров: {n_clusters}, Шумовых точек: {n_noise}")
+                                        
+                                        # Визуализация с помощью PCA
+                                        pca = PCA(n_components=2)
+                                        pca_result = pca.fit_transform(data_scaled)
+                                        
                                         fig, ax = plt.subplots(figsize=(10, 8))
-                                        pos = nx.spring_layout(G, k=1, seed=42)
-                                        nx.draw_networkx_nodes(G, pos, node_color='lightblue', 
-                                                              node_size=500, alpha=0.8, ax=ax)
-                                        nx.draw_networkx_labels(G, pos, font_size=8, font_weight='bold', ax=ax)
-                                        nx.draw_networkx_edges(G, pos, edge_color='gray', alpha=0.5, ax=ax)
-                                        ax.set_title('Correlation Network', fontsize=14, fontweight='bold')
-                                        ax.axis('off')
+                                        scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], 
+                                                           c=labels, cmap='viridis', s=50, alpha=0.7)
+                                        ax.set_xlabel('PC1', fontsize=12, fontweight='bold')
+                                        ax.set_ylabel('PC2', fontsize=12, fontweight='bold')
+                                        ax.set_title(f'DBSCAN Clustering (eps={eps}, min_samples={min_samples})', 
+                                                    fontsize=14, fontweight='bold')
+                                        plt.colorbar(scatter, ax=ax, label='Cluster')
+                                        ax.grid(True, alpha=0.3)
                                         plt.tight_layout()
                                         st.pyplot(fig)
                                     else:
-                                        st.warning("Недостаточно связей для построения сети")
-                                
-                                # Матрица корреляций
-                                st.subheader("📊 Матрица корреляций топ-дескрипторов")
-                                corr_fig = viz.plot_correlation_matrix(features=top_features[:10])
-                                if corr_fig is not None:
-                                    st.pyplot(corr_fig)
-                                
-                                # Pairplot
-                                st.subheader("🎨 Pairplot топ-5 дескрипторов")
-                                pair_fig = viz.plot_pairplot_top5(features=top_features[:4], target=target)
-                                if pair_fig is not None:
-                                    st.pyplot(pair_fig)
-                            else:
-                                st.warning("Не удалось найти значимые корреляции")
-                else:
-                    st.warning("Нет целевых переменных в данных")
-            else:
-                st.warning("Недостаточно дескрипторов для корреляционного анализа")
-        
-        # --- TAB 4: Карты и кластеры ---
-        with tabs[3]:
-            st.header("🗺️ Концентрационные карты и кластеризация")
+                                        st.warning("Недостаточно данных для кластеризации")
+                                else:
+                                    st.warning("Недостаточно признаков для кластеризации")
+                    
+                    else:  # Иерархическая
+                        if st.button("🔍 Кластеризовать (Иерархическая)", use_container_width=True):
+                            with st.spinner("Выполнение иерархической кластеризации..."):
+                                # Используем silhouette для оптимального K
+                                fig = viz.plot_silhouette()
+                                if fig is not None:
+                                    st.pyplot(fig)
+                                else:
+                                    st.warning("Недостаточно данных для кластеризации")
             
-            # Подвкладки
-            sub_tabs = st.tabs(["Концентрационные карты", "PCA", "Кластеризация"])
-            
-            with sub_tabs[0]:
-                st.subheader("🗺️ Концентрационные карты")
+            # --- TAB 5: Визуализация ---
+            with tabs[4]:
+                st.header("🎯 Интерактивная визуализация")
                 
-                # Выбор параметров
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    x_options = ['δ', '[B\']', 'D_total', 'rAav', 'rBav', 't', 'χBav', 'r_ratio_AB', 'δ_actual', 'B\'_conc']
-                    x_options = [x for x in x_options if x in df.columns]
-                    x_axis = st.selectbox("X-axis:", options=x_options, index=0 if x_options else None)
-                with col2:
-                    y_options = ['[B\']', 'D_total', 'δ', 'rAav', 'rBav', 't', 'χBav', 'r_ratio_AB', 'B\'_conc']
-                    y_options = [y for y in y_options if y in df.columns]
-                    y_axis = st.selectbox("Y-axis:", options=y_options, index=min(1, len(y_options)-1) if y_options else None)
-                with col3:
-                    color_options = [t for t in TARGET_VARIABLES if t in df.columns]
-                    color_by = st.selectbox("Color (целевая переменная):", options=color_options, index=0 if color_options else None)
-                
-                # Тип карты
-                map_type = st.radio(
-                    "Тип карты:",
-                    options=['Heatmap', 'Contour', 'Heatmap + точки'],
-                    horizontal=True
+                # Категории графиков
+                plot_category = st.selectbox(
+                    "Выберите категорию графиков:",
+                    options=[
+                        "Пузырьковые диаграммы",
+                        "Специализированные графики",
+                        "Pairplot с цветом",
+                        "Радарные диаграммы"
+                    ]
                 )
                 
-                if x_axis and y_axis and color_by:
-                    if st.button("🗺️ Построить карту", use_container_width=True):
-                        with st.spinner("Построение карты..."):
-                            if map_type == 'Heatmap':
-                                fig = viz.plot_heatmap_2d(x_axis, y_axis, color_by)
-                            elif map_type == 'Contour':
-                                fig = viz.plot_contour(x_axis, y_axis, color_by)
+                if plot_category == "Пузырьковые диаграммы":
+                    st.subheader("💎 Пузырьковая диаграмма")
+                    
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        x_feature = st.selectbox("X:", options=all_descriptors, index=0 if all_descriptors else None)
+                    with col2:
+                        y_target = st.selectbox("Y (целевая):", options=[t for t in TARGET_VARIABLES if t in df.columns], index=0)
+                    with col3:
+                        color_options = [d for d in all_descriptors if d != x_feature and d != y_target]
+                        color_feature = st.selectbox("Color:", options=color_options, index=0 if color_options else None)
+                    with col4:
+                        size_options = [d for d in all_descriptors if d != x_feature and d != y_target and d != color_feature]
+                        size_feature = st.selectbox("Size:", options=size_options, index=0 if size_options else None)
+                    
+                    if x_feature and y_target and color_feature and size_feature:
+                        if st.button("💎 Построить пузырьковую диаграмму", use_container_width=True):
+                            with st.spinner("Построение..."):
+                                fig = viz.plot_bubble_4d(x_feature, y_target, color_feature, size_feature)
+                                if fig is not None:
+                                    st.plotly_chart(fig, use_container_width=True)
+                                else:
+                                    st.warning("Недостаточно данных для построения")
+                    
+                    st.subheader("📊 Compositional Bubble")
+                    if st.button("📊 Построить Compositional Bubble", use_container_width=True):
+                        with st.spinner("Построение..."):
+                            fig = viz.plot_compositional_bubble()
+                            if fig is not None:
+                                st.plotly_chart(fig, use_container_width=True)
                             else:
-                                fig = viz.plot_heatmap_with_points(x_axis, y_axis, color_by)
+                                st.warning("Недостаточно данных")
+                    
+                    st.subheader("🎯 3D Scatter")
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        x_3d = st.selectbox("X (3D):", options=all_descriptors, key="x_3d", index=0)
+                    with col2:
+                        y_3d = st.selectbox("Y (3D):", options=all_descriptors, key="y_3d", index=min(1, len(all_descriptors)-1))
+                    with col3:
+                        z_3d = st.selectbox("Z (3D):", options=all_descriptors, key="z_3d", index=min(2, len(all_descriptors)-1))
+                    
+                    if x_3d and y_3d and z_3d:
+                        if st.button("🎯 Построить 3D Scatter", use_container_width=True):
+                            with st.spinner("Построение..."):
+                                fig = viz.plot_scatter_3d(x_3d, y_3d, z_3d)
+                                if fig is not None:
+                                    st.plotly_chart(fig, use_container_width=True)
+                                else:
+                                    st.warning("Недостаточно данных")
+                    
+                    st.subheader("📈 Bubble с размером = δ")
+                    if st.button("📈 Построить Bubble с размером = δ", use_container_width=True):
+                        with st.spinner("Построение..."):
+                            x_feat = st.selectbox("X:", options=all_descriptors, key="bubble_delta_x")
+                            y_targ = st.selectbox("Y:", options=[t for t in TARGET_VARIABLES if t in df.columns], key="bubble_delta_y")
+                            if x_feat and y_targ:
+                                fig = viz.plot_bubble_size_delta(x_feat, y_targ)
+                                if fig is not None:
+                                    st.plotly_chart(fig, use_container_width=True)
+                                else:
+                                    st.warning("Недостаточно данных")
+                
+                elif plot_category == "Специализированные графики":
+                    st.subheader("🎯 Специализированные графики")
+                    
+                    spec_plots = [
+                        "T(bends) vs δ",
+                        "α vs β (компромисс)",
+                        "β vs pH₂O",
+                        "α vs rAav",
+                        "β vs χBav",
+                        "T(bends) vs T_stab"
+                    ]
+                    
+                    selected_plot = st.selectbox("Выберите график:", spec_plots)
+                    
+                    if st.button("📊 Построить", use_container_width=True):
+                        with st.spinner("Построение..."):
+                            fig = None
+                            if selected_plot == "T(bends) vs δ":
+                                fig = viz.plot_t_bends_vs_delta()
+                            elif selected_plot == "α vs β (компромисс)":
+                                fig = viz.plot_alpha_vs_beta()
+                            elif selected_plot == "β vs pH₂O":
+                                fig = viz.plot_beta_vs_ph2o()
+                            elif selected_plot == "α vs rAav":
+                                fig = viz.plot_alpha_vs_rAav()
+                            elif selected_plot == "β vs χBav":
+                                fig = viz.plot_beta_vs_chiBav()
+                            elif selected_plot == "T(bends) vs T_stab":
+                                fig = viz.plot_t_bends_vs_t_stab()
                             
                             if fig is not None:
                                 st.pyplot(fig)
                             else:
-                                st.warning("Недостаточно данных для построения карты")
+                                st.warning("Недостаточно данных для построения графика")
                 
-                # Ternary plot
-                st.subheader("📐 Ternary Plot")
-                if '[B\']' in df.columns and '[D1]' in df.columns and '[D2]' in df.columns:
-                    ternary_target = st.selectbox(
-                        "Целевая переменная для Ternary Plot:",
-                        options=color_options,
-                        key="ternary_target"
+                elif plot_category == "Pairplot с цветом":
+                    st.subheader("🎨 Pairplot с многоцветным исполнением")
+                    
+                    # Выбор признаков
+                    features = st.multiselect(
+                        "Выберите признаки (2-5):",
+                        options=all_descriptors,
+                        default=all_descriptors[:3] if len(all_descriptors) >= 3 else all_descriptors
                     )
-                    if st.button("🔺 Построить Ternary Plot", use_container_width=True):
-                        fig = viz.plot_ternary('[B\']', '[D1]', '[D2]', ternary_target)
-                        if fig is not None:
-                            st.pyplot(fig)
-                        else:
-                            st.warning("Недостаточно данных для Ternary Plot")
-            
-            with sub_tabs[1]:
-                st.subheader("📊 PCA анализ")
-                
-                # Выбор компонент
-                pc_x = st.selectbox("PC X:", [1, 2, 3], index=0)
-                pc_y = st.selectbox("PC Y:", [1, 2, 3], index=1)
-                
-                # Biplot
-                if st.button("📊 Построить Biplot", use_container_width=True):
-                    with st.spinner("Построение Biplot..."):
-                        fig = viz.plot_pca_biplot()
-                        if fig is not None:
-                            st.pyplot(fig)
-                        else:
-                            st.warning("Недостаточно данных для PCA")
-                
-                # 3D PCA
-                if st.button("🎯 Построить 3D PCA", use_container_width=True):
-                    with st.spinner("Построение 3D PCA..."):
-                        fig = viz.plot_pca_3d()
-                        if fig is not None:
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.warning("Недостаточно данных для 3D PCA")
-                
-                # Elbow plot
-                st.subheader("📉 Elbow Plot")
-                max_components = st.slider("Максимальное число компонент:", 5, 20, 10)
-                if st.button("📉 Построить Elbow Plot", use_container_width=True):
-                    fig = viz.plot_elbow(max_components=max_components)
-                    if fig is not None:
-                        st.pyplot(fig)
+                    
+                    hue_by = st.selectbox(
+                        "Цвет по:",
+                        options=['method', 'B', 'A'] + [t for t in TARGET_VARIABLES if t in df.columns],
+                        index=0
+                    )
+                    
+                    if len(features) >= 2:
+                        if st.button("🎨 Построить Pairplot", use_container_width=True):
+                            with st.spinner("Построение..."):
+                                fig = viz.plot_pairplot_colored(features, hue_by)
+                                if fig is not None:
+                                    st.pyplot(fig)
+                                else:
+                                    st.warning("Недостаточно данных")
                     else:
-                        st.warning("Недостаточно данных для Elbow Plot")
-            
-            with sub_tabs[2]:
-                st.subheader("🔍 Кластеризация")
+                        st.warning("Выберите как минимум 2 признака")
                 
-                # Выбор алгоритма
-                algo = st.selectbox(
-                    "Алгоритм:",
-                    options=['K-means', 'DBSCAN', 'Иерархическая']
-                )
-                
-                if algo == 'K-means':
-                    n_clusters = st.slider("K (количество кластеров):", 2, 10, 3)
-                    if st.button("🔍 Кластеризовать (K-means)", use_container_width=True):
-                        with st.spinner("Выполнение K-means кластеризации..."):
-                            # Выполняем кластеризацию
-                            features = all_descriptors[:20]  # Используем топ-20
-                            valid_features = []
-                            for feat in features:
-                                if feat in df.columns and df[feat].isna().sum() / len(df) < 0.3:
-                                    valid_features.append(feat)
-                            
-                            if len(valid_features) > 1:
-                                data = df[valid_features].dropna()
-                                if len(data) > 10:
-                                    scaler = StandardScaler()
-                                    data_scaled = scaler.fit_transform(data)
-                                    
-                                    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-                                    labels = kmeans.fit_predict(data_scaled)
-                                    
-                                    # Добавляем метки в DataFrame
-                                    df_clustered = data.copy()
-                                    df_clustered['Cluster'] = labels
-                                    
-                                    # Silhouette score
-                                    score = silhouette_score(data_scaled, labels)
-                                    st.success(f"✅ Silhouette Score: {score:.3f}")
-                                    
-                                    # Визуализация с помощью PCA
-                                    pca = PCA(n_components=2)
-                                    pca_result = pca.fit_transform(data_scaled)
-                                    
-                                    fig, ax = plt.subplots(figsize=(10, 8))
-                                    scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], 
-                                                       c=labels, cmap='viridis', s=50, alpha=0.7)
-                                    ax.set_xlabel('PC1', fontsize=12, fontweight='bold')
-                                    ax.set_ylabel('PC2', fontsize=12, fontweight='bold')
-                                    ax.set_title(f'K-means Clustering (K={n_clusters})', fontsize=14, fontweight='bold')
-                                    plt.colorbar(scatter, ax=ax, label='Cluster')
-                                    ax.grid(True, alpha=0.3)
-                                    plt.tight_layout()
+                elif plot_category == "Радарные диаграммы":
+                    st.subheader("📊 Радарная диаграмма для сравнения групп")
+                    
+                    radar_features = st.multiselect(
+                        "Выберите признаки (минимум 3):",
+                        options=all_descriptors,
+                        default=all_descriptors[:3] if len(all_descriptors) >= 3 else all_descriptors
+                    )
+                    
+                    group_by = st.selectbox(
+                        "Группировка по:",
+                        options=['method', 'B', 'A'],
+                        index=0
+                    )
+                    
+                    if len(radar_features) >= 3:
+                        if st.button("📊 Построить радарную диаграмму", use_container_width=True):
+                            with st.spinner("Построение..."):
+                                fig = viz.plot_radar_chart(radar_features, group_by)
+                                if fig is not None:
                                     st.pyplot(fig)
                                 else:
-                                    st.warning("Недостаточно данных для кластеризации")
-                            else:
-                                st.warning("Недостаточно признаков для кластеризации")
+                                    st.warning("Недостаточно данных")
+                    else:
+                        st.warning("Выберите как минимум 3 признака")
+            
+            # --- TAB 6: Экспорт ---
+            with tabs[5]:
+                st.header("📤 Экспорт результатов")
                 
-                elif algo == 'DBSCAN':
-                    eps = st.slider("eps (максимальное расстояние):", 0.1, 5.0, 0.5, 0.1)
-                    min_samples = st.slider("min_samples:", 2, 10, 5)
-                    if st.button("🔍 Кластеризовать (DBSCAN)", use_container_width=True):
-                        with st.spinner("Выполнение DBSCAN кластеризации..."):
-                            features = all_descriptors[:20]
-                            valid_features = []
-                            for feat in features:
-                                if feat in df.columns and df[feat].isna().sum() / len(df) < 0.3:
-                                    valid_features.append(feat)
-                            
-                            if len(valid_features) > 1:
-                                data = df[valid_features].dropna()
-                                if len(data) > 10:
-                                    scaler = StandardScaler()
-                                    data_scaled = scaler.fit_transform(data)
-                                    
-                                    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-                                    labels = dbscan.fit_predict(data_scaled)
-                                    
-                                    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-                                    n_noise = list(labels).count(-1)
-                                    
-                                    st.info(f"📊 Найдено кластеров: {n_clusters}, Шумовых точек: {n_noise}")
-                                    
-                                    # Визуализация с помощью PCA
-                                    pca = PCA(n_components=2)
-                                    pca_result = pca.fit_transform(data_scaled)
-                                    
-                                    fig, ax = plt.subplots(figsize=(10, 8))
-                                    scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], 
-                                                       c=labels, cmap='viridis', s=50, alpha=0.7)
-                                    ax.set_xlabel('PC1', fontsize=12, fontweight='bold')
-                                    ax.set_ylabel('PC2', fontsize=12, fontweight='bold')
-                                    ax.set_title(f'DBSCAN Clustering (eps={eps}, min_samples={min_samples})', 
-                                                fontsize=14, fontweight='bold')
-                                    plt.colorbar(scatter, ax=ax, label='Cluster')
-                                    ax.grid(True, alpha=0.3)
-                                    plt.tight_layout()
-                                    st.pyplot(fig)
-                                else:
-                                    st.warning("Недостаточно данных для кластеризации")
-                            else:
-                                st.warning("Недостаточно признаков для кластеризации")
+                st.subheader("📊 Экспорт данных")
                 
-                else:  # Иерархическая
-                    if st.button("🔍 Кластеризовать (Иерархическая)", use_container_width=True):
-                        with st.spinner("Выполнение иерархической кластеризации..."):
-                            # Используем silhouette для оптимального K
-                            fig = viz.plot_silhouette()
-                            if fig is not None:
-                                st.pyplot(fig)
-                            else:
-                                st.warning("Недостаточно данных для кластеризации")
+                # Экспорт дескрипторов
+                if st.button("📥 Скачать данные с дескрипторами (CSV)", use_container_width=True):
+                    csv = df.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Скачать CSV",
+                        data=csv,
+                        file_name="perovskite_descriptors.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                
+                st.subheader("🖼️ Экспорт графиков")
+                
+                # Выбор графиков для экспорта
+                export_plots = st.multiselect(
+                    "Выберите графики для экспорта:",
+                    options=[
+                        "Корреляционные графики",
+                        "PCA и кластеризация",
+                        "Концентрационные карты",
+                        "Пузырьковые диаграммы",
+                        "Специализированные графики",
+                        "Pairplot и радарные диаграммы"
+                    ]
+                )
+                
+                if export_plots:
+                    st.info(f"ℹ️ Выбрано {len(export_plots)} категорий графиков")
+                    
+                    if st.button("📦 Сгенерировать графики для экспорта", use_container_width=True):
+                        with st.spinner("Генерация графиков..."):
+                            st.warning("⚠️ Функция экспорта графиков в ZIP находится в разработке")
+                
+                st.subheader("📄 Экспорт отчёта")
+                
+                if st.button("📄 Сгенерировать HTML-отчёт", use_container_width=True):
+                    with st.spinner("Генерация отчёта..."):
+                        st.warning("⚠️ Функция генерации HTML-отчёта находится в разработке")
         
-        # --- TAB 5: Визуализация ---
-        with tabs[4]:
-            st.header("🎯 Интерактивная визуализация")
-            
-            # Категории графиков
-            plot_category = st.selectbox(
-                "Выберите категорию графиков:",
-                options=[
-                    "Пузырьковые диаграммы",
-                    "Специализированные графики",
-                    "Pairplot с цветом",
-                    "Радарные диаграммы"
-                ]
-            )
-            
-            if plot_category == "Пузырьковые диаграммы":
-                st.subheader("💎 Пузырьковая диаграмма")
-                
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    x_feature = st.selectbox("X:", options=all_descriptors, index=0 if all_descriptors else None)
-                with col2:
-                    y_target = st.selectbox("Y (целевая):", options=[t for t in TARGET_VARIABLES if t in df.columns], index=0)
-                with col3:
-                    color_options = [d for d in all_descriptors if d != x_feature and d != y_target]
-                    color_feature = st.selectbox("Color:", options=color_options, index=0 if color_options else None)
-                with col4:
-                    size_options = [d for d in all_descriptors if d != x_feature and d != y_target and d != color_feature]
-                    size_feature = st.selectbox("Size:", options=size_options, index=0 if size_options else None)
-                
-                if x_feature and y_target and color_feature and size_feature:
-                    if st.button("💎 Построить пузырьковую диаграмму", use_container_width=True):
-                        with st.spinner("Построение..."):
-                            fig = viz.plot_bubble_4d(x_feature, y_target, color_feature, size_feature)
-                            if fig is not None:
-                                st.plotly_chart(fig, use_container_width=True)
-                            else:
-                                st.warning("Недостаточно данных для построения")
-                
-                st.subheader("📊 Compositional Bubble")
-                if st.button("📊 Построить Compositional Bubble", use_container_width=True):
-                    with st.spinner("Построение..."):
-                        fig = viz.plot_compositional_bubble()
-                        if fig is not None:
-                            st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.warning("Недостаточно данных")
-                
-                st.subheader("🎯 3D Scatter")
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    x_3d = st.selectbox("X (3D):", options=all_descriptors, key="x_3d", index=0)
-                with col2:
-                    y_3d = st.selectbox("Y (3D):", options=all_descriptors, key="y_3d", index=min(1, len(all_descriptors)-1))
-                with col3:
-                    z_3d = st.selectbox("Z (3D):", options=all_descriptors, key="z_3d", index=min(2, len(all_descriptors)-1))
-                
-                if x_3d and y_3d and z_3d:
-                    if st.button("🎯 Построить 3D Scatter", use_container_width=True):
-                        with st.spinner("Построение..."):
-                            fig = viz.plot_scatter_3d(x_3d, y_3d, z_3d)
-                            if fig is not None:
-                                st.plotly_chart(fig, use_container_width=True)
-                            else:
-                                st.warning("Недостаточно данных")
-                
-                st.subheader("📈 Bubble с размером = δ")
-                if st.button("📈 Построить Bubble с размером = δ", use_container_width=True):
-                    with st.spinner("Построение..."):
-                        x_feat = st.selectbox("X:", options=all_descriptors, key="bubble_delta_x")
-                        y_targ = st.selectbox("Y:", options=[t for t in TARGET_VARIABLES if t in df.columns], key="bubble_delta_y")
-                        if x_feat and y_targ:
-                            fig = viz.plot_bubble_size_delta(x_feat, y_targ)
-                            if fig is not None:
-                                st.plotly_chart(fig, use_container_width=True)
-                            else:
-                                st.warning("Недостаточно данных")
-            
-            elif plot_category == "Специализированные графики":
-                st.subheader("🎯 Специализированные графики")
-                
-                spec_plots = [
-                    "T(bends) vs δ",
-                    "α vs β (компромисс)",
-                    "β vs pH₂O",
-                    "α vs rAav",
-                    "β vs χBav",
-                    "T(bends) vs T_stab"
-                ]
-                
-                selected_plot = st.selectbox("Выберите график:", spec_plots)
-                
-                if st.button("📊 Построить", use_container_width=True):
-                    with st.spinner("Построение..."):
-                        fig = None
-                        if selected_plot == "T(bends) vs δ":
-                            fig = viz.plot_t_bends_vs_delta()
-                        elif selected_plot == "α vs β (компромисс)":
-                            fig = viz.plot_alpha_vs_beta()
-                        elif selected_plot == "β vs pH₂O":
-                            fig = viz.plot_beta_vs_ph2o()
-                        elif selected_plot == "α vs rAav":
-                            fig = viz.plot_alpha_vs_rAav()
-                        elif selected_plot == "β vs χBav":
-                            fig = viz.plot_beta_vs_chiBav()
-                        elif selected_plot == "T(bends) vs T_stab":
-                            fig = viz.plot_t_bends_vs_t_stab()
-                        
-                        if fig is not None:
-                            st.pyplot(fig)
-                        else:
-                            st.warning("Недостаточно данных для построения графика")
-            
-            elif plot_category == "Pairplot с цветом":
-                st.subheader("🎨 Pairplot с многоцветным исполнением")
-                
-                # Выбор признаков
-                features = st.multiselect(
-                    "Выберите признаки (2-5):",
-                    options=all_descriptors,
-                    default=all_descriptors[:3] if len(all_descriptors) >= 3 else all_descriptors
-                )
-                
-                hue_by = st.selectbox(
-                    "Цвет по:",
-                    options=['method', 'B', 'A'] + [t for t in TARGET_VARIABLES if t in df.columns],
-                    index=0
-                )
-                
-                if len(features) >= 2:
-                    if st.button("🎨 Построить Pairplot", use_container_width=True):
-                        with st.spinner("Построение..."):
-                            fig = viz.plot_pairplot_colored(features, hue_by)
-                            if fig is not None:
-                                st.pyplot(fig)
-                            else:
-                                st.warning("Недостаточно данных")
-                else:
-                    st.warning("Выберите как минимум 2 признака")
-            
-            elif plot_category == "Радарные диаграммы":
-                st.subheader("📊 Радарная диаграмма для сравнения групп")
-                
-                radar_features = st.multiselect(
-                    "Выберите признаки (минимум 3):",
-                    options=all_descriptors,
-                    default=all_descriptors[:3] if len(all_descriptors) >= 3 else all_descriptors
-                )
-                
-                group_by = st.selectbox(
-                    "Группировка по:",
-                    options=['method', 'B', 'A'],
-                    index=0
-                )
-                
-                if len(radar_features) >= 3:
-                    if st.button("📊 Построить радарную диаграмму", use_container_width=True):
-                        with st.spinner("Построение..."):
-                            fig = viz.plot_radar_chart(radar_features, group_by)
-                            if fig is not None:
-                                st.pyplot(fig)
-                            else:
-                                st.warning("Недостаточно данных")
-                else:
-                    st.warning("Выберите как минимум 3 признака")
-        
-        # --- TAB 6: Экспорт ---
-        with tabs[5]:
-            st.header("📤 Экспорт результатов")
-            
-            st.subheader("📊 Экспорт данных")
-            
-            # Экспорт дескрипторов
-            if st.button("📥 Скачать данные с дескрипторами (CSV)", use_container_width=True):
-                csv = df.to_csv(index=False)
-                st.download_button(
-                    label="📥 Скачать CSV",
-                    data=csv,
-                    file_name="perovskite_descriptors.csv",
-                    mime="text/csv",
-                    use_container_width=True
-                )
-            
-            st.subheader("🖼️ Экспорт графиков")
-            
-            # Выбор графиков для экспорта
-            export_plots = st.multiselect(
-                "Выберите графики для экспорта:",
-                options=[
-                    "Корреляционные графики",
-                    "PCA и кластеризация",
-                    "Концентрационные карты",
-                    "Пузырьковые диаграммы",
-                    "Специализированные графики",
-                    "Pairplot и радарные диаграммы"
-                ]
-            )
-            
-            if export_plots:
-                st.info(f"ℹ️ Выбрано {len(export_plots)} категорий графиков")
-                
-                if st.button("📦 Сгенерировать графики для экспорта", use_container_width=True):
-                    with st.spinner("Генерация графиков..."):
-                        st.warning("⚠️ Функция экспорта графиков в ZIP находится в разработке")
-            
-            st.subheader("📄 Экспорт отчёта")
-            
-            if st.button("📄 Сгенерировать HTML-отчёт", use_container_width=True):
-                with st.spinner("Генерация отчёта..."):
-                    st.warning("⚠️ Функция генерации HTML-отчёта находится в разработке")
+        else:
+            st.warning("⚠️ Данные загружены, но дескрипторы не рассчитаны. Пожалуйста, нажмите кнопку 'Загрузить и обработать' в боковой панели.")
     
     else:
         # Отображение приветствия при отсутствии данных
@@ -4028,7 +4032,8 @@ def main():
         - `∆T, °C` - температурный диапазон
         - `α·106 (K-1)` - коэффициент термического расширения
         - `T(bends), °C` - температуры изломов
-        - `αav·106 (K-1)` - средний КТР на участках        - `pH2O` - парциальное давление воды
+        - `αav·106 (K-1)` - средний КТР на участках
+        - `pH2O` - парциальное давление воды
         - `Ref` - ссылка на источник
         
         ### 🚀 Возможности приложения
@@ -4039,7 +4044,6 @@ def main():
         - 🎯 36 типов интерактивных графиков
         - 🔍 Фильтрация по составу и условиям эксперимента
         """)
-
 
 # ============================================================================
 # 6. ЗАПУСК ПРИЛОЖЕНИЯ

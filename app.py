@@ -65,12 +65,29 @@ def apply_scientific_style():
     Применение улучшенного научного стиля для всех matplotlib графиков.
     Стиль оптимизирован для публикаций в научных журналах.
     """
-    plt.style.use('seaborn-v0-8-whitegrid')
+    # Проверка доступных стилей и выбор подходящего
+    available_styles = plt.style.available
+    
+    # Приоритетные стили для научных публикаций
+    preferred_styles = ['seaborn-v0_8-whitegrid', 'seaborn-whitegrid', 'ggplot', 'default']
+    
+    selected_style = 'default'  # fallback
+    for style in preferred_styles:
+        if style in available_styles:
+            selected_style = style
+            break
+    
+    try:
+        plt.style.use(selected_style)
+    except:
+        # Если ничего не работает, используем настройки по умолчанию
+        pass
+    
     plt.rcParams.update({
         # Шрифты
         'font.size': 11,
         'font.family': 'serif',
-        'font.serif': ['Times New Roman', 'DejaVu Serif'],
+        'font.serif': ['Times New Roman', 'DejaVu Serif', 'Computer Modern Roman'],
         'mathtext.fontset': 'stix',
         
         # Оси

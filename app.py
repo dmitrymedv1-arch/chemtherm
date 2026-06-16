@@ -407,7 +407,7 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
     
     # Extract element names and concentrations
     for idx, row in df_desc.iterrows():
-        # A-site - FIXED: use double quotes for column names with apostrophes
+        # A-site - use double quotes for column names with apostrophes
         A_elem = row.get('A', '')
         A_prime_elem = row.get("A'", '')
         A_prime_conc = row.get("[A']", 0)
@@ -434,12 +434,12 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
         rD2 = IONIC_RADII.get(str(D2_elem), np.nan)
         
         # Get electronegativity
-        χA = ELECTRONEGATIVITY.get(str(A_elem), np.nan)
-        χA_prime = ELECTRONEGATIVITY.get(str(A_prime_elem), np.nan)
-        χB = ELECTRONEGATIVITY.get(str(B_elem), np.nan)
-        χB_prime = ELECTRONEGATIVITY.get(str(B_prime_elem), np.nan)
-        χD1 = ELECTRONEGATIVITY.get(str(D1_elem), np.nan)
-        χD2 = ELECTRONEGATIVITY.get(str(D2_elem), np.nan)
+        chiA = ELECTRONEGATIVITY.get(str(A_elem), np.nan)
+        chiA_prime = ELECTRONEGATIVITY.get(str(A_prime_elem), np.nan)
+        chiB = ELECTRONEGATIVITY.get(str(B_elem), np.nan)
+        chiB_prime = ELECTRONEGATIVITY.get(str(B_prime_elem), np.nan)
+        chiD1 = ELECTRONEGATIVITY.get(str(D1_elem), np.nan)
+        chiD2 = ELECTRONEGATIVITY.get(str(D2_elem), np.nan)
         
         # Get valence
         VB = VALENCE.get(str(B_elem), np.nan)
@@ -466,47 +466,47 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
         D_t = abs(1 - t)
         
         # Alternative tolerance factor
-        t_alt = (rAav + R_O) / (np.sqrt(2) * (rBav + R_O))  # Same formula, kept for compatibility
+        t_alt = (rAav + R_O) / (np.sqrt(2) * (rBav + R_O))
         
         # Octahedral factor
         octahedral_factor = rBav / R_O
         
         # Radius difference
-        Δr_AB = abs(rAav - rBav)
-        Δr_AB_norm = Δr_AB / R_O
+        Dr_AB = abs(rAav - rBav)
+        Dr_AB_norm = Dr_AB / R_O
         
-        # Variance of B-site radii
+        # Variance of B-site radii (FIXED: renamed from σ²_rB to sigma2_rB)
         B_sites = [rB * (1 - B_prime_conc - D1_conc - D2_conc), 
                    rB_prime * B_prime_conc, 
                    rD1 * D1_conc, 
                    rD2 * D2_conc]
         B_sites = [x for x in B_sites if not np.isnan(x)]
-        σ²_rB = np.var(B_sites) if len(B_sites) > 0 else 0
+        sigma2_rB = np.var(B_sites) if len(B_sites) > 0 else 0
         
-        # Variance of A-site radii
+        # Variance of A-site radii (FIXED: renamed from σ²_rA to sigma2_rA)
         A_sites = [rA * (1 - A_prime_conc), rA_prime * A_prime_conc]
         A_sites = [x for x in A_sites if not np.isnan(x)]
-        σ²_rA = np.var(A_sites) if len(A_sites) > 0 else 0
+        sigma2_rA = np.var(A_sites) if len(A_sites) > 0 else 0
         
         # Calculate average electronegativity
-        χAav = χA * (1 - A_prime_conc) + χA_prime * A_prime_conc
-        χBav = χB * (1 - B_prime_conc - D1_conc - D2_conc) + χB_prime * B_prime_conc + χD1 * D1_conc + χD2 * D2_conc
+        chiAav = chiA * (1 - A_prime_conc) + chiA_prime * A_prime_conc
+        chiBav = chiB * (1 - B_prime_conc - D1_conc - D2_conc) + chiB_prime * B_prime_conc + chiD1 * D1_conc + chiD2 * D2_conc
         
         # Electronegativity difference
-        Δχ_AB = abs(χAav - χBav)
-        χ_ratio_AB = χAav / χBav if χBav != 0 else np.nan
+        Dchi_AB = abs(chiAav - chiBav)
+        chi_ratio_AB = chiAav / chiBav if chiBav != 0 else np.nan
         
         # Total average electronegativity
-        χ_total = (χAav + χBav) / 2
+        chi_total = (chiAav + chiBav) / 2
         
         # Ionicity of A-O and B-O bonds
-        ionicity_AO = 1 - np.exp(-0.25 * (χAav - 3.44)**2)
-        ionicity_BO = 1 - np.exp(-0.25 * (χBav - 3.44)**2)
+        ionicity_AO = 1 - np.exp(-0.25 * (chiAav - 3.44)**2)
+        ionicity_BO = 1 - np.exp(-0.25 * (chiBav - 3.44)**2)
         
         # Acidity descriptors
-        acidity_AO = 1 / χAav if χAav != 0 else np.nan
-        acidity_BO = 1 / χBav if χBav != 0 else np.nan
-        Δacidity = acidity_BO - acidity_AO
+        acidity_AO = 1 / chiAav if chiAav != 0 else np.nan
+        acidity_BO = 1 / chiBav if chiBav != 0 else np.nan
+        Dacidity = acidity_BO - acidity_AO
         
         # Configurational entropy
         S_config_A = -8.314 * (A_prime_conc * np.log(A_prime_conc) + (1 - A_prime_conc) * np.log(1 - A_prime_conc)) if A_prime_conc > 0 and A_prime_conc < 1 else 0
@@ -523,7 +523,7 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
         Vo_proxy = (4 - V_Bav) / 2
         
         # Hydration enthalpy (approximate)
-        ΔH_hydr = 1 / (rBav * χBav) if rBav * χBav != 0 else np.nan
+        DH_hydr = 1 / (rBav * chiBav) if rBav * chiBav != 0 else np.nan
         
         # Bond energy (Coulombic)
         E_BO = (VB * 2) / rBav if rBav != 0 else np.nan
@@ -531,25 +531,25 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
         # Mass density (approximate)
         M_total = MA * (1 - A_prime_conc) + MA_prime * A_prime_conc + MB * (1 - B_prime_conc - D1_conc - D2_conc) + MB_prime * B_prime_conc + MD1 * D1_conc + MD2 * D2_conc + 3 * MOLAR_MASS['O']
         V_cell = (rAav + R_O) * (rBav + R_O)**3
-        ρ = M_total / V_cell if V_cell != 0 else np.nan
+        rho = M_total / V_cell if V_cell != 0 else np.nan
         
         # Average molar mass
         M_Aav = MA * (1 - A_prime_conc) + MA_prime * A_prime_conc
         M_Bav = MB * (1 - B_prime_conc - D1_conc - D2_conc) + MB_prime * B_prime_conc + MD1 * D1_conc + MD2 * D2_conc
         M_ratio_AB = M_Aav / M_Bav if M_Bav != 0 else np.nan
         M_rA = M_Aav * rAav
-        M_χA = M_Aav * χAav
+        M_chiA = M_Aav * chiAav
         
         # Defect descriptors
-        δ = row.get('δ', D1_conc/2 + D2_conc/2)
-        Z_eff_B = 4 - 2 * δ
-        proton_affinity = 1 / (rBav * χBav) if rBav * χBav != 0 else np.nan
-        E_vac = 1 / (rBav**2) * (χBav - 3.44) if rBav != 0 else np.nan
+        delta = row.get('δ', D1_conc/2 + D2_conc/2)
+        Z_eff_B = 4 - 2 * delta
+        proton_affinity = 1 / (rBav * chiBav) if rBav * chiBav != 0 else np.nan
+        E_vac = 1 / (rBav**2) * (chiBav - 3.44) if rBav != 0 else np.nan
         
         # T(bends) descriptors
         r_ratio_AB = rAav / rBav if rBav != 0 else np.nan
-        T_stab = -ΔH_hydr / 8.314 if not np.isnan(ΔH_hydr) else np.nan
-        δ_χB = δ * χBav if not np.isnan(χBav) else np.nan
+        T_stab = -DH_hydr / 8.314 if not np.isnan(DH_hydr) else np.nan
+        delta_chiB = delta * chiBav if not np.isnan(chiBav) else np.nan
         
         # Alpha/beta ratio (if available)
         alpha_beta_ratio = row.get('alpha_beta_ratio', np.nan)
@@ -563,34 +563,34 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
             'D_t': D_t,
             't_alt': t_alt,
             'octahedral_factor': octahedral_factor,
-            'Δr_AB': Δr_AB,
-            'Δr_AB_norm': Δr_AB_norm,
-            'σ²_rB': σ²_rB,
-            'σ²_rA': σ²_rA,
+            'Dr_AB': Dr_AB,
+            'Dr_AB_norm': Dr_AB_norm,
+            'sigma2_rB': sigma2_rB,
+            'sigma2_rA': sigma2_rA,
             'V_cell': V_cell,
-            'V_free': V_cell * (1 - 0.74),  # Approximate packing factor
-            'oct_dist': abs(rBav - rBav) / rBav,  # Placeholder
+            'V_free': V_cell * (1 - 0.74),
+            'oct_dist': abs(rBav - rBav) / rBav,
             
             # Electronegativity descriptors (9-21, 41-43)
-            'χAav': χAav,
-            'χBav': χBav,
-            'Δχ_AB': Δχ_AB,
-            'χ_ratio_AB': χ_ratio_AB,
-            'χ_total': χ_total,
+            'chiAav': chiAav,
+            'chiBav': chiBav,
+            'Dchi_AB': Dchi_AB,
+            'chi_ratio_AB': chi_ratio_AB,
+            'chi_total': chi_total,
             'ionicity_AO': ionicity_AO,
             'ionicity_BO': ionicity_BO,
             'acidity_AO': acidity_AO,
             'acidity_BO': acidity_BO,
-            'Δacidity': Δacidity,
+            'Dacidity': Dacidity,
             
             # Thermodynamic descriptors (22-29, 44-46)
             'S_config_A': S_config_A,
             'S_config_B': S_config_B,
             'V_Bav': V_Bav,
             'Vo_proxy': Vo_proxy,
-            'ΔH_hydr': ΔH_hydr,
+            'DH_hydr': DH_hydr,
             'E_BO': E_BO,
-            'ρ': ρ,
+            'rho': rho,
             
             # Mass descriptors (47-52)
             'M_Aav': M_Aav,
@@ -598,10 +598,10 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
             'M_total': M_total,
             'M_ratio_AB': M_ratio_AB,
             'M_rA': M_rA,
-            'M_χA': M_χA,
+            'M_chiA': M_chiA,
             
             # Defect descriptors (53-56)
-            'δ_calc': δ,
+            'delta_calc': delta,
             'Z_eff_B': Z_eff_B,
             'proton_affinity': proton_affinity,
             'E_vac': E_vac,
@@ -609,7 +609,7 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
             # T(bends) descriptors (57-60)
             'alpha_beta_ratio': alpha_beta_ratio,
             'T_stab': T_stab,
-            'δ_χB': δ_χB,
+            'delta_chiB': delta_chiB,
             'r_ratio_AB': r_ratio_AB,
             
             # Compositional descriptors

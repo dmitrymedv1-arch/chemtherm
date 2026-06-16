@@ -468,11 +468,12 @@ class DescriptorEngine:
         # --- Группа 2: Электроотрицательные дескрипторы ---
         self.calculate_electronegativity()
         
-        # --- Группа 3: Термодинамические дескрипторы ---
-        self.calculate_thermodynamic()
-        
-        # --- Группа 4: Массовые дескрипторы ---
+        # --- Группа 3: Массовые дескрипторы ---
+        # Должны быть рассчитаны до термодинамических, так как используются в них
         self.calculate_mass()
+        
+        # --- Группа 4: Термодинамические дескрипторы ---
+        self.calculate_thermodynamic()
         
         # --- Группа 5: Дефектные дескрипторы ---
         self.calculate_defect()
@@ -836,9 +837,6 @@ class DescriptorEngine:
         
         # 6. Энергия связи B-O (кулоновская)
         self.df['E_BO'] = (self.df['V_Bav'] * 2) / (self.df['rBav'] + self.df['rO_est'])
-        
-        # 7. Массовая плотность (относительная)
-        self.df['ρ'] = self.df['M_Bav'] / self.df['V_cell']
     
     def calculate_mass(self):
         """Расчёт массовых дескрипторов"""
@@ -915,6 +913,9 @@ class DescriptorEngine:
         
         # 6. Произведение массы и электроотрицательности A
         self.df['M_χA'] = self.df['M_Aav'] * self.df['χAav']
+
+        # 7. Массовая плотность (относительная) - перенесено из calculate_thermodynamic
+        self.df['ρ'] = self.df['M_Bav'] / self.df['V_cell']
     
     def calculate_defect(self):
         """Расчёт дефектных дескрипторов"""

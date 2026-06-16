@@ -1015,9 +1015,13 @@ def create_correlation_heatmap(correlation_matrix: pd.DataFrame, title: str = "C
                 ax=ax, annot_kws={'size': 8})
     
     ax.set_title(title, fontweight='bold', fontsize=14)
-    plt.tight_layout()
+    
+    try:
+        plt.tight_layout()
+    except RuntimeError:
+        plt.subplots_adjust(left=0.15, right=0.95, top=0.95, bottom=0.15)
+    
     return fig
-
 
 def create_pairplot(df: pd.DataFrame, features: List[str], hue_col: str = None) -> plt.Figure:
     """

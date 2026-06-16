@@ -247,24 +247,24 @@ def apply_scientific_style():
 
 COLOR_PALETTES = {
     'B_cation': {
-        'Ce': '#E74C3C',    # Red
-        'Zr': '#3498DB',    # Blue
-        'Sn': '#2ECC71',    # Green
-        'Ti': '#F39C12',    # Orange
-        'Hf': '#9B59B6',    # Purple
+        'Ce': '#E74C3C',
+        'Zr': '#3498DB',
+        'Sn': '#2ECC71',
+        'Ti': '#F39C12',
+        'Hf': '#9B59B6',
         'default': '#7F8C8D'
     },
     'method': {
-        'dilatometry': '#2C3E50',   # Dark navy
-        'HT XRD': '#E67E22',         # Orange
-        'HT ND': '#8E44AD',          # Purple
+        'dilatometry': '#2C3E50',
+        'HT XRD': '#E67E22',
+        'HT ND': '#8E44AD',
         'default': '#7F8C8D'
     },
     'A_cation': {
-        'Ba': '#1A5276',    # Dark blue
-        'Sr': '#2471A3',    # Medium blue
-        'Ca': '#5DADE2',    # Light blue
-        'La': '#F39C12',    # Orange
+        'Ba': '#1A5276',
+        'Sr': '#2471A3',
+        'Ca': '#5DADE2',
+        'La': '#F39C12',
         'default': '#7F8C8D'
     },
     'continuous': 'viridis',
@@ -302,7 +302,7 @@ def parse_uploaded_data(text: str) -> pd.DataFrame:
         df = df.dropna(axis=1, how='all')
         
         # Convert numeric columns
-        numeric_cols = ['[A']', '[B']', '[D1]', '[D2]', 'δ', 'β', 'α·106 (K-1)', 'pH2O']
+        numeric_cols = ['[A']', "[B']", '[D1]', '[D2]', 'δ', 'β', 'α·106 (K-1)', 'pH2O']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
@@ -314,10 +314,10 @@ def parse_uploaded_data(text: str) -> pd.DataFrame:
             df['T_range'] = df['T_max'] - df['T_min']
         
         # Calculate delta if not present
-        if 'δ' in df.columns and ['D1]' in df.columns and ['D2]' in df.columns:
-            df['δ_calc'] = df['[D1]']/2 + df['[D2]']/2
+        if 'δ' in df.columns and '[D1]' in df.columns and '[D2]' in df.columns:
+            df['delta_calc'] = df['[D1]']/2 + df['[D2]']/2
             # Use calculated if original is NaN
-            df['δ'] = df['δ'].fillna(df['δ_calc'])
+            df['δ'] = df['δ'].fillna(df['delta_calc'])
         
         return df
     
@@ -379,7 +379,7 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
         df_clean['D_total'] = df_clean['[D1]'] + df_clean['[D2]']
     
     # Calculate B'_conc - FIXED: proper string escaping
-    if "[B']" in df_clean.columns:  # Using double quotes to avoid escaping issues
+    if "[B']" in df_clean.columns:
         df_clean["B'_conc"] = df_clean["[B']"]
     
     # Calculate alpha/beta ratio
@@ -475,7 +475,7 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
         Dr_AB = abs(rAav - rBav)
         Dr_AB_norm = Dr_AB / R_O
         
-        # Variance of B-site radii (FIXED: renamed from σ²_rB to sigma2_rB)
+        # Variance of B-site radii
         B_sites = [rB * (1 - B_prime_conc - D1_conc - D2_conc), 
                    rB_prime * B_prime_conc, 
                    rD1 * D1_conc, 
@@ -483,7 +483,7 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
         B_sites = [x for x in B_sites if not np.isnan(x)]
         sigma2_rB = np.var(B_sites) if len(B_sites) > 0 else 0
         
-        # Variance of A-site radii (FIXED: renamed from σ²_rA to sigma2_rA)
+        # Variance of A-site radii
         A_sites = [rA * (1 - A_prime_conc), rA_prime * A_prime_conc]
         A_sites = [x for x in A_sites if not np.isnan(x)]
         sigma2_rA = np.var(A_sites) if len(A_sites) > 0 else 0
@@ -624,7 +624,8 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
     return df_desc
 
 # ============================================================================
-# SECTION 7: CORRELATION ANALYSIS# ============================================================================
+# SECTION 7: CORRELATION ANALYSIS
+# ============================================================================
 
 @st.cache_data
 def calculate_correlations(df: pd.DataFrame, target_cols: List[str]) -> Dict:
@@ -675,7 +676,6 @@ def calculate_correlations(df: pd.DataFrame, target_cols: List[str]) -> Dict:
     try:
         from scipy.spatial.distance import pdist, squareform
         distance_corr = corr_data.corr()
-        # Simplified distance correlation using energy distance
     except:
         pass
     
@@ -1182,7 +1182,7 @@ def create_pca_3d(pca_results: Dict) -> go.Figure:
         go.Scatter3d(
             x=X_pca[:, 0],
             y=X_pca[:, 1],
-            z=X_pca[:, 2],
+            z=X_pca[:, 2] if X_pca.shape[1] > 2 else np.zeros_like(X_pca[:, 0]),
             mode='markers',
             marker=dict(
                 size=5,
@@ -1192,7 +1192,8 @@ def create_pca_3d(pca_results: Dict) -> go.Figure:
                 opacity=0.8
             ),
             text=[f'PC1: {x:.2f}, PC2: {y:.2f}, PC3: {z:.2f}' 
-                  for x, y, z in zip(X_pca[:, 0], X_pca[:, 1], X_pca[:, 2])],
+                  for x, y, z in zip(X_pca[:, 0], X_pca[:, 1], 
+                                    X_pca[:, 2] if X_pca.shape[1] > 2 else np.zeros_like(X_pca[:, 0]))],
             hoverinfo='text'
         )
     ])
@@ -1201,7 +1202,7 @@ def create_pca_3d(pca_results: Dict) -> go.Figure:
         scene=dict(
             xaxis_title=f'PC1 ({explained[0]*100:.1f}%)',
             yaxis_title=f'PC2 ({explained[1]*100:.1f}%)',
-            zaxis_title=f'PC3 ({explained[2]*100:.1f}%)',
+            zaxis_title=f'PC3 ({explained[2]*100:.1f}%)' if len(explained) > 2 else 'PC3',
         ),
         title='3D PCA Visualization',
         width=800,
@@ -1617,19 +1618,19 @@ def create_t_bends_analysis(df: pd.DataFrame, color_col: Optional[str] = None) -
     """Create T(bends) analysis plot."""
     fig, ax = plt.subplots(figsize=(10, 8))
     
-    data = df[['T_bends_first', 'δ', color_col] if color_col in df.columns else ['T_bends_first', 'δ']].dropna()
+    data = df[['T_bends_first', 'delta_calc', color_col] if color_col in df.columns else ['T_bends_first', 'delta_calc']].dropna()
     
     if data.empty or 'T_bends_first' not in data.columns:
         ax.text(0.5, 0.5, 'No T(bends) data available', ha='center', va='center', fontsize=14)
         return fig
     
     if color_col in data.columns:
-        scatter = ax.scatter(data['δ'], data['T_bends_first'], 
+        scatter = ax.scatter(data['delta_calc'], data['T_bends_first'], 
                            c=data[color_col].astype('category').cat.codes,
                            cmap='viridis', alpha=0.6, s=50)
         ax.legend(*scatter.legend_elements(), title=color_col)
     else:
-        ax.scatter(data['δ'], data['T_bends_first'], alpha=0.6, s=50, color='#2C3E50')
+        ax.scatter(data['delta_calc'], data['T_bends_first'], alpha=0.6, s=50, color='#2C3E50')
     
     ax.set_xlabel('δ - Oxygen Vacancy Concentration', fontsize=12, fontweight='bold')
     ax.set_ylabel('T(bends) - First Bending Temperature (°C)', fontsize=12, fontweight='bold')
@@ -1697,7 +1698,7 @@ def create_beta_vs_electronegativity(df: pd.DataFrame) -> plt.Figure:
     """Create β vs electronegativity plot."""
     fig, ax = plt.subplots(figsize=(10, 8))
     
-    data = df[['β', 'χBav', 'B_type']].dropna()
+    data = df[['β', 'chiBav', 'B_type']].dropna()
     
     if data.empty:
         ax.text(0.5, 0.5, 'No data available', ha='center', va='center', fontsize=14)
@@ -1706,7 +1707,7 @@ def create_beta_vs_electronegativity(df: pd.DataFrame) -> plt.Figure:
     for b_type in data['B_type'].unique():
         subset = data[data['B_type'] == b_type]
         if not subset.empty:
-            ax.scatter(subset['χBav'], subset['β'], 
+            ax.scatter(subset['chiBav'], subset['β'], 
                       label=b_type, alpha=0.6, s=40)
     
     ax.set_xlabel('χBav - Average Electronegativity of B-site', fontsize=12, fontweight='bold')
@@ -1966,9 +1967,9 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         df_filtered = df_filtered[df_filtered['B_type'] == filters['B_type']]
     
     # Advanced filters
-    if 'δ_min' in filters and 'δ_max' in filters:
-        df_filtered = df_filtered[(df_filtered['δ'] >= filters['δ_min']) & 
-                                  (df_filtered['δ'] <= filters['δ_max'])]
+    if 'delta_min' in filters and 'delta_max' in filters:
+        df_filtered = df_filtered[(df_filtered['delta_calc'] >= filters['delta_min']) & 
+                                  (df_filtered['delta_calc'] <= filters['delta_max'])]
     
     if 'pH2O_min' in filters and 'pH2O_max' in filters:
         df_filtered = df_filtered[(df_filtered['pH2O'] >= filters['pH2O_min']) & 
@@ -1996,9 +1997,9 @@ def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
         df_filtered = df_filtered[(df_filtered['t'] >= filters['t_min']) & 
                                   (df_filtered['t'] <= filters['t_max'])]
     
-    if 'χBav_min' in filters and 'χBav_max' in filters:
-        df_filtered = df_filtered[(df_filtered['χBav'] >= filters['χBav_min']) & 
-                                  (df_filtered['χBav'] <= filters['χBav_max'])]
+    if 'chiBav_min' in filters and 'chiBav_max' in filters:
+        df_filtered = df_filtered[(df_filtered['chiBav'] >= filters['chiBav_min']) & 
+                                  (df_filtered['chiBav'] <= filters['chiBav_max'])]
     
     return df_filtered
 
@@ -2028,13 +2029,13 @@ def render_sidebar_filters(df: pd.DataFrame) -> Dict:
     # Advanced filters
     with st.sidebar.expander("📊 Advanced Filters", expanded=False):
         # Delta range
-        δ_min = float(df['δ'].min()) if df['δ'].notna().any() else 0
-        δ_max = float(df['δ'].max()) if df['δ'].notna().any() else 0.5
-        filters['δ_min'], filters['δ_max'] = st.slider(
+        delta_min = float(df['delta_calc'].min()) if df['delta_calc'].notna().any() else 0
+        delta_max = float(df['delta_calc'].max()) if df['delta_calc'].notna().any() else 0.5
+        filters['delta_min'], filters['delta_max'] = st.slider(
             'δ range',
             min_value=0.0,
             max_value=0.5,
-            value=(δ_min, δ_max),
+            value=(delta_min, delta_max),
             step=0.01
         )
         
@@ -2095,14 +2096,14 @@ def render_sidebar_filters(df: pd.DataFrame) -> Dict:
                 step=0.01
             )
         
-        if 'χBav' in df.columns:
-            χ_min = float(df['χBav'].min()) if df['χBav'].notna().any() else 0.8
-            χ_max = float(df['χBav'].max()) if df['χBav'].notna().any() else 2.0
-            filters['χBav_min'], filters['χBav_max'] = st.slider(
+        if 'chiBav' in df.columns:
+            chi_min = float(df['chiBav'].min()) if df['chiBav'].notna().any() else 0.8
+            chi_max = float(df['chiBav'].max()) if df['chiBav'].notna().any() else 2.0
+            filters['chiBav_min'], filters['chiBav_max'] = st.slider(
                 'χBav range',
                 min_value=0.8,
                 max_value=2.0,
-                value=(χ_min, χ_max),
+                value=(chi_min, chi_max),
                 step=0.05
             )
     
@@ -2178,13 +2179,13 @@ def render_descriptor_page(df: pd.DataFrame):
         
         # Display descriptor columns
         desc_cols = [col for col in df_desc.columns if col not in df.columns or col in 
-                    ['rAav', 'rBav', 't', 'D_t', 'χAav', 'χBav', 'Δχ_AB', 
-                     'V_Bav', 'Vo_proxy', 'M_total', 'δ_calc', 'B'_conc', 'D_total']]
+                    ['rAav', 'rBav', 't', 'D_t', 'chiAav', 'chiBav', 'Dchi_AB', 
+                     'V_Bav', 'Vo_proxy', 'M_total', 'delta_calc', "B'_conc", 'D_total']]
         
         st.markdown("### 📊 Calculated Descriptors")
         
         # Show descriptor table with selected columns
-        display_cols = ['№'] + desc_cols[:20]  # Show first 20 descriptors
+        display_cols = ['№'] + desc_cols[:20]
         display_cols = [col for col in display_cols if col in df_desc.columns]
         st.dataframe(df_desc[display_cols].head(10))
         

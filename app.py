@@ -51,6 +51,16 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+def safe_tight_layout(fig):
+    """
+    Safely apply tight_layout, falling back to subplots_adjust if needed.
+    """
+    try:
+        fig.tight_layout()
+    except RuntimeError:
+        # Если tight_layout не работает из-за colorbar, используем subplots_adjust
+        fig.subplots_adjust(left=0.12, right=0.95, top=0.95, bottom=0.12)
+
 # ============================================================================
 # SECTION 2: BUILT-IN DATABASES
 # ============================================================================

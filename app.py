@@ -65,7 +65,13 @@ def apply_scientific_style():
     Применение улучшенного научного стиля для всех matplotlib графиков.
     Стиль оптимизирован для публикаций в научных журналах.
     """
-    plt.style.use('seaborn-v0-8-whitegrid')
+    try:
+    plt.style.use('seaborn-whitegrid')
+except:
+    try:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    except:
+        plt.style.use('default')
     plt.rcParams.update({
         # Шрифты
         'font.size': 11,

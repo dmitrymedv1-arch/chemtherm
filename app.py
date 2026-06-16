@@ -488,6 +488,9 @@ class DescriptorEngine:
     def calculate_geometric(self):
         """Расчёт геометрических дескрипторов"""
         
+        # Добавляем оценку rO для расчётов (должно быть до использования)
+        self.df['rO_est'] = self.ionic_radii['O']
+        
         # 1. Средний радиус A-site
         def calc_rAav(row):
             A = row['A']
@@ -632,6 +635,7 @@ class DescriptorEngine:
         self.df['σ²_rB'] = self.df.apply(calc_sigma2_rB, axis=1)
         
         # 10. Расчётный объём элементарной ячейки (псевдокубический)
+        # Используем rO_est, который создан в начале метода
         self.df['V_cell'] = (2 * (self.df['rBav'] + self.df['rO_est']))**3
         
         # 11. Отношение радиусов rA/rB
@@ -640,8 +644,8 @@ class DescriptorEngine:
     def calculate_electronegativity(self):
         """Расчёт электроотрицательных дескрипторов"""
         
-        # Добавляем оценку rO для расчётов
-        self.df['rO_est'] = self.ionic_radii['O']
+        # Используем константу напрямую, без создания колонки rO_est
+        rO = self.ionic_radii['O']
         
         # 1. Средняя электроотрицательность A-site
         def calc_chiAav(row):

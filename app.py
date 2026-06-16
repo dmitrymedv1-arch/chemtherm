@@ -378,9 +378,9 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     if '[D1]' in df_clean.columns and '[D2]' in df_clean.columns:
         df_clean['D_total'] = df_clean['[D1]'] + df_clean['[D2]']
     
-    # Calculate B'_conc
-    if '[B']' in df_clean.columns:
-        df_clean['B'_conc'] = df_clean['[B']']
+    # Calculate B'_conc - FIXED: proper string escaping
+    if "[B']" in df_clean.columns:  # Using double quotes to avoid escaping issues
+        df_clean["B'_conc"] = df_clean["[B']"]
     
     # Calculate alpha/beta ratio
     if 'α·106 (K-1)' in df_clean.columns and 'β' in df_clean.columns:

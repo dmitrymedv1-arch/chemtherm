@@ -3227,7 +3227,9 @@ def main():
             clear_button = st.button("🗑️ Очистить", use_container_width=True)
         
         if clear_button:
-            st.session_state.clear()
+            # Очищаем все ключи session_state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.rerun()
         
         if load_button and data_text:
@@ -3250,6 +3252,9 @@ def main():
                     df_descriptors = engine.calculate_all()
                     st.session_state['df_descriptors'] = df_descriptors
                     
+                    # Сохраняем отфильтрованные данные как копию дескрипторов
+                    st.session_state['filtered_df'] = df_descriptors.copy()
+                    
                     st.success(f"✅ Загружено {len(df_clean)} записей")
                     st.info(f"📊 Рассчитано {len(df_descriptors.columns) - len(df_clean.columns)} дескрипторов")
                 else:
@@ -3258,113 +3263,117 @@ def main():
         st.markdown("---")
         
         # Фильтры (появляются после загрузки данных)
+        # Проверяем, что данные загружены и ключ существует
         if 'data_loaded' in st.session_state and st.session_state.data_loaded:
-            st.subheader("🔍 Фильтры")
-            
-            df = st.session_state['df_descriptors']
-            
-            # Уровень 1: Базовые фильтры
-            st.subheader("Метод измерения")
-            method_options = df['method'].unique().tolist() if 'method' in df.columns else []
-            method_filter = st.multiselect(
-                "Выберите методы:",
-                options=method_options,
-                default=method_options
-            )
-            
-            st.subheader("A-катион")
-            a_options = df['A'].unique().tolist() if 'A' in df.columns else []
-            a_filter = st.multiselect(
-                "Выберите A-катионы:",
-                options=a_options,
-                default=a_options
-            )
-            
-            st.subheader("B-катион")
-            b_options = df['B'].unique().tolist() if 'B' in df.columns else []
-            b_filter = st.multiselect(
-                "Выберите B-катионы:",
-                options=b_options,
-                default=b_options
-            )
-            
-            # Уровень 2: Расширенные фильтры
-            st.subheader("Диапазон δ")
-            if 'δ' in df.columns:
-                delta_min = float(df['δ'].min())
-                delta_max = float(df['δ'].max())
-                delta_range = st.slider(
-                    "δ:",
-                    min_value=delta_min,
-                    max_value=delta_max,
-                    value=(delta_min, delta_max),
-                    step=0.01
+            if 'df_descriptors' in st.session_state:
+                st.subheader("🔍 Фильтры")
+                
+                df = st.session_state['df_descriptors']
+                
+                # Уровень 1: Базовые фильтры
+                st.subheader("Метод измерения")
+                method_options = df['method'].unique().tolist() if 'method' in df.columns else []
+                method_filter = st.multiselect(
+                    "Выберите методы:",
+                    options=method_options,
+                    default=method_options
                 )
-            
-            st.subheader("pH₂O")
-            if 'pH2O' in df.columns:
-                ph2o_min = float(df['pH2O'].min())
-                ph2o_max = float(df['pH2O'].max())
-                ph2o_range = st.slider(
-                    "pH₂O:",
-                    min_value=ph2o_min,
-                    max_value=ph2o_max,
-                    value=(ph2o_min, ph2o_max),
-                    step=0.001
+                
+                st.subheader("A-катион")
+                a_options = df['A'].unique().tolist() if 'A' in df.columns else []
+                a_filter = st.multiselect(
+                    "Выберите A-катионы:",
+                    options=a_options,
+                    default=a_options
                 )
-            
-            # Уровень 3: Дескрипторные фильтры
-            with st.expander("Дескрипторные фильтры"):
-                if 't' in df.columns:
-                    t_min = float(df['t'].min())
-                    t_max = float(df['t'].max())
-                    t_range = st.slider(
-                        "Толерант-фактор (t):",
-                        min_value=t_min,
-                        max_value=t_max,
-                        value=(t_min, t_max),
+                
+                st.subheader("B-катион")
+                b_options = df['B'].unique().tolist() if 'B' in df.columns else []
+                b_filter = st.multiselect(
+                    "Выберите B-катионы:",
+                    options=b_options,
+                    default=b_options
+                )
+                
+                # Уровень 2: Расширенные фильтры
+                st.subheader("Диапазон δ")
+                if 'δ' in df.columns:
+                    delta_min = float(df['δ'].min())
+                    delta_max = float(df['δ'].max())
+                    delta_range = st.slider(
+                        "δ:",
+                        min_value=delta_min,
+                        max_value=delta_max,
+                        value=(delta_min, delta_max),
                         step=0.01
                     )
                 
-                if 'rAav' in df.columns:
-                    ra_min = float(df['rAav'].min())
-                    ra_max = float(df['rAav'].max())
-                    ra_range = st.slider(
-                        "rAav (Å):",
-                        min_value=ra_min,
-                        max_value=ra_max,
-                        value=(ra_min, ra_max),
-                        step=0.05
+                st.subheader("pH₂O")
+                if 'pH2O' in df.columns:
+                    ph2o_min = float(df['pH2O'].min())
+                    ph2o_max = float(df['pH2O'].max())
+                    ph2o_range = st.slider(
+                        "pH₂O:",
+                        min_value=ph2o_min,
+                        max_value=ph2o_max,
+                        value=(ph2o_min, ph2o_max),
+                        step=0.001
                     )
-            
-            st.markdown("---")
-            
-            # Применение фильтров
-            filtered_df = df.copy()
-            
-            if method_filter:
-                filtered_df = filtered_df[filtered_df['method'].isin(method_filter)]
-            
-            if a_filter:
-                filtered_df = filtered_df[filtered_df['A'].isin(a_filter)]
-            
-            if b_filter:
-                filtered_df = filtered_df[filtered_df['B'].isin(b_filter)]
-            
-            if 'δ' in df.columns:
-                filtered_df = filtered_df[(filtered_df['δ'] >= delta_range[0]) & (filtered_df['δ'] <= delta_range[1])]
-            
-            if 'pH2O' in df.columns:
-                filtered_df = filtered_df[(filtered_df['pH2O'] >= ph2o_range[0]) & (filtered_df['pH2O'] <= ph2o_range[1])]
-            
-            if 't' in df.columns:
-                filtered_df = filtered_df[(filtered_df['t'] >= t_range[0]) & (filtered_df['t'] <= t_range[1])]
-            
-            if 'rAav' in df.columns:
-                filtered_df = filtered_df[(filtered_df['rAav'] >= ra_range[0]) & (filtered_df['rAav'] <= ra_range[1])]
-            
-            st.session_state['filtered_df'] = filtered_df
-            st.caption(f"📊 Данных после фильтрации: {len(filtered_df)} строк")
+                
+                # Уровень 3: Дескрипторные фильтры
+                with st.expander("Дескрипторные фильтры"):
+                    if 't' in df.columns:
+                        t_min = float(df['t'].min())
+                        t_max = float(df['t'].max())
+                        t_range = st.slider(
+                            "Толерант-фактор (t):",
+                            min_value=t_min,
+                            max_value=t_max,
+                            value=(t_min, t_max),
+                            step=0.01
+                        )
+                    
+                    if 'rAav' in df.columns:
+                        ra_min = float(df['rAav'].min())
+                        ra_max = float(df['rAav'].max())
+                        ra_range = st.slider(
+                            "rAav (Å):",
+                            min_value=ra_min,
+                            max_value=ra_max,
+                            value=(ra_min, ra_max),
+                            step=0.05
+                        )
+                
+                st.markdown("---")
+                
+                # Применение фильтров
+                filtered_df = df.copy()
+                
+                if method_filter:
+                    filtered_df = filtered_df[filtered_df['method'].isin(method_filter)]
+                
+                if a_filter:
+                    filtered_df = filtered_df[filtered_df['A'].isin(a_filter)]
+                
+                if b_filter:
+                    filtered_df = filtered_df[filtered_df['B'].isin(b_filter)]
+                
+                if 'δ' in df.columns:
+                    filtered_df = filtered_df[(filtered_df['δ'] >= delta_range[0]) & (filtered_df['δ'] <= delta_range[1])]
+                
+                if 'pH2O' in df.columns:
+                    filtered_df = filtered_df[(filtered_df['pH2O'] >= ph2o_range[0]) & (filtered_df['pH2O'] <= ph2o_range[1])]
+                
+                if 't' in df.columns:
+                    filtered_df = filtered_df[(filtered_df['t'] >= t_range[0]) & (filtered_df['t'] <= t_range[1])]
+                
+                if 'rAav' in df.columns:
+                    filtered_df = filtered_df[(filtered_df['rAav'] >= ra_range[0]) & (filtered_df['rAav'] <= ra_range[1])]
+                
+                st.session_state['filtered_df'] = filtered_df
+                st.caption(f"📊 Данных после фильтрации: {len(filtered_df)} строк")
+            else:
+                st.warning("⚠️ Данные загружены, но дескрипторы не рассчитаны. Нажмите 'Загрузить и обработать'.")
     
     # --- MAIN AREA: Tabs ---
     if 'data_loaded' in st.session_state and st.session_state.data_loaded:

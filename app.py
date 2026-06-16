@@ -177,8 +177,9 @@ def apply_scientific_style():
         'axes.spines.top': False,
         'axes.spines.right': False,
         'axes.grid': True,
-        'axes.grid.alpha': 0.3,
-        'axes.grid.linestyle': '--',
+        'grid.alpha': 0.3,
+        'grid.linestyle': '--',
+        'grid.linewidth': 0.8,
         
         # Метки
         'xtick.color': '#000000',
@@ -225,7 +226,6 @@ def apply_scientific_style():
         'pdf.fonttype': 42,
         'ps.fonttype': 42,
     })
-
 
 def get_plotly_layout(title, xlabel, ylabel, width=None, height=None, showlegend=True):
     """Стандартный layout для Plotly графиков в научном стиле"""

@@ -56,47 +56,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-def safe_set_style():
-    """
-    Безопасная установка стиля matplotlib.
-    Пробует разные варианты и гарантирует, что приложение не упадёт.
-    """
-    import matplotlib.pyplot as plt
-    
-    # Список возможных стилей в порядке приоритета
-    style_candidates = [
-        'seaborn-whitegrid',
-        'seaborn-v0_8-whitegrid',
-        'seaborn-white',
-        'seaborn-v0_8',
-        'seaborn',
-        'ggplot',
-        'bmh',
-        'fivethirtyeight',
-        'default'
-    ]
-    
-    available_styles = plt.style.available
-    
-    # Пробуем найти подходящий стиль
-    selected_style = 'default'
-    for style in style_candidates:
-        if style in available_styles:
-            selected_style = style
-            break
-    
-    try:
-        plt.style.use(selected_style)
-    except:
-        # Если ничего не работает, используем базовые настройки
-        pass
-    
-    return selected_style
-
-# Использование:
-selected = safe_set_style()
-print(f"Applied style: {selected}")
-
 # ============================================================================
 # SECTION 2: SCIENTIFIC STYLE CONFIGURATION
 # ============================================================================

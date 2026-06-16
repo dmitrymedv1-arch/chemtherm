@@ -302,7 +302,7 @@ def parse_uploaded_data(text: str) -> pd.DataFrame:
         df = df.dropna(axis=1, how='all')
         
         # Convert numeric columns
-        numeric_cols = ['[A']', "[B']", '[D1]', '[D2]', 'δ', 'β', 'α·106 (K-1)', 'pH2O']
+        numeric_cols = ['[A']', '[B']', '[D1]', '[D2]', 'δ', 'β', 'α·106 (K-1)', 'pH2O']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')

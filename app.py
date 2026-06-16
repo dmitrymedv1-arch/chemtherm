@@ -65,29 +65,22 @@ def apply_scientific_style():
     Применение улучшенного научного стиля для всех matplotlib графиков.
     Стиль оптимизирован для публикаций в научных журналах.
     """
-    # Проверка доступных стилей и выбор подходящего
+    # Проверка доступных стилей
     available_styles = plt.style.available
-    
-    # Приоритетные стили для научных публикаций
-    preferred_styles = ['seaborn-v0_8-whitegrid', 'seaborn-whitegrid', 'ggplot', 'default']
-    
-    selected_style = 'default'  # fallback
-    for style in preferred_styles:
-        if style in available_styles:
-            selected_style = style
-            break
-    
-    try:
-        plt.style.use(selected_style)
-    except:
-        # Если ничего не работает, используем настройки по умолчанию
-        pass
+    if 'seaborn-v0_8-whitegrid' in available_styles:
+        plt.style.use('seaborn-v0_8-whitegrid')
+    elif 'seaborn-whitegrid' in available_styles:
+        plt.style.use('seaborn-whitegrid')
+    elif 'ggplot' in available_styles:
+        plt.style.use('ggplot')
+    else:
+        plt.style.use('default')
     
     plt.rcParams.update({
         # Шрифты
         'font.size': 11,
         'font.family': 'serif',
-        'font.serif': ['Times New Roman', 'DejaVu Serif', 'Computer Modern Roman'],
+        'font.serif': ['Times New Roman', 'DejaVu Serif'],
         'mathtext.fontset': 'stix',
         
         # Оси
@@ -972,14 +965,13 @@ def calculate_defect_descriptors(row):
     
     descriptors = {}
     
-    # Проверка и пересчёт δ
+    # Проверка и пересчёт δ (не добавляем δ, так как она уже есть в исходных данных)
     if not pd.isna(D1_conc) and not pd.isna(D2_conc):
         delta_calc = D1_conc/2 + D2_conc/2
         descriptors['δ_calc'] = delta_calc
-        descriptors['δ'] = delta if not pd.isna(delta) else delta_calc
+        # Не добавляем δ, чтобы избежать дублирования
     else:
         descriptors['δ_calc'] = np.nan
-        descriptors['δ'] = delta
     
     # Эффективный заряд B-site
     V_Bav = calculate_thermodynamic_descriptors(row).get('V_Bav', 4)
@@ -1005,8 +997,8 @@ def calculate_defect_descriptors(row):
         descriptors['E_vac'] = np.nan
     
     # Комбинированный дескриптор δ * χB
-    if not pd.isna(descriptors['δ']) and not pd.isna(χBav):
-        descriptors['δ_χB'] = descriptors['δ'] * χBav
+    if not pd.isna(delta) and not pd.isna(χBav):
+        descriptors['δ_χB'] = delta * χBav
     else:
         descriptors['δ_χB'] = np.nan
     
@@ -1111,8 +1103,10 @@ def calculate_all_descriptors(df):
         mass = calculate_mass_descriptors(row)
         descriptors.update(mass)
         
-        # Дефектные
+        # Дефектные (исключаем δ, чтобы избежать дублирования)
         defect = calculate_defect_descriptors(row)
+        if 'δ' in defect:
+            defect.pop('δ', None)
         descriptors.update(defect)
         
         # T(bends)-специфические
@@ -1131,8 +1125,15 @@ def calculate_all_descriptors(df):
     # Добавление дескрипторов в DataFrame
     desc_df = pd.DataFrame(all_descriptors)
     
+    # Удаляем δ из desc_df, так как она уже есть в исходных данных
+    if 'δ' in desc_df.columns:
+        desc_df = desc_df.drop(columns=['δ'])
+    
     # Объединение с исходным DataFrame
     df_result = pd.concat([df_desc.reset_index(drop=True), desc_df.reset_index(drop=True)], axis=1)
+    
+    # Удаление дублирующихся колонок, если они всё же появились
+    df_result = df_result.loc[:, ~df_result.columns.duplicated()]
     
     return df_result
 
@@ -1507,8 +1508,7 @@ def perform_umap_analysis(df, descriptors, n_components=2):
         scaler = StandardScaler()
         data_scaled = scaler.fit_transform(data)
         
-        # UMAP
-        reducer = umap.UMAP(n_components=n_components, random_state=42)
+        # UMAP        reducer = umap.UMAP(n_components=n_components, random_state=42)
         umap_result = reducer.fit_transform(data_scaled)
         
         results = {
@@ -2255,12 +2255,12 @@ def main():
                     
                     # Show preview
                     st.subheader("📋 Data Preview")
-                    st.dataframe(df_desc.head(10), use_container_width=True)
+                    st.dataframe(df_desc.head(10), width='stretch')
                     
                     # Show statistics
                     st.subheader("📊 Basic Statistics")
                     numeric_cols = df_desc.select_dtypes(include=[np.number]).columns[:10]
-                    st.dataframe(df_desc[numeric_cols].describe(), use_container_width=True)
+                    st.dataframe(df_desc[numeric_cols].describe(), width='stretch')
                 else:
                     st.error("❌ Failed to parse data. Please check the format.")
             else:
@@ -2320,11 +2320,11 @@ def main():
                 desc_cols.extend([c for c in cols if c in df.columns])
             
             if desc_cols:
-                st.dataframe(df[desc_cols].describe(), use_container_width=True)
+                st.dataframe(df[desc_cols].describe(), width='stretch')
             
             # Show full descriptor table
             with st.expander("📋 Full Descriptor Table"):
-                st.dataframe(df[desc_cols], use_container_width=True)
+                st.dataframe(df[desc_cols], width='stretch')
             
             # Export descriptors
             if st.button("💾 Export Descriptors"):
@@ -2421,20 +2421,20 @@ def main():
                                     
                                     top_df = pd.DataFrame([{'Descriptor': k, 'Correlation': v['correlation'], 
                                                           'p-value': v['p_value']} for k, v in sorted_corr[:15]])
-                                    st.dataframe(top_df, use_container_width=True)
+                                    st.dataframe(top_df, width='stretch')
                         
                         # VIF analysis
                         st.subheader("📈 Multicollinearity Check (VIF)")
                         if st.button("Calculate VIF"):
                             vif_results = calculate_vif(df, selected_descs[:10])
                             if vif_results:
-                                st.dataframe(vif_results, use_container_width=True)
+                                st.dataframe(vif_results, width='stretch')
                                 
                                 # Highlight high VIF
                                 high_vif = vif_results[vif_results['VIF'] > 5]
                                 if not high_vif.empty:
                                     st.warning(f"⚠️ {len(high_vif)} variables have VIF > 5 (high multicollinearity)")
-                                    st.dataframe(high_vif, use_container_width=True)
+                                    st.dataframe(high_vif, width='stretch')
                     else:
                         st.warning("Not enough data for correlation analysis.")
     
@@ -2538,7 +2538,7 @@ def main():
                                     cluster_stats = df_cluster.groupby('Cluster').size().reset_index(name='Count')
                                     if 'silhouette' in cluster_results and cluster_results['silhouette']:
                                         cluster_stats['Silhouette'] = cluster_results['silhouette']
-                                    st.dataframe(cluster_stats, use_container_width=True)
+                                    st.dataframe(cluster_stats, width='stretch')
                                     
                                     # Cluster profiles
                                     fig = create_cluster_profiles(cluster_results, pca_descs[:8])
@@ -2843,7 +2843,7 @@ def main():
             
             # Show data preview
             with st.expander("📋 Preview export data"):
-                st.dataframe(export_df.head(10), use_container_width=True)
+                st.dataframe(export_df.head(10), width='stretch')
 
 # ============================================================================
 # MAIN EXECUTION

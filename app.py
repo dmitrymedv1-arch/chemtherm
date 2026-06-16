@@ -143,7 +143,8 @@ def apply_scientific_style():
     Apply scientific publication style for matplotlib plots.
     Optimized for materials science journals.
     """
-    plt.style.use('seaborn-v0-8-whitegrid')
+    plt.style.use('seaborn-whitegrid')
+    
     plt.rcParams.update({
         # Font settings
         'font.size': 11,

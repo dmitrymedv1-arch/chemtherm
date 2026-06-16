@@ -1,60 +1,51 @@
 """
-PROTON-CONDUCTING PEROVSKITES ANALYZER
-========================================
-Interactive Streamlit application for analyzing correlations between
-chemical composition, structure, and thermal/chemical expansion properties
-of proton-conducting perovskite oxides.
+Proton-Conducting Perovskites Analysis Dashboard
+Streamlit application for analyzing composition-structure-property relationships
+in proton-conducting perovskite oxides.
 
 Author: Materials Science Research Group
 Version: 1.0.0
 """
 
 # ============================================================================
-# SECTION 1: IMPORTS AND CONFIGURATION
+# SECTION 1: IMPORTS
 # ============================================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-import io
+from io import StringIO
 import re
-from typing import Dict, List, Tuple, Optional, Union
+from typing import Dict, List, Tuple, Optional, Any
 import warnings
 warnings.filterwarnings('ignore')
 
-# Data processing
+# Data science
 from scipy import stats
 from scipy.spatial.distance import pdist, squareform
 from scipy.cluster.hierarchy import dendrogram, linkage, fcluster
-from scipy.interpolate import griddata
 
 # Machine learning
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans, DBSCAN
 from sklearn.manifold import TSNE
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.metrics import silhouette_score, silhouette_samples
-from sklearn.feature_selection import VarianceThreshold
 from sklearn.linear_model import LinearRegression
+from sklearn.feature_selection import VarianceThreshold
 
 # Visualization
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from matplotlib.patches import Patch
 import seaborn as sns
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 import networkx as nx
 
-# Statistics
-from statsmodels.stats.outliers_influence import variance_inflation_factor
-from statsmodels.tsa.stattools import acf
-
-# Set page config
+# Set page config must be the first Streamlit command
 st.set_page_config(
-    page_title="Proton-Conducting Perovskites Analyzer",
+    page_title="Perovskite Analysis Dashboard",
     page_icon="🔬",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -64,112 +55,84 @@ st.set_page_config(
 # SECTION 2: BUILT-IN DATABASES
 # ============================================================================
 
-# 2.1 Ionic radii according to Shannon (A-site: 12-coordination, B-site: 6-coordination)
+# Shannon ionic radii (12-coordination for A-site, 6-coordination for B-site)
 IONIC_RADII = {
     # A-site cations (12-coordination)
-    'Ba': 1.61, 'Ba2': 1.61, 'Ba²⁺': 1.61,
-    'Sr': 1.44, 'Sr2': 1.44, 'Sr²⁺': 1.44,
-    'Ca': 1.34, 'Ca2': 1.34, 'Ca²⁺': 1.34,
-    'La': 1.36, 'La3': 1.36, 'La³⁺': 1.36,
-    'Nd': 1.27, 'Nd3': 1.27, 'Nd³⁺': 1.27,
-    'Sm': 1.24, 'Sm3': 1.24, 'Sm³⁺': 1.24,
-    'Gd': 1.19, 'Gd3': 1.19, 'Gd³⁺': 1.19,
-    'Yb': 1.12, 'Yb3': 1.12, 'Yb³⁺': 1.12,
-    'Y': 1.10, 'Y3': 1.10, 'Y³⁺': 1.10,
-    'Sc': 0.90, 'Sc3': 0.90, 'Sc³⁺': 0.90,
-    'Eu': 1.25, 'Eu3': 1.25, 'Eu³⁺': 1.25,
-    'Dy': 1.17, 'Dy3': 1.17, 'Dy³⁺': 1.17,
-    'Ho': 1.15, 'Ho3': 1.15, 'Ho³⁺': 1.15,
-    'Tm': 1.13, 'Tm3': 1.13, 'Tm³⁺': 1.13,
-    'Tb': 1.20, 'Tb3': 1.20, 'Tb³⁺': 1.20,
-    'Pr': 1.29, 'Pr3': 1.29, 'Pr³⁺': 1.29,
-    'Pb': 1.49, 'Pb2': 1.49, 'Pb²⁺': 1.49,
-    'Bi': 1.38, 'Bi3': 1.38, 'Bi³⁺': 1.38,
-    'Al': 0.54, 'Al3': 0.54, 'Al³⁺': 0.54,
-    'Ga': 0.62, 'Ga3': 0.62, 'Ga³⁺': 0.62,
+    'Ba': 1.61, 'Ba2': 1.61,  # Ba2+
+    'Sr': 1.44, 'Sr2': 1.44,  # Sr2+
+    'Ca': 1.34, 'Ca2': 1.34,  # Ca2+
+    'La': 1.36, 'La3': 1.36,  # La3+
+    'Pr': 1.30, 'Pr3': 1.30,  # Pr3+
+    'Nd': 1.27, 'Nd3': 1.27,  # Nd3+
+    'Sm': 1.24, 'Sm3': 1.24,  # Sm3+
+    'Eu': 1.20, 'Eu3': 1.20,  # Eu3+
+    'Gd': 1.19, 'Gd3': 1.19,  # Gd3+
+    'Tb': 1.18, 'Tb3': 1.18,  # Tb3+
+    'Dy': 1.17, 'Dy3': 1.17,  # Dy3+
+    'Ho': 1.16, 'Ho3': 1.16,  # Ho3+
+    'Y': 1.14, 'Y3': 1.14,    # Y3+
+    'Yb': 1.13, 'Yb3': 1.13,  # Yb3+
+    'Tm': 1.14, 'Tm3': 1.14,  # Tm3+
+    'Sc': 1.14, 'Sc3': 1.14,  # Sc3+
     
     # B-site cations (6-coordination)
-    'Ce': 0.87, 'Ce4': 0.87, 'Ce⁴⁺': 0.87,
-    'Zr': 0.72, 'Zr4': 0.72, 'Zr⁴⁺': 0.72,
-    'Sn': 0.69, 'Sn4': 0.69, 'Sn⁴⁺': 0.69,
-    'Ti': 0.605, 'Ti4': 0.605, 'Ti⁴⁺': 0.605,
-    'Hf': 0.71, 'Hf4': 0.71, 'Hf⁴⁺': 0.71,
-    'Fe': 0.645, 'Fe3': 0.645, 'Fe³⁺': 0.645,
-    'Zn': 0.60, 'Zn2': 0.60, 'Zn²⁺': 0.60,
-    'In': 0.80, 'In3': 0.80, 'In³⁺': 0.80,
-    'Y': 0.90, 'Y3': 0.90, 'Y³⁺': 0.90,
-    'Yb': 0.868, 'Yb3': 0.868, 'Yb³⁺': 0.868,
-    'Sc': 0.745, 'Sc3': 0.745, 'Sc³⁺': 0.745,
-    'Sm': 0.958, 'Sm3': 0.958, 'Sm³⁺': 0.958,
-    'Nd': 0.983, 'Nd3': 0.983, 'Nd³⁺': 0.983,
-    'Gd': 0.938, 'Gd3': 0.938, 'Gd³⁺': 0.938,
-    'Dy': 0.912, 'Dy3': 0.912, 'Dy³⁺': 0.912,
-    'Eu': 0.947, 'Eu3': 0.947, 'Eu³⁺': 0.947,
-    'Ho': 0.901, 'Ho3': 0.901, 'Ho³⁺': 0.901,
-    'Tm': 0.880, 'Tm3': 0.880, 'Tm³⁺': 0.880,
-    'Tb': 0.923, 'Tb3': 0.923, 'Tb³⁺': 0.923,
-    'La': 1.032, 'La3': 1.032, 'La³⁺': 1.032,
-    'Pr': 0.99, 'Pr3': 0.99, 'Pr³⁺': 0.99,
-    'Bi': 0.76, 'Bi3': 0.76, 'Bi³⁺': 0.76,
-    'Al': 0.535, 'Al3': 0.535, 'Al³⁺': 0.535,
-    'Ga': 0.62, 'Ga3': 0.62, 'Ga³⁺': 0.62,
-    'Si': 0.40, 'Si4': 0.40, 'Si⁴⁺': 0.40,
-    'Ge': 0.53, 'Ge4': 0.53, 'Ge⁴⁺': 0.53,
+    'Ce': 0.87, 'Ce4': 0.87,  # Ce4+
+    'Zr': 0.72, 'Zr4': 0.72,  # Zr4+
+    'Sn': 0.69, 'Sn4': 0.69,  # Sn4+
+    'Ti': 0.605, 'Ti4': 0.605,  # Ti4+
+    'Hf': 0.71, 'Hf4': 0.71,  # Hf4+
+    'Y': 0.90, 'Y3': 0.90,    # Y3+
+    'Yb': 0.868, 'Yb3': 0.868,  # Yb3+
+    'Sc': 0.745, 'Sc3': 0.745,  # Sc3+
+    'In': 0.80, 'In3': 0.80,  # In3+
+    'Fe': 0.645, 'Fe3': 0.645,  # Fe3+ (low spin)
+    'Dy': 0.912, 'Dy3': 0.912,  # Dy3+
+    'Sm': 0.958, 'Sm3': 0.958,  # Sm3+
+    'Nd': 0.983, 'Nd3': 0.983,  # Nd3+
+    'Gd': 0.938, 'Gd3': 0.938,  # Gd3+
+    'Eu': 0.947, 'Eu3': 0.947,  # Eu3+
+    'Tm': 0.880, 'Tm3': 0.880,  # Tm3+
+    'Tb': 0.923, 'Tb3': 0.923,  # Tb3+
+    'Ho': 0.901, 'Ho3': 0.901,  # Ho3+
+    'Zn': 0.60, 'Zn2': 0.60,   # Zn2+
+    'Al': 0.535, 'Al3': 0.535,  # Al3+
+    
+    # Oxygen
+    'O': 1.40, 'O2': 1.40  # O2- (6-coordination)
 }
 
-# 2.2 Electronegativity (Pauling scale)
-ELECTRONEGATIVITY = {
-    'Ba': 0.89, 'Sr': 0.95, 'Ca': 1.00, 'Mg': 1.31,
-    'La': 1.10, 'Nd': 1.14, 'Sm': 1.17, 'Eu': 1.20,
-    'Gd': 1.20, 'Tb': 1.20, 'Dy': 1.22, 'Ho': 1.23,
-    'Y': 1.22, 'Yb': 1.10, 'Lu': 1.27, 'Sc': 1.36,
+# Electronegativities (Pauling scale)
+ELECTRONEGATIVITIES = {
+    'Ba': 0.89, 'Sr': 0.95, 'Ca': 1.00, 'La': 1.10,
     'Ce': 1.12, 'Zr': 1.33, 'Sn': 1.96, 'Ti': 1.54,
-    'Hf': 1.30, 'Fe': 1.83, 'Zn': 1.65, 'In': 1.78,
-    'Pb': 2.33, 'Bi': 2.02, 'Al': 1.61, 'Ga': 1.81,
-    'Ge': 2.01, 'Si': 1.90, 'O': 3.44, 'Pr': 1.13,
-    'Tm': 1.25, 'W': 2.36, 'Mo': 2.16, 'Nb': 1.60,
-    'Ta': 1.50, 'V': 1.63, 'Cr': 1.66, 'Mn': 1.55,
-    'Co': 1.88, 'Ni': 1.91, 'Cu': 1.90, 'Ag': 1.93,
-    'Au': 2.54, 'Pt': 2.28, 'Pd': 2.20, 'Rh': 2.28,
-    'Ru': 2.20, 'Os': 2.20, 'Ir': 2.20, 'Re': 1.90,
+    'Y': 1.22, 'Yb': 1.10, 'Sc': 1.36, 'In': 1.78,
+    'Fe': 1.83, 'Gd': 1.20, 'Sm': 1.17, 'Nd': 1.14,
+    'Eu': 1.20, 'Dy': 1.22, 'Ho': 1.23, 'Tm': 1.25,
+    'Tb': 1.20, 'Hf': 1.30, 'Zn': 1.65, 'Al': 1.61,
+    'Pr': 1.13, 'O': 3.44
 }
 
-# 2.3 Valence states
-VALENCE = {
-    'Ba': 2, 'Sr': 2, 'Ca': 2, 'Mg': 2,
-    'La': 3, 'Nd': 3, 'Sm': 3, 'Eu': 3,
-    'Gd': 3, 'Tb': 3, 'Dy': 3, 'Ho': 3,
-    'Y': 3, 'Yb': 3, 'Lu': 3, 'Sc': 3,
+# Valences
+VALENCES = {
+    'Ba': 2, 'Sr': 2, 'Ca': 2, 'La': 3,
     'Ce': 4, 'Zr': 4, 'Sn': 4, 'Ti': 4,
-    'Hf': 4, 'Fe': 3, 'Zn': 2, 'In': 3,
-    'Pb': 2, 'Bi': 3, 'Al': 3, 'Ga': 3,
-    'Ge': 4, 'Si': 4, 'Pr': 3, 'Tm': 3,
-    'W': 6, 'Mo': 6, 'Nb': 5, 'Ta': 5,
-    'V': 5, 'Cr': 3, 'Mn': 2, 'Co': 2,
-    'Ni': 2, 'Cu': 2, 'Ag': 1, 'Au': 3,
-    'Pt': 4, 'Pd': 2, 'Rh': 3, 'Ru': 4,
-    'Os': 4, 'Ir': 4, 'Re': 7,
+    'Y': 3, 'Yb': 3, 'Sc': 3, 'In': 3,
+    'Fe': 3, 'Gd': 3, 'Sm': 3, 'Nd': 3,
+    'Eu': 3, 'Dy': 3, 'Ho': 3, 'Tm': 3,
+    'Tb': 3, 'Hf': 4, 'Zn': 2, 'Al': 3,
+    'Pr': 3
 }
 
-# 2.4 Molar masses (g/mol)
-MOLAR_MASS = {
-    'Ba': 137.327, 'Sr': 87.62, 'Ca': 40.078, 'Mg': 24.305,
-    'La': 138.905, 'Nd': 144.242, 'Sm': 150.36, 'Eu': 151.964,
-    'Gd': 157.25, 'Tb': 158.925, 'Dy': 162.500, 'Ho': 164.930,
-    'Y': 88.906, 'Yb': 173.045, 'Lu': 174.967, 'Sc': 44.956,
+# Molar masses (g/mol)
+MOLAR_MASSES = {
+    'Ba': 137.327, 'Sr': 87.62, 'Ca': 40.078, 'La': 138.905,
     'Ce': 140.116, 'Zr': 91.224, 'Sn': 118.710, 'Ti': 47.867,
-    'Hf': 178.49, 'Fe': 55.845, 'Zn': 65.38, 'In': 114.818,
-    'Pb': 207.2, 'Bi': 208.980, 'Al': 26.982, 'Ga': 69.723,
-    'Ge': 72.630, 'Si': 28.085, 'Pr': 140.908, 'Tm': 168.934,
-    'W': 183.84, 'Mo': 95.95, 'Nb': 92.906, 'Ta': 180.948,
-    'V': 50.942, 'Cr': 51.996, 'Mn': 54.938, 'Co': 58.933,
-    'Ni': 58.693, 'Cu': 63.546, 'Ag': 107.868, 'Au': 196.967,
-    'Pt': 195.084, 'Pd': 106.42, 'Rh': 102.906, 'Ru': 101.07,
-    'Os': 190.23, 'Ir': 192.217, 'Re': 186.207, 'O': 15.999,
+    'Y': 88.906, 'Yb': 173.045, 'Sc': 44.956, 'In': 114.818,
+    'Fe': 55.845, 'Gd': 157.25, 'Sm': 150.36, 'Nd': 144.242,
+    'Eu': 151.964, 'Dy': 162.500, 'Ho': 164.930, 'Tm': 168.934,
+    'Tb': 158.925, 'Hf': 178.49, 'Zn': 65.38, 'Al': 26.982,
+    'Pr': 140.908, 'O': 15.999
 }
-
-# 2.5 Oxygen ionic radius (6-coordination)
-R_O = 1.40  # Å
 
 # ============================================================================
 # SECTION 3: SCIENTIFIC PLOTTING STYLE
@@ -177,9 +140,10 @@ R_O = 1.40  # Å
 
 def apply_scientific_style():
     """
-    Apply unified scientific plotting style for publication-quality figures.
+    Apply scientific publication style for matplotlib plots.
+    Optimized for materials science journals.
     """
-    plt.style.use('seaborn-v0_8-whitegrid')
+    plt.style.use('seaborn-v0-8-whitegrid')
     plt.rcParams.update({
         # Font settings
         'font.size': 11,
@@ -187,7 +151,7 @@ def apply_scientific_style():
         'font.serif': ['Times New Roman', 'DejaVu Serif'],
         'mathtext.fontset': 'stix',
         
-        # Axes settings
+        # Axes
         'axes.labelsize': 12,
         'axes.labelweight': 'bold',
         'axes.titlesize': 13,
@@ -198,7 +162,7 @@ def apply_scientific_style():
         'axes.spines.top': False,
         'axes.spines.right': False,
         
-        # Tick settings
+        # Ticks
         'xtick.color': '#000000',
         'ytick.color': '#000000',
         'xtick.labelsize': 11,
@@ -209,12 +173,8 @@ def apply_scientific_style():
         'xtick.major.width': 1.5,
         'ytick.major.size': 7,
         'ytick.major.width': 1.5,
-        'xtick.minor.size': 4,
-        'xtick.minor.width': 1,
-        'ytick.minor.size': 4,
-        'ytick.minor.width': 1,
         
-        # Legend settings
+        # Legend
         'legend.fontsize': 10,
         'legend.frameon': True,
         'legend.framealpha': 0.9,
@@ -223,7 +183,7 @@ def apply_scientific_style():
         'legend.borderaxespad': 0.5,
         'legend.handlelength': 1.5,
         
-        # Figure settings
+        # Figure
         'figure.dpi': 300,
         'savefig.dpi': 300,
         'savefig.bbox': 'tight',
@@ -231,2670 +191,2009 @@ def apply_scientific_style():
         'figure.facecolor': 'white',
         'figure.constrained_layout.use': True,
         
-        # Line settings
+        # Lines and markers
         'lines.linewidth': 2,
         'lines.markersize': 7,
         'errorbar.capsize': 3,
         
-        # PDF settings for publications
+        # PDF export
         'pdf.fonttype': 42,
         'ps.fonttype': 42,
     })
 
-# ============================================================================
-# SECTION 4: COLOR PALETTES
-# ============================================================================
 
+# Color palettes
 COLOR_PALETTES = {
     'B_cation': {
-        'Ce': '#E74C3C',
-        'Zr': '#3498DB',
-        'Sn': '#2ECC71',
-        'Ti': '#F39C12',
-        'Hf': '#9B59B6',
-        'default': '#7F8C8D'
-    },
-    'method': {
-        'dilatometry': '#2C3E50',
-        'HT XRD': '#E67E22',
-        'HT ND': '#8E44AD',
-        'default': '#7F8C8D'
+        'Ce': '#E74C3C', 'Zr': '#3498DB', 'Sn': '#2ECC71',
+        'Ti': '#F39C12', 'Hf': '#9B59B6'
     },
     'A_cation': {
-        'Ba': '#1A5276',
-        'Sr': '#2471A3',
-        'Ca': '#5DADE2',
-        'La': '#F39C12',
-        'default': '#7F8C8D'
+        'Ba': '#1A5276', 'Sr': '#2471A3', 'Ca': '#5DADE2',
+        'La': '#F39C12', 'Pr': '#E67E22'
+    },
+    'method': {
+        'dilatometry': '#2C3E50', 'HT XRD': '#E67E22',
+        'HT ND': '#8E44AD', 'HT-XRD': '#E67E22', 'HT-ND': '#8E44AD'
     },
     'continuous': 'viridis',
     'diverging': 'coolwarm',
-    'categorical': 'Set2',
-    'clusters': 'tab10'
+    'qualitative': ['#E74C3C', '#3498DB', '#2ECC71', '#F39C12', 
+                    '#9B59B6', '#1ABC9C', '#E67E22', '#2C3E50']
 }
 
 # ============================================================================
-# SECTION 5: DATA PROCESSING FUNCTIONS
+# SECTION 4: DATA PARSING AND CLEANING
 # ============================================================================
 
 @st.cache_data
 def parse_uploaded_data(text: str) -> pd.DataFrame:
     """
-    Parse pasted tabular data into pandas DataFrame.
-    
-    Args:
-        text: String containing tab-separated data with header
-        
-    Returns:
-        DataFrame with parsed data
+    Parse pasted tabular data into DataFrame.
+    Handles various delimiters and cleans the data.
     """
-    try:
-        # Read from string buffer
-        df = pd.read_csv(io.StringIO(text), sep='\t', na_values=['-', '—', ''])
-        
-        # Strip whitespace from column names
-        df.columns = df.columns.str.strip()
-        
-        # Remove any empty rows
-        df = df.dropna(how='all')
-        
-        # Remove any empty columns
-        df = df.dropna(axis=1, how='all')
-        
-        # Convert numeric columns
-        numeric_cols = ['[A']', '[B']', '[D1]', '[D2]', 'δ', 'β', 'α·106 (K-1)', 'pH2O']
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        
-        # Parse temperature range
-        if '∆T, °C' in df.columns:
-            df['T_min'] = df['∆T, °C'].str.split('-').str[0].astype(float)
-            df['T_max'] = df['∆T, °C'].str.split('-').str[1].astype(float)
-            df['T_range'] = df['T_max'] - df['T_min']
-        
-        # Calculate delta if not present
-        if 'δ' in df.columns and '[D1]' in df.columns and '[D2]' in df.columns:
-            df['delta_calc'] = df['[D1]']/2 + df['[D2]']/2
-            # Use calculated if original is NaN
-            df['δ'] = df['δ'].fillna(df['delta_calc'])
-        
-        return df
-    
-    except Exception as e:
-        st.error(f"Error parsing data: {str(e)}")
+    if not text.strip():
         return pd.DataFrame()
-
-@st.cache_data
-def parse_semicolon_list(value: str) -> List[float]:
-    """
-    Parse semicolon-separated values into list of floats.
     
-    Args:
-        value: String like "10.6;4.73;10.1" or "400;600"
-        
-    Returns:
-        List of floats
+    # Try different delimiters
+    lines = text.strip().split('\n')
+    
+    # Check if first line contains expected columns
+    expected_cols = ['№', 'A', "A'", 'B', "B'", 'D1', 'D2', 
+                     "[A']", "[B']", '[D1]', '[D2]', 'δ',
+                     'method', 'β', '∆T, °C', 'α·106 (K-1)',
+                     'T(bends), °C', 'αav·106 (K-1)', 'pH2O', 'Ref']
+    
+    # Try tab delimiter first
+    for delimiter in ['\t', ',', ';', '  ', ' ']:
+        try:
+            df = pd.read_csv(StringIO(text), delimiter=delimiter, 
+                            dtype=str, keep_default_na=False)
+            # Check if we got expected number of columns
+            if len(df.columns) >= 10:
+                # Clean column names
+                df.columns = df.columns.str.strip()
+                return clean_dataframe(df)
+        except:
+            continue
+    
+    # If all fail, try manual parsing
+    st.warning("Auto-detection failed. Please ensure data is tab-separated.")
+    return pd.DataFrame()
+
+
+def clean_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     """
-    if pd.isna(value) or value == '-' or value == '':
+    Clean and standardize the DataFrame.
+    """
+    # Rename columns if needed
+    expected_names = ['№', 'A', "A'", 'B', "B'", 'D1', 'D2', 
+                      "[A']", "[B']", '[D1]', '[D2]', 'δ',
+                      'method', 'β', 'delta_T', 'alpha',
+                      'T_bends', 'alpha_av', 'pH2O', 'Ref']
+    
+    # Map columns if they match expected pattern
+    if len(df.columns) >= 19:
+        df.columns = expected_names[:len(df.columns)]
+    
+    # Replace '-' with NaN
+    df = df.replace('-', pd.NA)
+    df = df.replace('—', pd.NA)
+    df = df.replace('–', pd.NA)
+    
+    # Convert numeric columns
+    numeric_cols = ['№', "[A']", "[B']", '[D1]', '[D2]', 'δ', 'β', 
+                    'alpha', 'pH2O', 'alpha_av']
+    
+    for col in numeric_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+    
+    # Convert delta_T to numeric range
+    if 'delta_T' in df.columns:
+        df['delta_T_low'] = df['delta_T'].str.split('-').str[0].astype(float)
+        df['delta_T_high'] = df['delta_T'].str.split('-').str[1].astype(float)
+    
+    # Parse T_bends
+    if 'T_bends' in df.columns:
+        df['T_bends_list'] = df['T_bends'].apply(parse_t_bends)
+        df['T_bends_count'] = df['T_bends_list'].apply(len)
+        df['T_bends_first'] = df['T_bends_list'].apply(lambda x: x[0] if x else np.nan)
+        df['T_bends_last'] = df['T_bends_list'].apply(lambda x: x[-1] if x else np.nan)
+    
+    # Parse alpha_av
+    if 'alpha_av' in df.columns:
+        df['alpha_av_list'] = df['alpha_av'].apply(parse_alpha_av)
+        df['alpha_av_count'] = df['alpha_av_list'].apply(len)
+        df['alpha_av_first'] = df['alpha_av_list'].apply(lambda x: x[0] if x else np.nan)
+        df['alpha_av_last'] = df['alpha_av_list'].apply(lambda x: x[-1] if x else np.nan)
+    
+    # Calculate delta if missing
+    if 'δ' in df.columns and '[D1]' in df.columns and '[D2]' in df.columns:
+        df['δ_calc'] = df['[D1]'] / 2 + df['[D2]'] / 2
+        # Use calculated delta where original is NaN
+        if df['δ'].isna().any():
+            df['δ'] = df['δ'].fillna(df['δ_calc'])
+    
+    return df
+
+
+def parse_t_bends(value: Any) -> List[float]:
+    """
+    Parse semicolon-separated temperature bend values.
+    Example: "400;600" -> [400.0, 600.0]
+    """
+    if pd.isna(value) or value == '-' or value == '—' or value == '':
         return []
     try:
-        return [float(x.strip()) for x in str(value).split(';') if x.strip()]
+        if isinstance(value, (int, float)):
+            return [float(value)]
+        # Remove any whitespace and split
+        value_str = str(value).strip()
+        if ';' in value_str:
+            parts = value_str.split(';')
+        elif ',' in value_str:
+            parts = value_str.split(',')
+        else:
+            return [float(value_str)]
+        
+        return [float(p.strip()) for p in parts if p.strip()]
     except:
         return []
 
-@st.cache_data
-def clean_data(df: pd.DataFrame) -> pd.DataFrame:
+
+def parse_alpha_av(value: Any) -> List[float]:
     """
-    Clean and preprocess the DataFrame.
-    
-    Args:
-        df: Raw DataFrame
+    Parse semicolon-separated alpha_av values.
+    Example: "10.6;4.73;10.1" -> [10.6, 4.73, 10.1]
+    """
+    if pd.isna(value) or value == '-' or value == '—' or value == '':
+        return []
+    try:
+        if isinstance(value, (int, float)):
+            return [float(value)]
+        value_str = str(value).strip()
+        if ';' in value_str:
+            parts = value_str.split(';')
+        elif ',' in value_str:
+            parts = value_str.split(',')
+        else:
+            return [float(value_str)]
         
-    Returns:
-        Cleaned DataFrame
+        return [float(p.strip()) for p in parts if p.strip()]
+    except:
+        return []
+
+
+def get_cation_radius(element: str, site: str = 'B') -> float:
     """
-    df_clean = df.copy()
+    Get Shannon ionic radius for a cation.
+    """
+    if pd.isna(element) or element == '':
+        return np.nan
     
-    # Parse T(bends) and alpha_av
-    if 'T(bends), °C' in df_clean.columns:
-        df_clean['T_bends_list'] = df_clean['T(bends), °C'].apply(parse_semicolon_list)
-        df_clean['n_bends'] = df_clean['T_bends_list'].apply(len)
-        df_clean['T_bends_first'] = df_clean['T_bends_list'].apply(lambda x: x[0] if x else np.nan)
-        df_clean['T_bends_last'] = df_clean['T_bends_list'].apply(lambda x: x[-1] if x else np.nan)
+    # Handle simple element symbols
+    element = str(element).strip()
     
-    if 'αav·106 (K-1)' in df_clean.columns:
-        df_clean['alpha_av_list'] = df_clean['αav·106 (K-1)'].apply(parse_semicolon_list)
-        df_clean['alpha_av_first'] = df_clean['alpha_av_list'].apply(lambda x: x[0] if x else np.nan)
-        df_clean['alpha_av_last'] = df_clean['alpha_av_list'].apply(lambda x: x[-1] if x else np.nan)
+    # Try exact match first
+    if element in IONIC_RADII:
+        return IONIC_RADII[element]
     
-    # Extract B-cation type
-    df_clean['B_type'] = df_clean['B'].apply(lambda x: str(x) if pd.notna(x) else 'Unknown')
+    # Try with valence
+    if site == 'A':
+        variants = [f'{element}2', f'{element}3']
+    else:
+        variants = [f'{element}4', f'{element}3', f'{element}2']
     
-    # Extract A-cation type
-    df_clean['A_type'] = df_clean['A'].apply(lambda x: str(x) if pd.notna(x) else 'Unknown')
+    for v in variants:
+        if v in IONIC_RADII:
+            return IONIC_RADII[v]
     
-    # Calculate D_total
-    if '[D1]' in df_clean.columns and '[D2]' in df_clean.columns:
-        df_clean['D_total'] = df_clean['[D1]'] + df_clean['[D2]']
+    return np.nan
+
+
+def get_electronegativity(element: str) -> float:
+    """
+    Get Pauling electronegativity for an element.
+    """
+    if pd.isna(element) or element == '':
+        return np.nan
     
-    # Calculate B'_conc - FIXED: proper string escaping
-    if "[B']" in df_clean.columns:
-        df_clean["B'_conc"] = df_clean["[B']"]
+    element = str(element).strip()
+    # Remove valence suffix if present
+    element = re.sub(r'[234]\+?', '', element)
     
-    # Calculate alpha/beta ratio
-    if 'α·106 (K-1)' in df_clean.columns and 'β' in df_clean.columns:
-        df_clean['alpha_beta_ratio'] = df_clean['α·106 (K-1)'] / df_clean['β']
+    if element in ELECTRONEGATIVITIES:
+        return ELECTRONEGATIVITIES[element]
     
-    return df_clean
+    return np.nan
+
+
+def get_valence(element: str) -> float:
+    """
+    Get valence state for an element.
+    """
+    if pd.isna(element) or element == '':
+        return np.nan
+    
+    element = str(element).strip()
+    
+    if element in VALENCES:
+        return VALENCES[element]
+    
+    return np.nan
+
+
+def get_molar_mass(element: str) -> float:
+    """
+    Get molar mass for an element.
+    """
+    if pd.isna(element) or element == '':
+        return np.nan
+    
+    element = str(element).strip()
+    element = re.sub(r'[234]\+?', '', element)
+    
+    if element in MOLAR_MASSES:
+        return MOLAR_MASSES[element]
+    
+    return np.nan
 
 # ============================================================================
-# SECTION 6: DESCRIPTOR ENGINE
+# SECTION 5: DESCRIPTOR ENGINE
 # ============================================================================
 
 @st.cache_data
 def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculate all 63+ descriptors for each composition.
-    
-    Args:
-        df: Cleaned DataFrame with composition data
-        
-    Returns:
-        DataFrame with all descriptors added
+    Calculate all 63+ descriptors for the perovskite compositions.
     """
+    if df.empty:
+        return df
+    
+    # Create a copy to avoid modifying original
     df_desc = df.copy()
     
-    # Extract element names and concentrations
-    for idx, row in df_desc.iterrows():
-        # A-site - use double quotes for column names with apostrophes
-        A_elem = row.get('A', '')
-        A_prime_elem = row.get("A'", '')
-        A_prime_conc = row.get("[A']", 0)
-        
-        # B-site
-        B_elem = row.get('B', '')
-        B_prime_elem = row.get("B'", '')
-        B_prime_conc = row.get("[B']", 0)
-        D1_elem = row.get('D1', '')
-        D1_conc = row.get('[D1]', 0)
-        D2_elem = row.get('D2', '')
-        D2_conc = row.get('[D2]', 0)
-        
-        # Skip if A or B is missing
-        if pd.isna(A_elem) or pd.isna(B_elem):
-            continue
-        
-        # Get ionic radii
-        rA = IONIC_RADII.get(str(A_elem), np.nan)
-        rA_prime = IONIC_RADII.get(str(A_prime_elem), np.nan)
-        rB = IONIC_RADII.get(str(B_elem), np.nan)
-        rB_prime = IONIC_RADII.get(str(B_prime_elem), np.nan)
-        rD1 = IONIC_RADII.get(str(D1_elem), np.nan)
-        rD2 = IONIC_RADII.get(str(D2_elem), np.nan)
-        
-        # Get electronegativity
-        chiA = ELECTRONEGATIVITY.get(str(A_elem), np.nan)
-        chiA_prime = ELECTRONEGATIVITY.get(str(A_prime_elem), np.nan)
-        chiB = ELECTRONEGATIVITY.get(str(B_elem), np.nan)
-        chiB_prime = ELECTRONEGATIVITY.get(str(B_prime_elem), np.nan)
-        chiD1 = ELECTRONEGATIVITY.get(str(D1_elem), np.nan)
-        chiD2 = ELECTRONEGATIVITY.get(str(D2_elem), np.nan)
-        
-        # Get valence
-        VB = VALENCE.get(str(B_elem), np.nan)
-        VB_prime = VALENCE.get(str(B_prime_elem), np.nan)
-        VD1 = VALENCE.get(str(D1_elem), np.nan)
-        VD2 = VALENCE.get(str(D2_elem), np.nan)
-        
-        # Get molar mass
-        MA = MOLAR_MASS.get(str(A_elem), np.nan)
-        MA_prime = MOLAR_MASS.get(str(A_prime_elem), np.nan)
-        MB = MOLAR_MASS.get(str(B_elem), np.nan)
-        MB_prime = MOLAR_MASS.get(str(B_prime_elem), np.nan)
-        MD1 = MOLAR_MASS.get(str(D1_elem), np.nan)
-        MD2 = MOLAR_MASS.get(str(D2_elem), np.nan)
-        
-        # Calculate average radii
-        rAav = rA * (1 - A_prime_conc) + rA_prime * A_prime_conc
-        rBav = rB * (1 - B_prime_conc - D1_conc - D2_conc) + rB_prime * B_prime_conc + rD1 * D1_conc + rD2 * D2_conc
-        
-        # Calculate tolerance factor (Goldschmidt)
-        t = (rAav + R_O) / (np.sqrt(2) * (rBav + R_O))
-        
-        # Calculate deviation from ideal
-        D_t = abs(1 - t)
-        
-        # Alternative tolerance factor
-        t_alt = (rAav + R_O) / (np.sqrt(2) * (rBav + R_O))
-        
-        # Octahedral factor
-        octahedral_factor = rBav / R_O
-        
-        # Radius difference
-        Dr_AB = abs(rAav - rBav)
-        Dr_AB_norm = Dr_AB / R_O
-        
-        # Variance of B-site radii
-        B_sites = [rB * (1 - B_prime_conc - D1_conc - D2_conc), 
-                   rB_prime * B_prime_conc, 
-                   rD1 * D1_conc, 
-                   rD2 * D2_conc]
-        B_sites = [x for x in B_sites if not np.isnan(x)]
-        sigma2_rB = np.var(B_sites) if len(B_sites) > 0 else 0
-        
-        # Variance of A-site radii
-        A_sites = [rA * (1 - A_prime_conc), rA_prime * A_prime_conc]
-        A_sites = [x for x in A_sites if not np.isnan(x)]
-        sigma2_rA = np.var(A_sites) if len(A_sites) > 0 else 0
-        
-        # Calculate average electronegativity
-        chiAav = chiA * (1 - A_prime_conc) + chiA_prime * A_prime_conc
-        chiBav = chiB * (1 - B_prime_conc - D1_conc - D2_conc) + chiB_prime * B_prime_conc + chiD1 * D1_conc + chiD2 * D2_conc
-        
-        # Electronegativity difference
-        Dchi_AB = abs(chiAav - chiBav)
-        chi_ratio_AB = chiAav / chiBav if chiBav != 0 else np.nan
-        
-        # Total average electronegativity
-        chi_total = (chiAav + chiBav) / 2
-        
-        # Ionicity of A-O and B-O bonds
-        ionicity_AO = 1 - np.exp(-0.25 * (chiAav - 3.44)**2)
-        ionicity_BO = 1 - np.exp(-0.25 * (chiBav - 3.44)**2)
-        
-        # Acidity descriptors
-        acidity_AO = 1 / chiAav if chiAav != 0 else np.nan
-        acidity_BO = 1 / chiBav if chiBav != 0 else np.nan
-        Dacidity = acidity_BO - acidity_AO
-        
-        # Configurational entropy
-        S_config_A = -8.314 * (A_prime_conc * np.log(A_prime_conc) + (1 - A_prime_conc) * np.log(1 - A_prime_conc)) if A_prime_conc > 0 and A_prime_conc < 1 else 0
-        S_config_B = 0
-        B_conc_list = [1 - B_prime_conc - D1_conc - D2_conc, B_prime_conc, D1_conc, D2_conc]
-        for c in B_conc_list:
-            if c > 0 and c < 1:
-                S_config_B += -8.314 * c * np.log(c)
-        
-        # Average valence of B-site
-        V_Bav = VB * (1 - B_prime_conc - D1_conc - D2_conc) + VB_prime * B_prime_conc + VD1 * D1_conc + VD2 * D2_conc
-        
-        # Vacancy proxy
-        Vo_proxy = (4 - V_Bav) / 2
-        
-        # Hydration enthalpy (approximate)
-        DH_hydr = 1 / (rBav * chiBav) if rBav * chiBav != 0 else np.nan
-        
-        # Bond energy (Coulombic)
-        E_BO = (VB * 2) / rBav if rBav != 0 else np.nan
-        
-        # Mass density (approximate)
-        M_total = MA * (1 - A_prime_conc) + MA_prime * A_prime_conc + MB * (1 - B_prime_conc - D1_conc - D2_conc) + MB_prime * B_prime_conc + MD1 * D1_conc + MD2 * D2_conc + 3 * MOLAR_MASS['O']
-        V_cell = (rAav + R_O) * (rBav + R_O)**3
-        rho = M_total / V_cell if V_cell != 0 else np.nan
-        
-        # Average molar mass
-        M_Aav = MA * (1 - A_prime_conc) + MA_prime * A_prime_conc
-        M_Bav = MB * (1 - B_prime_conc - D1_conc - D2_conc) + MB_prime * B_prime_conc + MD1 * D1_conc + MD2 * D2_conc
-        M_ratio_AB = M_Aav / M_Bav if M_Bav != 0 else np.nan
-        M_rA = M_Aav * rAav
-        M_chiA = M_Aav * chiAav
-        
-        # Defect descriptors
-        delta = row.get('δ', D1_conc/2 + D2_conc/2)
-        Z_eff_B = 4 - 2 * delta
-        proton_affinity = 1 / (rBav * chiBav) if rBav * chiBav != 0 else np.nan
-        E_vac = 1 / (rBav**2) * (chiBav - 3.44) if rBav != 0 else np.nan
-        
-        # T(bends) descriptors
-        r_ratio_AB = rAav / rBav if rBav != 0 else np.nan
-        T_stab = -DH_hydr / 8.314 if not np.isnan(DH_hydr) else np.nan
-        delta_chiB = delta * chiBav if not np.isnan(chiBav) else np.nan
-        
-        # Alpha/beta ratio (if available)
-        alpha_beta_ratio = row.get('alpha_beta_ratio', np.nan)
-        
-        # Store all descriptors
-        desc_dict = {
-            # Geometric descriptors (1-8, 36-40)
-            'rAav': rAav,
-            'rBav': rBav,
-            't': t,
-            'D_t': D_t,
-            't_alt': t_alt,
-            'octahedral_factor': octahedral_factor,
-            'Dr_AB': Dr_AB,
-            'Dr_AB_norm': Dr_AB_norm,
-            'sigma2_rB': sigma2_rB,
-            'sigma2_rA': sigma2_rA,
-            'V_cell': V_cell,
-            'V_free': V_cell * (1 - 0.74),
-            'oct_dist': abs(rBav - rBav) / rBav,
-            
-            # Electronegativity descriptors (9-21, 41-43)
-            'chiAav': chiAav,
-            'chiBav': chiBav,
-            'Dchi_AB': Dchi_AB,
-            'chi_ratio_AB': chi_ratio_AB,
-            'chi_total': chi_total,
-            'ionicity_AO': ionicity_AO,
-            'ionicity_BO': ionicity_BO,
-            'acidity_AO': acidity_AO,
-            'acidity_BO': acidity_BO,
-            'Dacidity': Dacidity,
-            
-            # Thermodynamic descriptors (22-29, 44-46)
-            'S_config_A': S_config_A,
-            'S_config_B': S_config_B,
-            'V_Bav': V_Bav,
-            'Vo_proxy': Vo_proxy,
-            'DH_hydr': DH_hydr,
-            'E_BO': E_BO,
-            'rho': rho,
-            
-            # Mass descriptors (47-52)
-            'M_Aav': M_Aav,
-            'M_Bav': M_Bav,
-            'M_total': M_total,
-            'M_ratio_AB': M_ratio_AB,
-            'M_rA': M_rA,
-            'M_chiA': M_chiA,
-            
-            # Defect descriptors (53-56)
-            'delta_calc': delta,
-            'Z_eff_B': Z_eff_B,
-            'proton_affinity': proton_affinity,
-            'E_vac': E_vac,
-            
-            # T(bends) descriptors (57-60)
-            'alpha_beta_ratio': alpha_beta_ratio,
-            'T_stab': T_stab,
-            'delta_chiB': delta_chiB,
-            'r_ratio_AB': r_ratio_AB,
-            
-            # Compositional descriptors
-            "B'_conc": B_prime_conc,
-            'D_total': D1_conc + D2_conc,
-        }
-        
-        # Add descriptors to DataFrame
-        for key, value in desc_dict.items():
-            df_desc.loc[idx, key] = value
+    # Get concentrations
+    A_conc = 1 - df_desc["[A']"].fillna(0)
+    B_conc = 1 - df_desc["[B']"].fillna(0) - df_desc['[D1]'].fillna(0) - df_desc['[D2]'].fillna(0)
+    
+    # ========================================================================
+    # Group 1: Geometric descriptors
+    # ========================================================================
+    
+    # Average A-site radius
+    rA = df_desc['A'].apply(lambda x: get_cation_radius(x, 'A'))
+    rA_prime = df_desc["A'"].apply(lambda x: get_cation_radius(x, 'A'))
+    df_desc['rAav'] = rA * A_conc + rA_prime * df_desc["[A']"].fillna(0)
+    
+    # Average B-site radius
+    rB = df_desc['B'].apply(lambda x: get_cation_radius(x, 'B'))
+    rB_prime = df_desc["B'"].apply(lambda x: get_cation_radius(x, 'B'))
+    rD1 = df_desc['D1'].apply(lambda x: get_cation_radius(x, 'B'))
+    rD2 = df_desc['D2'].apply(lambda x: get_cation_radius(x, 'B'))
+    
+    df_desc['rBav'] = (rB * B_conc + 
+                       rB_prime * df_desc["[B']"].fillna(0) +
+                       rD1 * df_desc['[D1]'].fillna(0) +
+                       rD2 * df_desc['[D2]'].fillna(0))
+    
+    # Oxygen radius
+    rO = IONIC_RADII['O']
+    
+    # Goldschmidt tolerance factor
+    df_desc['t'] = (df_desc['rAav'] + rO) / (np.sqrt(2) * (df_desc['rBav'] + rO))
+    
+    # Tolerance factor deviation
+    df_desc['D_t'] = np.abs(1 - df_desc['t'])
+    
+    # Octahedral factor
+    df_desc['octahedral_factor'] = df_desc['rBav'] / rO
+    
+    # Radius difference A-B
+    df_desc['delta_r_AB'] = np.abs(df_desc['rAav'] - df_desc['rBav'])
+    df_desc['delta_r_AB_norm'] = df_desc['delta_r_AB'] / rO
+    
+    # Radius ratio
+    df_desc['r_ratio_AB'] = df_desc['rAav'] / df_desc['rBav']
+    
+    # Variance of B-site radii
+    df_desc['sigma2_rB'] = (B_conc * (rB - df_desc['rBav'])**2 +
+                            df_desc["[B']"].fillna(0) * (rB_prime - df_desc['rBav'])**2 +
+                            df_desc['[D1]'].fillna(0) * (rD1 - df_desc['rBav'])**2 +
+                            df_desc['[D2]'].fillna(0) * (rD2 - df_desc['rBav'])**2)
+    
+    # Variance of A-site radii
+    df_desc['sigma2_rA'] = (A_conc * (rA - df_desc['rAav'])**2 +
+                            df_desc["[A']"].fillna(0) * (rA_prime - df_desc['rAav'])**2)
+    
+    # Unit cell volume proxy (pseudocubic)
+    df_desc['V_cell'] = (df_desc['rAav'] + rO) * (df_desc['rBav'] + rO)**3
+    
+    # Octahedral distortion proxy
+    df_desc['oct_dist'] = (np.abs(rB - df_desc['rBav']) + 
+                           np.abs(rB_prime - df_desc['rBav']) +
+                           np.abs(rD1 - df_desc['rBav']) +
+                           np.abs(rD2 - df_desc['rBav'])) / 4
+    
+    # ========================================================================
+    # Group 2: Electronegativity descriptors
+    # ========================================================================
+    
+    # Get electronegativities
+    chiA = df_desc['A'].apply(lambda x: get_electronegativity(x))
+    chiA_prime = df_desc["A'"].apply(lambda x: get_electronegativity(x))
+    chiB = df_desc['B'].apply(lambda x: get_electronegativity(x))
+    chiB_prime = df_desc["B'"].apply(lambda x: get_electronegativity(x))
+    chiD1 = df_desc['D1'].apply(lambda x: get_electronegativity(x))
+    chiD2 = df_desc['D2'].apply(lambda x: get_electronegativity(x))
+    
+    # Average electronegativities
+    df_desc['chiAav'] = chiA * A_conc + chiA_prime * df_desc["[A']"].fillna(0)
+    df_desc['chiBav'] = (chiB * B_conc + 
+                         chiB_prime * df_desc["[B']"].fillna(0) +
+                         chiD1 * df_desc['[D1]'].fillna(0) +
+                         chiD2 * df_desc['[D2]'].fillna(0))
+    
+    # Difference and ratio
+    df_desc['delta_chi_AB'] = np.abs(df_desc['chiAav'] - df_desc['chiBav'])
+    df_desc['chi_ratio_AB'] = df_desc['chiAav'] / df_desc['chiBav']
+    
+    # Ionicity (Pauling formula)
+    chiO = ELECTRONEGATIVITIES['O']
+    df_desc['ionicity_AO'] = 1 - np.exp(-0.25 * (df_desc['chiAav'] - chiO)**2)
+    df_desc['ionicity_BO'] = 1 - np.exp(-0.25 * (df_desc['chiBav'] - chiO)**2)
+    
+    # Acidity (inverse electronegativity)
+    df_desc['acidity_AO'] = 1 / df_desc['chiAav']
+    df_desc['acidity_BO'] = 1 / df_desc['chiBav']
+    df_desc['delta_acidity'] = df_desc['acidity_BO'] - df_desc['acidity_AO']
+    
+    # ========================================================================
+    # Group 3: Thermodynamic descriptors
+    # ========================================================================
+    
+    # Configurational entropy
+    R = 8.314  # J/(mol*K)
+    
+    # A-site entropy
+    df_desc['S_config_A'] = -R * (A_conc * np.log(A_conc + 1e-10) +
+                                   df_desc["[A']"].fillna(0) * np.log(df_desc["[A']"].fillna(0) + 1e-10))
+    
+    # B-site entropy
+    df_desc['S_config_B'] = -R * (B_conc * np.log(B_conc + 1e-10) +
+                                   df_desc["[B']"].fillna(0) * np.log(df_desc["[B']"].fillna(0) + 1e-10) +
+                                   df_desc['[D1]'].fillna(0) * np.log(df_desc['[D1]'].fillna(0) + 1e-10) +
+                                   df_desc['[D2]'].fillna(0) * np.log(df_desc['[D2]'].fillna(0) + 1e-10))
+    
+    # Average B-site valence
+    vB = df_desc['B'].apply(lambda x: get_valence(x))
+    vB_prime = df_desc["B'"].apply(lambda x: get_valence(x))
+    vD1 = df_desc['D1'].apply(lambda x: get_valence(x))
+    vD2 = df_desc['D2'].apply(lambda x: get_valence(x))
+    
+    df_desc['V_Bav'] = (vB * B_conc + 
+                        vB_prime * df_desc["[B']"].fillna(0) +
+                        vD1 * df_desc['[D1]'].fillna(0) +
+                        vD2 * df_desc['[D2]'].fillna(0))
+    
+    # Oxygen vacancy proxy (for Ce4+/Zr4+ systems)
+    df_desc['Vo_proxy'] = (4 - df_desc['V_Bav']) / 2
+    
+    # Hydration enthalpy proxy
+    df_desc['delta_H_hydr'] = 1 / (df_desc['rBav'] + 1e-10) * (df_desc['chiBav'] - chiO)**2
+    
+    # B-O bond energy proxy (Coulombic)
+    df_desc['E_BO'] = (df_desc['V_Bav'] * 2) / (df_desc['rBav'] + 1e-10)
+    
+    # Mass density proxy
+    df_desc['rho'] = df_desc['M_total'] / df_desc['V_cell']
+    
+    # ========================================================================
+    # Group 4: Mass descriptors
+    # ========================================================================
+    
+    # Get molar masses
+    mA = df_desc['A'].apply(lambda x: get_molar_mass(x))
+    mA_prime = df_desc["A'"].apply(lambda x: get_molar_mass(x))
+    mB = df_desc['B'].apply(lambda x: get_molar_mass(x))
+    mB_prime = df_desc["B'"].apply(lambda x: get_molar_mass(x))
+    mD1 = df_desc['D1'].apply(lambda x: get_molar_mass(x))
+    mD2 = df_desc['D2'].apply(lambda x: get_molar_mass(x))
+    
+    df_desc['M_Aav'] = mA * A_conc + mA_prime * df_desc["[A']"].fillna(0)
+    df_desc['M_Bav'] = (mB * B_conc + 
+                        mB_prime * df_desc["[B']"].fillna(0) +
+                        mD1 * df_desc['[D1]'].fillna(0) +
+                        mD2 * df_desc['[D2]'].fillna(0))
+    
+    df_desc['M_total'] = df_desc['M_Aav'] + df_desc['M_Bav'] + 3 * MOLAR_MASSES['O']
+    df_desc['M_ratio_AB'] = df_desc['M_Aav'] / (df_desc['M_Bav'] + 1e-10)
+    df_desc['M_rA'] = df_desc['M_Aav'] * df_desc['rAav']
+    df_desc['M_chiA'] = df_desc['M_Aav'] * df_desc['chiAav']
+    
+    # ========================================================================
+    # Group 5: Defect descriptors
+    # ========================================================================
+    
+    # Effective B-site charge
+    df_desc['Z_eff_B'] = 4 - 2 * df_desc['δ']
+    
+    # Proton affinity proxy
+    df_desc['proton_affinity'] = 1 / ((df_desc['rBav'] + 1e-10) * (df_desc['chiBav'] + 1e-10))
+    
+    # Vacancy formation energy proxy
+    df_desc['E_vac'] = 1 / (df_desc['rBav']**2 + 1e-10) * (df_desc['chiBav'] - chiO)
+    
+    # ========================================================================
+    # Group 6: T(bends) specific descriptors
+    # ========================================================================
+    
+    # Alpha/beta ratio (if both available)
+    df_desc['alpha_beta_ratio'] = df_desc['alpha'] / (df_desc['β'] + 1e-10)
+    
+    # Proton stability temperature proxy
+    df_desc['T_stab'] = -df_desc['delta_H_hydr'] / R
+    
+    # Combined descriptors
+    df_desc['delta_chiB'] = df_desc['δ'] * df_desc['chiBav']
+    df_desc['delta_rB'] = df_desc['δ'] * df_desc['rBav']
+    
+    # ========================================================================
+    # Group 7: Compositional descriptors
+    # ========================================================================
+    
+    df_desc["B'_conc"] = df_desc["[B']"].fillna(0)
+    df_desc['D_total'] = df_desc['[D1]'].fillna(0) + df_desc['[D2]'].fillna(0)
+    df_desc['D_ratio'] = df_desc['[D1]'].fillna(0) / (df_desc['[D2]'].fillna(0) + 1e-10)
+    
+    # ========================================================================
+    # Group 8: Combined (physics-inspired) descriptors
+    # ========================================================================
+    
+    df_desc['delta_chi_div_t'] = df_desc['delta_chi_AB'] / (df_desc['t'] + 1e-10)
+    df_desc['delta_chi_mul_t'] = df_desc['delta_chi_AB'] * df_desc['t']
+    df_desc['disorder_over_distortion'] = df_desc['sigma2_rB'] / (df_desc['D_t'] + 1e-10)
+    df_desc['ionic_x_octa'] = df_desc['ionicity_BO'] * df_desc['octahedral_factor']
+    df_desc['chi_ratio_t'] = df_desc['chi_ratio_AB'] * df_desc['t']
+    df_desc['rBav_x_chiBav'] = df_desc['rBav'] * df_desc['chiBav']
     
     return df_desc
 
 # ============================================================================
-# SECTION 7: CORRELATION ANALYSIS
+# SECTION 6: CORRELATION ANALYSIS
 # ============================================================================
 
 @st.cache_data
 def calculate_correlations(df: pd.DataFrame, target_cols: List[str]) -> Dict:
     """
-    Calculate comprehensive correlation matrices.
-    
-    Args:
-        df: DataFrame with descriptors
-        target_cols: List of target variable names
-        
-    Returns:
-        Dictionary with correlation matrices
+    Calculate various correlation matrices and statistics.
     """
-    # Select numeric columns
+    if df.empty:
+        return {}
+    
+    # Select only numeric columns
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     
-    # Filter out columns with too many NaN
-    valid_cols = [col for col in numeric_cols if df[col].notna().sum() > 5]
+    # Remove columns with too many NaN
+    valid_cols = [col for col in numeric_cols if df[col].notna().sum() > 10]
     
-    # Create correlation DataFrames
-    corr_data = df[valid_cols].copy()
+    if len(valid_cols) < 3:
+        return {}
+    
+    # Fill NaN with median
+    df_filled = df[valid_cols].copy()
+    for col in df_filled.columns:
+        df_filled[col] = df_filled[col].fillna(df_filled[col].median())
     
     # Pearson correlation
-    pearson_corr = corr_data.corr(method='pearson')
+    pearson_corr = df_filled.corr(method='pearson')
     
     # Spearman correlation
-    spearman_corr = corr_data.corr(method='spearman')
+    spearman_corr = df_filled.corr(method='spearman')
+    
+    # Calculate p-values for Pearson
+    p_values = pd.DataFrame(np.ones_like(pearson_corr), 
+                           index=pearson_corr.index, 
+                           columns=pearson_corr.columns)
+    
+    for i in range(len(pearson_corr.columns)):
+        for j in range(len(pearson_corr.columns)):
+            if i != j:
+                col1 = pearson_corr.columns[i]
+                col2 = pearson_corr.columns[j]
+                # Remove NaN for this pair
+                mask = df_filled[col1].notna() & df_filled[col2].notna()
+                if mask.sum() > 3:
+                    corr, p_val = stats.pearsonr(df_filled[col1][mask], df_filled[col2][mask])
+                    p_values.iloc[i, j] = p_val
     
     # Partial correlation (controlling for pH2O)
-    partial_corr = None
-    if 'pH2O' in corr_data.columns:
-        pH2O = corr_data['pH2O']
-        partial_corr = corr_data.corr()
-        for i in range(len(partial_corr)):
-            for j in range(len(partial_corr)):
-                if i != j:
-                    col_i = partial_corr.columns[i]
-                    col_j = partial_corr.columns[j]
-                    if col_i in corr_data.columns and col_j in corr_data.columns:
-                        r_ij = corr_data[col_i].corr(corr_data[col_j])
-                        r_i_pH = corr_data[col_i].corr(pH2O) if pH2O.notna().sum() > 0 else 0
-                        r_j_pH = corr_data[col_j].corr(pH2O) if pH2O.notna().sum() > 0 else 0
-                        if 1 - r_i_pH**2 > 0 and 1 - r_j_pH**2 > 0:
-                            partial_corr.loc[col_i, col_j] = (r_ij - r_i_pH * r_j_pH) / np.sqrt((1 - r_i_pH**2) * (1 - r_j_pH**2))
+    partial_corr = df_filled.copy()
+    if 'pH2O' in partial_corr.columns:
+        # Remove pH2O and compute partial correlations
+        pH2O = partial_corr['pH2O']
+        for col in partial_corr.columns:
+            if col != 'pH2O':
+                # Regress out pH2O
+                model = LinearRegression()
+                model.fit(pH2O.values.reshape(-1, 1), partial_corr[col].values)
+                partial_corr[col] = partial_corr[col] - model.predict(pH2O.values.reshape(-1, 1))
+        
+        # Compute correlations of residuals
+        partial_corr_matrix = partial_corr.drop('pH2O', axis=1).corr()
+    else:
+        partial_corr_matrix = pd.DataFrame()
     
     # Distance correlation
-    distance_corr = None
-    try:
-        from scipy.spatial.distance import pdist, squareform
-        distance_corr = corr_data.corr()
-    except:
-        pass
+    from scipy.spatial.distance import pdist, squareform
     
-    # Find top correlations with target variables
-    top_correlations = {}
-    target_present = [col for col in target_cols if col in corr_data.columns]
+    def distance_correlation(x, y):
+        n = len(x)
+        # Compute distance matrices
+        dx = squareform(pdist(x.reshape(-1, 1)))
+        dy = squareform(pdist(y.reshape(-1, 1)))
+        # Center matrices
+        dx = dx - dx.mean(axis=0) - dx.mean(axis=1)[:, np.newaxis] + dx.mean()
+        dy = dy - dy.mean(axis=0) - dy.mean(axis=1)[:, np.newaxis] + dy.mean()
+        # Compute distance correlation
+        if np.sum(dx * dy) > 0:
+            dcorr = np.sqrt(np.sum(dx * dy) / (np.sqrt(np.sum(dx**2)) * np.sqrt(np.sum(dy**2)) + 1e-10))
+        else:
+            dcorr = 0
+        return dcorr
     
-    for target in target_present:
-        if target in pearson_corr.columns:
-            corr_series = pearson_corr[target].drop(target)
-            top_positive = corr_series.nlargest(10)
-            top_negative = corr_series.nsmallest(10)
-            top_correlations[target] = {
-                'positive': top_positive,
-                'negative': top_negative,
-                'all': corr_series.sort_values(ascending=False)
-            }
+    # Calculate distance correlation for target columns
+    dcorr_dict = {}
+    for target in target_cols:
+        if target in df_filled.columns:
+            dcorr_dict[target] = {}
+            for col in valid_cols:
+                if col != target:
+                    x = df_filled[target].values
+                    y = df_filled[col].values
+                    # Remove NaN
+                    mask = ~np.isnan(x) & ~np.isnan(y)
+                    if mask.sum() > 3:
+                        dcorr_dict[target][col] = distance_correlation(x[mask], y[mask])
     
-    # Calculate VIF for multicollinearity
-    vif_data = {}
-    if len(corr_data.columns) > 1:
-        try:
-            X = corr_data.dropna()
-            if X.shape[1] > 1 and X.shape[0] > X.shape[1]:
-                vif_data = {}
-                for i, col in enumerate(X.columns):
-                    vif_data[col] = variance_inflation_factor(X.values, i)
-            else:
-                vif_data = {col: np.nan for col in X.columns}
-        except:
-            vif_data = {col: np.nan for col in corr_data.columns}
+    # Feature importance using Random Forest
+    rf_importance = {}
+    for target in target_cols:
+        if target in df_filled.columns:
+            # Prepare data
+            X = df_filled.drop(target, axis=1)
+            y = df_filled[target]
+            
+            # Remove rows with NaN in target
+            mask = y.notna()
+            X = X[mask]
+            y = y[mask]
+            
+            if len(X) > 10 and len(X.columns) > 0:
+                # Fill NaN
+                X = X.fillna(X.median())
+                
+                try:
+                    rf = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+                    rf.fit(X, y)
+                    rf_importance[target] = pd.Series(rf.feature_importances_, 
+                                                     index=X.columns).sort_values(ascending=False)
+                except:
+                    rf_importance[target] = pd.Series()
     
     return {
         'pearson': pearson_corr,
         'spearman': spearman_corr,
-        'partial': partial_corr,
-        'distance': distance_corr,
-        'top_correlations': top_correlations,
-        'vif': vif_data,
-        'valid_cols': valid_cols
+        'p_values': p_values,
+        'partial': partial_corr_matrix,
+        'distance': dcorr_dict,
+        'rf_importance': rf_importance,
+        'valid_cols': valid_cols,
+        'filled_data': df_filled
     }
 
-@st.cache_data
-def find_top_descriptors(correlation_data: Dict, target_cols: List[str], n: int = 20) -> List[str]:
+
+def find_top_descriptors(correlations: Dict, target_cols: List[str], n_top: int = 20) -> List[str]:
     """
     Find top N descriptors based on correlation with target variables.
-    
-    Args:
-        correlation_data: Dictionary from calculate_correlations
-        target_cols: List of target variable names
-        n: Number of top descriptors to return
-        
-    Returns:
-        List of top descriptor names
     """
-    top_descriptors = set()
-    pearson = correlation_data['pearson']
+    if not correlations or 'pearson' not in correlations:
+        return []
     
+    pearson = correlations['pearson']
+    rf_importance = correlations.get('rf_importance', {})
+    
+    # Score each descriptor
+    scores = {}
+    for col in pearson.columns:
+        if col in target_cols:
+            continue
+        
+        score = 0
+        count = 0
+        
+        # Add Pearson correlation with each target
+        for target in target_cols:
+            if target in pearson.index:
+                corr_val = abs(pearson.loc[target, col])
+                if not np.isnan(corr_val):
+                    score += corr_val
+                    count += 1
+        
+        # Add Random Forest importance if available
+        for target in target_cols:
+            if target in rf_importance and col in rf_importance[target].index:
+                imp_val = rf_importance[target][col]
+                if not np.isnan(imp_val):
+                    score += imp_val * 0.5  # Weighted less than correlation
+        
+        if count > 0:
+            scores[col] = score / count
+    
+    # Sort and get top N
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    top_descriptors = [item[0] for item in sorted_scores[:n_top]]
+    
+    # Ensure target columns are included
     for target in target_cols:
-        if target in pearson.columns:
-            corr_series = pearson[target].drop(target)
-            # Get absolute correlations
-            abs_corr = corr_series.abs().sort_values(ascending=False)
-            top_descriptors.update(abs_corr.head(n//len(target_cols) + 1).index.tolist())
+        if target not in top_descriptors and target in pearson.columns:
+            top_descriptors.append(target)
     
-    # Ensure we have at least n descriptors
-    if len(top_descriptors) < n:
-        # Add more from all columns
-        all_cols = pearson.columns.tolist()
-        for col in all_cols:
-            if col not in top_descriptors and col not in target_cols:
-                top_descriptors.add(col)
-                if len(top_descriptors) >= n:
-                    break
-    
-    return list(top_descriptors)[:n]
+    return top_descriptors
 
 # ============================================================================
-# SECTION 8: PCA AND CLUSTERING
+# SECTION 7: PCA AND CLUSTERING
 # ============================================================================
 
 @st.cache_data
-def perform_pca_analysis(df: pd.DataFrame, descriptors: List[str], n_components: int = 10) -> Dict:
+def perform_pca_analysis(df: pd.DataFrame, descriptors: List[str]) -> Dict:
     """
-    Perform PCA analysis on descriptor data.
+    Perform PCA analysis on selected descriptors.
+    """
+    if df.empty or len(descriptors) < 3:
+        return {}
     
-    Args:
-        df: DataFrame with descriptors
-        descriptors: List of descriptor names
-        n_components: Number of PCA components to compute
-        
-    Returns:
-        Dictionary with PCA results
-    """
-    # Prepare data
+    # Select and clean data
     X = df[descriptors].copy()
     
-    # Remove rows with too many NaN
-    X = X.dropna(thresh=len(descriptors)//2)
-    
-    # Impute remaining NaN with median
+    # Fill NaN with median
     for col in X.columns:
-        if X[col].isna().sum() > 0:
-            X[col].fillna(X[col].median(), inplace=True)
+        X[col] = X[col].fillna(X[col].median())
+    
+    # Remove constant columns
+    variance_threshold = VarianceThreshold(threshold=0.01)
+    X_filtered = variance_threshold.fit_transform(X)
+    selected_cols = X.columns[variance_threshold.get_support()].tolist()
+    
+    if len(selected_cols) < 2:
+        return {}
     
     # Standardize
     scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    X_scaled = scaler.fit_transform(X_filtered)
     
     # Perform PCA
-    pca = PCA(n_components=min(n_components, X_scaled.shape[1], X_scaled.shape[0]-1))
-    X_pca = pca.fit_transform(X_scaled)
+    pca = PCA()
+    pca_result = pca.fit_transform(X_scaled)
     
-    # Calculate explained variance
+    # Determine optimal number of components (elbow)
     explained_variance = pca.explained_variance_ratio_
-    cumsum_variance = np.cumsum(explained_variance)
+    cumulative_variance = np.cumsum(explained_variance)
     
-    # Get component loadings
-    loadings = pd.DataFrame(
-        pca.components_.T,
-        columns=[f'PC{i+1}' for i in range(pca.components_.shape[0])],
-        index=X.columns
-    )
+    # Find elbow point
+    n_components_optimal = np.argmax(cumulative_variance > 0.85) + 1
+    
+    # Get loadings
+    loadings = pd.DataFrame(pca.components_[:n_components_optimal].T,
+                           index=selected_cols,
+                           columns=[f'PC{i+1}' for i in range(n_components_optimal)])
     
     return {
         'pca': pca,
-        'X_pca': X_pca,
-        'X_scaled': X_scaled,
-        'explained_variance': explained_variance,
-        'cumsum_variance': cumsum_variance,
-        'loadings': loadings,
         'scaler': scaler,
-        'features': X.columns.tolist()
+        'X_scaled': X_scaled,
+        'pca_result': pca_result,
+        'explained_variance': explained_variance,
+        'cumulative_variance': cumulative_variance,
+        'n_components_optimal': n_components_optimal,
+        'loadings': loadings,
+        'selected_cols': selected_cols,
+        'original_cols': descriptors
     }
 
-@st.cache_data
-def perform_clustering(X_pca: np.ndarray, method: str = 'kmeans', n_clusters: int = 3) -> Dict:
-    """
-    Perform clustering on PCA-transformed data.
-    
-    Args:
-        X_pca: PCA-transformed data
-        method: 'kmeans', 'dbscan', or 'hierarchical'
-        n_clusters: Number of clusters (for kmeans and hierarchical)
-        
-    Returns:
-        Dictionary with clustering results
-    """
-    results = {}
-    
-    if method == 'kmeans':
-        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-        labels = kmeans.fit_predict(X_pca)
-        silhouette = silhouette_score(X_pca, labels) if len(np.unique(labels)) > 1 else 0
-        
-        results = {
-            'labels': labels,
-            'centers': kmeans.cluster_centers_,
-            'silhouette': silhouette,
-            'method': 'kmeans'
-        }
-    
-    elif method == 'dbscan':
-        # Try different eps values
-        best_eps = 0.5
-        best_labels = None
-        best_silhouette = -1
-        
-        for eps in np.linspace(0.1, 2.0, 10):
-            dbscan = DBSCAN(eps=eps, min_samples=5)
-            labels = dbscan.fit_predict(X_pca)
-            n_clusters_db = len(np.unique(labels[labels != -1]))
-            if n_clusters_db >= 2:
-                try:
-                    silhouette = silhouette_score(X_pca[labels != -1], labels[labels != -1])
-                    if silhouette > best_silhouette:
-                        best_silhouette = silhouette
-                        best_labels = labels
-                        best_eps = eps
-                except:
-                    pass
-        
-        results = {
-            'labels': best_labels if best_labels is not None else np.zeros(X_pca.shape[0]),
-            'eps': best_eps,
-            'silhouette': best_silhouette,
-            'method': 'dbscan'
-        }
-    
-    elif method == 'hierarchical':
-        linkage_matrix = linkage(X_pca, method='ward')
-        labels = fcluster(linkage_matrix, n_clusters, criterion='maxclust')
-        silhouette = silhouette_score(X_pca, labels) if len(np.unique(labels)) > 1 else 0
-        
-        results = {
-            'labels': labels,
-            'linkage_matrix': linkage_matrix,
-            'silhouette': silhouette,
-            'method': 'hierarchical'
-        }
-    
-    return results
 
 @st.cache_data
-def perform_tsne(df: pd.DataFrame, descriptors: List[str], perplexity: int = 30) -> np.ndarray:
+def perform_clustering(pca_result: np.ndarray, n_clusters: int = None) -> Dict:
     """
-    Perform t-SNE dimensionality reduction.
+    Perform K-means clustering with optimal cluster number detection.
+    """
+    if pca_result is None or len(pca_result) < 3:
+        return {}
     
-    Args:
-        df: DataFrame with descriptors
-        descriptors: List of descriptor names
-        perplexity: t-SNE perplexity parameter
+    X = pca_result[:, :min(3, pca_result.shape[1])]
+    
+    # Determine optimal number of clusters using silhouette
+    if n_clusters is None:
+        max_clusters = min(10, len(X) // 3)
+        if max_clusters < 2:
+            return {}
         
-    Returns:
-        t-SNE coordinates (n_samples, 2)
+        silhouette_scores = []
+        for k in range(2, max_clusters + 1):
+            kmeans = KMeans(n_clusters=k, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(X)
+            if len(set(labels)) > 1:
+                score = silhouette_score(X, labels)
+                silhouette_scores.append(score)
+            else:
+                silhouette_scores.append(-1)
+        
+        optimal_k = np.argmax(silhouette_scores) + 2 if silhouette_scores else 2
+    else:
+        optimal_k = n_clusters
+    
+    # Perform final clustering
+    kmeans = KMeans(n_clusters=optimal_k, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(X)
+    
+    # Calculate silhouette
+    if len(set(labels)) > 1:
+        silhouette_avg = silhouette_score(X, labels)
+        silhouette_per_sample = silhouette_samples(X, labels)
+    else:
+        silhouette_avg = -1
+        silhouette_per_sample = np.ones(len(X))
+    
+    return {
+        'labels': labels,
+        'centers': kmeans.cluster_centers_,
+        'optimal_k': optimal_k,
+        'silhouette_avg': silhouette_avg,
+        'silhouette_samples': silhouette_per_sample,
+        'kmeans': kmeans,
+        'X_used': X
+    }
+
+# ============================================================================
+# SECTION 8: VISUALIZATION FUNCTIONS
+# ============================================================================
+
+# Plotting functions will be added here
+# Each function returns a matplotlib figure or plotly figure
+
+def create_distribution_plots(df: pd.DataFrame, columns: List[str]) -> plt.Figure:
     """
-    X = df[descriptors].copy()
+    Create distribution histograms for selected columns.
+    """
+    apply_scientific_style()
     
-    # Impute NaN
-    for col in X.columns:
-        if X[col].isna().sum() > 0:
-            X[col].fillna(X[col].median(), inplace=True)
+    n_cols = min(3, len(columns))
+    n_rows = (len(columns) + n_cols - 1) // n_cols
     
-    # Standardize
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(X)
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(12, 4*n_rows))
+    axes = axes.flatten() if n_rows * n_cols > 1 else [axes]
     
-    # t-SNE
-    tsne = TSNE(n_components=2, perplexity=min(perplexity, X_scaled.shape[0]-1), random_state=42)
-    X_tsne = tsne.fit_transform(X_scaled)
-    
-    return X_tsne
-
-# ============================================================================
-# SECTION 9: VISUALIZATION FUNCTIONS
-# ============================================================================
-
-# 9.1 Distribution plots
-def create_distribution_plots(df: pd.DataFrame, descriptors: List[str]) -> plt.Figure:
-    """Create distribution histograms for selected descriptors."""
-    fig, axes = plt.subplots(3, 3, figsize=(15, 12))
-    axes = axes.flatten()
-    
-    n_plots = min(len(descriptors), 9)
-    for i in range(n_plots):
-        col = descriptors[i]
-        if col in df.columns and df[col].notna().sum() > 1:
-            ax = axes[i]
-            df[col].hist(bins=20, alpha=0.7, ax=ax, edgecolor='black', linewidth=0.5)
-            ax.set_xlabel(col, fontsize=10)
-            ax.set_ylabel('Frequency', fontsize=10)
+    for idx, col in enumerate(columns[:len(axes)]):
+        ax = axes[idx]
+        data = df[col].dropna()
+        if len(data) > 0:
+            ax.hist(data, bins=20, edgecolor='black', color='#3498DB', alpha=0.7)
+            ax.set_xlabel(col, fontweight='bold')
+            ax.set_ylabel('Frequency', fontweight='bold')
+            ax.axvline(data.mean(), color='red', linestyle='--', 
+                      label=f'Mean: {data.mean():.3f}')
+            ax.axvline(data.median(), color='green', linestyle='--',
+                      label=f'Median: {data.median():.3f}')
+            ax.legend()
             ax.grid(True, alpha=0.3)
     
     # Hide empty subplots
-    for i in range(n_plots, 9):
-        axes[i].set_visible(False)
+    for idx in range(len(columns), len(axes)):
+        axes[idx].set_visible(False)
     
-    plt.tight_layout()
+    fig.tight_layout()
     return fig
 
-def create_box_plots(df: pd.DataFrame, target_col: str, category_col: str) -> plt.Figure:
-    """Create box plots comparing target variable across categories."""
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    data = df[[target_col, category_col]].dropna()
-    if data.empty or len(data[category_col].unique()) < 2:
-        return fig
-    
-    sns.boxplot(data=data, x=category_col, y=target_col, ax=ax)
-    ax.set_xlabel(category_col, fontsize=12)
-    ax.set_ylabel(target_col, fontsize=12)
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    return fig
 
-def create_violin_plots(df: pd.DataFrame, target_col: str, category_col: str) -> plt.Figure:
-    """Create violin plots for target variable across categories."""
-    fig, ax = plt.subplots(figsize=(10, 6))
+def create_correlation_heatmap(correlation_matrix: pd.DataFrame, title: str = "Correlation Matrix") -> plt.Figure:
+    """
+    Create a heatmap of correlation matrix.
+    """
+    apply_scientific_style()
     
-    data = df[[target_col, category_col]].dropna()
-    if data.empty or len(data[category_col].unique()) < 2:
-        return fig
-    
-    sns.violinplot(data=data, x=category_col, y=target_col, ax=ax)
-    ax.set_xlabel(category_col, fontsize=12)
-    ax.set_ylabel(target_col, fontsize=12)
-    ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    return fig
-
-# 9.2 Correlation plots
-def create_correlation_matrix_plot(corr_matrix: pd.DataFrame, title: str = 'Correlation Matrix') -> plt.Figure:
-    """Create heatmap of correlation matrix."""
     fig, ax = plt.subplots(figsize=(12, 10))
     
-    # Mask upper triangle
-    mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
-    
-    sns.heatmap(
-        corr_matrix, 
-        mask=mask,
-        annot=True, 
-        fmt='.2f',
-        cmap=COLOR_PALETTES['diverging'],
-        center=0,
-        square=True,
-        linewidths=0.5,
-        cbar_kws={"shrink": 0.8},
-        ax=ax
-    )
-    ax.set_title(title, fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
-
-def create_correlation_network_plot(corr_matrix: pd.DataFrame, threshold: float = 0.5) -> plt.Figure:
-    """Create network graph of significant correlations."""
-    fig, ax = plt.subplots(figsize=(14, 10))
-    
-    # Create graph
-    G = nx.Graph()
-    
-    # Add nodes
-    for col in corr_matrix.columns:
-        G.add_node(col)
-    
-    # Add edges for correlations above threshold
-    for i in range(len(corr_matrix.columns)):
-        for j in range(i+1, len(corr_matrix.columns)):
-            corr = corr_matrix.iloc[i, j]
-            if abs(corr) > threshold and not np.isnan(corr):
-                G.add_edge(corr_matrix.columns[i], corr_matrix.columns[j], weight=abs(corr))
-    
-    if len(G.edges()) == 0:
-        ax.text(0.5, 0.5, 'No significant correlations found\nabove threshold', 
-                ha='center', va='center', fontsize=14)
-        ax.set_axis_off()
-        return fig
-    
-    # Position nodes
-    pos = nx.spring_layout(G, k=1, iterations=50)
-    
-    # Draw edges
-    edges = G.edges()
-    weights = [G[u][v]['weight'] for u, v in edges]
-    nx.draw_networkx_edges(G, pos, width=weights, alpha=0.6, ax=ax)
-    
-    # Draw nodes
-    nx.draw_networkx_nodes(G, pos, node_size=500, node_color='lightblue', 
-                          edgecolors='black', linewidths=1.5, ax=ax)
-    
-    # Draw labels
-    nx.draw_networkx_labels(G, pos, font_size=8, font_weight='bold', ax=ax)
-    
-    ax.set_title(f'Correlation Network (|corr| > {threshold})', fontsize=14, fontweight='bold')
-    ax.set_axis_off()
-    
-    plt.tight_layout()
-    return fig
-
-def create_pairplot_colored(df: pd.DataFrame, features: List[str], hue_col: str) -> plt.Figure:
-    """Create pairplot with color coding."""
-    if len(features) < 2:
-        fig, ax = plt.subplots(figsize=(6, 4))
-        ax.text(0.5, 0.5, 'Need at least 2 features for pairplot', 
-                ha='center', va='center', fontsize=14)
-        return fig
-    
-    data = df[features + [hue_col] if hue_col in df.columns else features].dropna()
-    
-    if hue_col in df.columns and len(data[hue_col].unique()) <= 10:
-        g = sns.pairplot(data, vars=features, hue=hue_col, 
-                        diag_kind='kde', plot_kws={'alpha': 0.6})
-    else:
-        g = sns.pairplot(data, vars=features, 
-                        diag_kind='kde', plot_kws={'alpha': 0.6})
-    
-    plt.suptitle('Pairplot of Top Features', y=1.02, fontsize=14, fontweight='bold')
-    return g.fig
-
-def create_scatter_regression(df: pd.DataFrame, x_col: str, y_col: str) -> plt.Figure:
-    """Create scatter plot with regression line."""
-    fig, ax = plt.subplots(figsize=(8, 6))
-    
-    data = df[[x_col, y_col]].dropna()
-    if data.empty:
-        ax.text(0.5, 0.5, 'No data available', ha='center', va='center', fontsize=14)
-        return fig
-    
-    # Scatter
-    ax.scatter(data[x_col], data[y_col], alpha=0.6, s=30, color='#2C3E50')
-    
-    # Regression
-    from sklearn.linear_model import LinearRegression
-    X = data[[x_col]].values
-    y = data[y_col].values
-    
-    if len(X) > 1:
-        reg = LinearRegression()
-        reg.fit(X, y)
-        y_pred = reg.predict(X)
-        
-        # Plot regression line
-        x_line = np.linspace(X.min(), X.max(), 100)
-        y_line = reg.predict(x_line.reshape(-1, 1))
-        ax.plot(x_line, y_line, color='#E74C3C', linewidth=2, label='Regression')
-        
-        # R² and p-value
-        r2 = reg.score(X, y)
-        slope, intercept = reg.coef_[0], reg.intercept_
-        p_value = None
-        try:
-            from scipy import stats
-            _, p_value, _, _ = stats.linregress(X.flatten(), y)
-        except:
-            pass
-        
-        # Annotation
-        annotation = f'R² = {r2:.3f}'
-        if p_value is not None:
-            annotation += f'\np = {p_value:.3e}'
-        annotation += f'\ny = {slope:.3f}x + {intercept:.3f}'
-        ax.annotate(annotation, xy=(0.05, 0.95), xycoords='axes fraction',
-                    verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-    
-    ax.set_xlabel(x_col, fontsize=12, fontweight='bold')
-    ax.set_ylabel(y_col, fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    
-    plt.tight_layout()
-    return fig
-
-def create_residual_plot(df: pd.DataFrame, x_col: str, y_col: str) -> plt.Figure:
-    """Create residual plot for regression."""
-    fig, ax = plt.subplots(figsize=(8, 6))
-    
-    data = df[[x_col, y_col]].dropna()
-    if data.empty:
-        ax.text(0.5, 0.5, 'No data available', ha='center', va='center', fontsize=14)
-        return fig
-    
-    # Fit regression
-    X = data[[x_col]].values
-    y = data[y_col].values
-    
-    if len(X) > 1:
-        reg = LinearRegression()
-        reg.fit(X, y)
-        y_pred = reg.predict(X)
-        residuals = y - y_pred
-        
-        # Plot residuals
-        ax.scatter(y_pred, residuals, alpha=0.6, s=30, color='#2C3E50')
-        ax.axhline(y=0, color='#E74C3C', linestyle='--', linewidth=2)
-        
-        ax.set_xlabel('Predicted Values', fontsize=12, fontweight='bold')
-        ax.set_ylabel('Residuals', fontsize=12, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-    
-    plt.tight_layout()
-    return fig
-
-# 9.3 PCA and clustering plots
-def create_pca_biplot(pca_results: Dict, n_components: int = 2) -> plt.Figure:
-    """Create PCA biplot."""
-    if n_components > 2:
-        n_components = 2
-    
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    X_pca = pca_results['X_pca']
-    loadings = pca_results['loadings']
-    features = pca_results['features']
-    
-    # Scatter
-    ax.scatter(X_pca[:, 0], X_pca[:, 1], alpha=0.5, s=30, color='#2C3E50')
-    
-    # Loadings (arrows)
-    for i, feature in enumerate(features):
-        if i < len(loadings):
-            x = loadings.iloc[i, 0] * 3
-            y = loadings.iloc[i, 1] * 3
-            ax.arrow(0, 0, x, y, head_width=0.05, head_length=0.05, 
-                    fc='#E74C3C', ec='#E74C3C', alpha=0.7)
-            ax.text(x*1.1, y*1.1, feature, fontsize=8, color='#E74C3C')
-    
-    ax.set_xlabel(f'PC1 ({pca_results["explained_variance"][0]*100:.1f}%)', fontsize=12)
-    ax.set_ylabel(f'PC2 ({pca_results["explained_variance"][1]*100:.1f}%)', fontsize=12)
-    ax.grid(True, alpha=0.3)
-    ax.set_title('PCA Biplot', fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
-
-def create_pca_3d(pca_results: Dict) -> go.Figure:
-    """Create interactive 3D PCA plot."""
-    X_pca = pca_results['X_pca']
-    explained = pca_results['explained_variance']
-    
-    fig = go.Figure(data=[
-        go.Scatter3d(
-            x=X_pca[:, 0],
-            y=X_pca[:, 1],
-            z=X_pca[:, 2] if X_pca.shape[1] > 2 else np.zeros_like(X_pca[:, 0]),
-            mode='markers',
-            marker=dict(
-                size=5,
-                color=X_pca[:, 0],
-                colorscale='Viridis',
-                showscale=True,
-                opacity=0.8
-            ),
-            text=[f'PC1: {x:.2f}, PC2: {y:.2f}, PC3: {z:.2f}' 
-                  for x, y, z in zip(X_pca[:, 0], X_pca[:, 1], 
-                                    X_pca[:, 2] if X_pca.shape[1] > 2 else np.zeros_like(X_pca[:, 0]))],
-            hoverinfo='text'
-        )
-    ])
-    
-    fig.update_layout(
-        scene=dict(
-            xaxis_title=f'PC1 ({explained[0]*100:.1f}%)',
-            yaxis_title=f'PC2 ({explained[1]*100:.1f}%)',
-            zaxis_title=f'PC3 ({explained[2]*100:.1f}%)' if len(explained) > 2 else 'PC3',
-        ),
-        title='3D PCA Visualization',
-        width=800,
-        height=600
-    )
-    
-    return fig
-
-def create_tsne_plot(X_tsne: np.ndarray, labels: Optional[np.ndarray] = None) -> plt.Figure:
-    """Create t-SNE visualization."""
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    if labels is not None:
-        scatter = ax.scatter(X_tsne[:, 0], X_tsne[:, 1], c=labels, 
-                           cmap=COLOR_PALETTES['categorical'], alpha=0.6, s=30)
-        ax.legend(*scatter.legend_elements(), title='Cluster')
-    else:
-        ax.scatter(X_tsne[:, 0], X_tsne[:, 1], alpha=0.6, s=30, color='#2C3E50')
-    
-    ax.set_xlabel('t-SNE Component 1', fontsize=12)
-    ax.set_ylabel('t-SNE Component 2', fontsize=12)
-    ax.grid(True, alpha=0.3)
-    ax.set_title('t-SNE Visualization', fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
-
-def create_silhouette_plot(X: np.ndarray, labels: np.ndarray) -> plt.Figure:
-    """Create silhouette plot."""
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    try:
-        silhouette_vals = silhouette_samples(X, labels)
-        n_clusters = len(np.unique(labels))
-        
-        y_lower = 10
-        for i in range(n_clusters):
-            cluster_vals = silhouette_vals[labels == i]
-            cluster_vals.sort()
-            cluster_size = len(cluster_vals)
-            y_upper = y_lower + cluster_size
-            
-            color = cm.nipy_spectral(float(i) / n_clusters)
-            ax.fill_betweenx(np.arange(y_lower, y_upper), 0, cluster_vals,
-                             facecolor=color, edgecolor=color, alpha=0.7)
-            
-            ax.text(-0.05, y_lower + 0.5 * cluster_size, str(i), fontsize=10)
-            y_lower = y_upper + 10
-        
-        ax.axvline(x=silhouette_score(X, labels), color="red", linestyle="--")
-        ax.set_xlabel("Silhouette Coefficient", fontsize=12)
-        ax.set_ylabel("Cluster", fontsize=12)
-        ax.set_title("Silhouette Plot", fontsize=14, fontweight='bold')
-        ax.grid(True, alpha=0.3)
-        
-    except:
-        ax.text(0.5, 0.5, 'Silhouette analysis failed', ha='center', va='center', fontsize=14)
-        ax.set_axis_off()
-    
-    plt.tight_layout()
-    return fig
-
-def create_cluster_profiles(df: pd.DataFrame, cluster_col: str, descriptors: List[str]) -> plt.Figure:
-    """Create heatmap of cluster profiles."""
-    fig, ax = plt.subplots(figsize=(12, 8))
-    
-    # Calculate mean values per cluster
-    cluster_means = df.groupby(cluster_col)[descriptors].mean()
-    
-    # Standardize
-    from sklearn.preprocessing import StandardScaler
-    scaler = StandardScaler()
-    cluster_means_scaled = pd.DataFrame(
-        scaler.fit_transform(cluster_means),
-        index=cluster_means.index,
-        columns=cluster_means.columns
-    )
-    
-    # Heatmap
-    sns.heatmap(cluster_means_scaled, annot=True, fmt='.2f', cmap='RdBu_r',
-                center=0, ax=ax, cbar_kws={'label': 'Standardized Value'})
-    ax.set_title('Cluster Profiles (Standardized Mean Values)', fontsize=14, fontweight='bold')
-    ax.set_xlabel('Descriptors', fontsize=12)
-    ax.set_ylabel('Cluster', fontsize=12)
-    
-    plt.tight_layout()
-    return fig
-
-# 9.4 Concentration maps
-def create_concentration_heatmap(df: pd.DataFrame, x_col: str, y_col: str, 
-                                 color_col: str, title: str = '') -> go.Figure:
-    """Create interactive concentration heatmap."""
-    data = df[[x_col, y_col, color_col]].dropna()
-    
-    if data.empty:
-        fig = go.Figure()
-        fig.add_annotation(text='No data available', x=0.5, y=0.5, showarrow=False)
-        return fig
-    
-    # Create grid
-    x_grid = np.linspace(data[x_col].min(), data[x_col].max(), 50)
-    y_grid = np.linspace(data[y_col].min(), data[y_col].max(), 50)
-    X_grid, Y_grid = np.meshgrid(x_grid, y_grid)
-    
-    # Interpolate
-    try:
-        Z_grid = griddata(
-            (data[x_col].values, data[y_col].values),
-            data[color_col].values,
-            (X_grid, Y_grid),
-            method='cubic'
-        )
-    except:
-        Z_grid = np.zeros_like(X_grid)
+    # Create mask for upper triangle
+    mask = np.triu(np.ones_like(correlation_matrix, dtype=bool))
     
     # Create heatmap
-    fig = go.Figure(data=go.Heatmap(
-        x=x_grid,
-        y=y_grid,
-        z=Z_grid,
-        colorscale='Viridis',
-        hovertemplate='X: %{x:.3f}<br>Y: %{y:.3f}<br>Value: %{z:.3f}<extra></extra>'
-    ))
+    sns.heatmap(correlation_matrix, mask=mask, annot=True, fmt='.2f',
+                cmap='coolwarm', center=0, square=True, 
+                linewidths=0.5, cbar_kws={"shrink": 0.8},
+                ax=ax, annot_kws={'size': 8})
     
-    # Add original points
-    fig.add_trace(go.Scatter(
-        x=data[x_col],
-        y=data[y_col],
-        mode='markers',
-        marker=dict(
-            size=5,
-            color='white',
-            line=dict(color='black', width=1)
-        ),
-        text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{color_col}: {c:.3f}' 
-              for x, y, c in zip(data[x_col], data[y_col], data[color_col])],
-        hoverinfo='text',
-        name='Data points'
-    ))
-    
-    fig.update_layout(
-        title=title or f'{color_col} vs {x_col} and {y_col}',
-        xaxis_title=x_col,
-        yaxis_title=y_col,
-        width=800,
-        height=600,
-        template='plotly_white'
-    )
-    
+    ax.set_title(title, fontweight='bold', fontsize=14)
+    plt.tight_layout()
     return fig
 
-def create_concentration_contour(df: pd.DataFrame, x_col: str, y_col: str, 
-                                 color_col: str, title: str = '') -> plt.Figure:
-    """Create contour plot for concentration maps."""
-    fig, ax = plt.subplots(figsize=(10, 8))
+
+def create_pairplot(df: pd.DataFrame, features: List[str], hue_col: str = None) -> plt.Figure:
+    """
+    Create a pairplot of selected features.
+    """
+    apply_scientific_style()
     
-    data = df[[x_col, y_col, color_col]].dropna()
+    # Prepare data
+    plot_data = df[features].copy()
     
-    if data.empty:
-        ax.text(0.5, 0.5, 'No data available', ha='center', va='center', fontsize=14)
+    # Add hue if provided
+    if hue_col and hue_col in df.columns:
+        plot_data[hue_col] = df[hue_col]
+        g = sns.pairplot(plot_data, vars=features, hue=hue_col, 
+                        diag_kind='kde', plot_kws={'alpha': 0.6})
+    else:
+        g = sns.pairplot(plot_data, diag_kind='kde', plot_kws={'alpha': 0.6})
+    
+    # Adjust figure
+    fig = g.figure
+    fig.set_size_inches(12, 10)
+    plt.tight_layout()
+    return fig
+
+
+def create_scatter_with_regression(df: pd.DataFrame, x_col: str, y_col: str, 
+                                  color_col: str = None) -> plt.Figure:
+    """
+    Create a scatter plot with regression line.
+    """
+    apply_scientific_style()
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Prepare data
+    valid_mask = df[x_col].notna() & df[y_col].notna()
+    x_data = df[x_col][valid_mask]
+    y_data = df[y_col][valid_mask]
+    
+    if len(x_data) < 3:
+        ax.text(0.5, 0.5, 'Insufficient data points', 
+                ha='center', va='center', transform=ax.transAxes)
         return fig
     
-    # Create grid
-    x_grid = np.linspace(data[x_col].min(), data[x_col].max(), 50)
-    y_grid = np.linspace(data[y_col].min(), data[y_col].max(), 50)
-    X_grid, Y_grid = np.meshgrid(x_grid, y_grid)
+    # Create scatter
+    if color_col and color_col in df.columns:
+        scatter = ax.scatter(x_data, y_data, c=df[color_col][valid_mask],
+                           cmap='viridis', alpha=0.7, s=50)
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label(color_col, fontweight='bold')
+    else:
+        ax.scatter(x_data, y_data, color='#3498DB', alpha=0.7, s=50)
     
-    # Interpolate
-    try:
-        Z_grid = griddata(
-            (data[x_col].values, data[y_col].values),
-            data[color_col].values,
-            (X_grid, Y_grid),
-            method='cubic'
-        )
-    except:
-        Z_grid = np.zeros_like(X_grid)
+    # Add regression line
+    if len(x_data) > 2:
+        model = LinearRegression()
+        model.fit(x_data.values.reshape(-1, 1), y_data.values)
+        x_range = np.linspace(x_data.min(), x_data.max(), 100)
+        y_range = model.predict(x_range.reshape(-1, 1))
+        ax.plot(x_range, y_range, 'r-', linewidth=2, label='Regression')
+        
+        # Add statistics
+        r2 = model.score(x_data.values.reshape(-1, 1), y_data.values)
+        ax.text(0.05, 0.95, f'R² = {r2:.3f}', transform=ax.transAxes,
+               verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        
+        # Add equation
+        eq_text = f'y = {model.coef_[0]:.3f}x + {model.intercept_:.3f}'
+        ax.text(0.05, 0.88, eq_text, transform=ax.transAxes,
+               verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
     
-    # Contour plot
-    contour = ax.contourf(X_grid, Y_grid, Z_grid, 20, cmap='viridis', alpha=0.8)
-    ax.contour(X_grid, Y_grid, Z_grid, 10, colors='black', linewidths=0.5, alpha=0.3)
-    
-    # Colorbar
-    cbar = plt.colorbar(contour, ax=ax)
-    cbar.set_label(color_col, fontsize=12)
-    
-    # Scatter points
-    ax.scatter(data[x_col], data[y_col], c='white', s=20, edgecolors='black', linewidth=0.5, alpha=0.7)
-    
-    ax.set_xlabel(x_col, fontsize=12, fontweight='bold')
-    ax.set_ylabel(y_col, fontsize=12, fontweight='bold')
+    ax.set_xlabel(x_col, fontweight='bold')
+    ax.set_ylabel(y_col, fontweight='bold')
+    ax.legend()
     ax.grid(True, alpha=0.3)
-    ax.set_title(title or f'{color_col} Contour Map', fontsize=14, fontweight='bold')
     
     plt.tight_layout()
     return fig
 
-def create_ternary_plot(df: pd.DataFrame, comp_cols: List[str], color_col: str) -> go.Figure:
-    """Create ternary plot for compositional data."""
-    data = df[comp_cols + [color_col]].dropna()
+
+def create_pca_biplot(pca_result: np.ndarray, loadings: pd.DataFrame, 
+                     labels: np.ndarray = None, title: str = "PCA Biplot") -> plt.Figure:
+    """
+    Create a PCA biplot with loadings and projections.
+    """
+    apply_scientific_style()
     
-    if data.empty or len(comp_cols) != 3:
+    fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Projections
+    if labels is not None:
+        scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], 
+                           c=labels, cmap='tab10', alpha=0.7, s=50)
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label('Cluster', fontweight='bold')
+    else:
+        ax.scatter(pca_result[:, 0], pca_result[:, 1], 
+                  color='#3498DB', alpha=0.7, s=50)
+    
+    # Loadings (vectors)
+    n_loadings = min(10, len(loadings))
+    for i in range(n_loadings):
+        vector = loadings.iloc[i, :2].values
+        if np.linalg.norm(vector) > 0.1:
+            ax.arrow(0, 0, vector[0] * 3, vector[1] * 3, 
+                    head_width=0.05, head_length=0.05, fc='red', ec='red')
+            ax.text(vector[0] * 3.2, vector[1] * 3.2, 
+                   loadings.index[i], fontsize=9, color='red')
+    
+    ax.axhline(0, color='black', linestyle='-', linewidth=0.5)
+    ax.axvline(0, color='black', linestyle='-', linewidth=0.5)
+    ax.set_xlabel('Principal Component 1', fontweight='bold')
+    ax.set_ylabel('Principal Component 2', fontweight='bold')
+    ax.set_title(title, fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
+
+def create_plotly_concentration_heatmap(df: pd.DataFrame, x_col: str, y_col: str, 
+                                       color_col: str, filters: Dict = None) -> go.Figure:
+    """
+    Create an interactive 2D concentration heatmap using Plotly.
+    """
+    # Prepare data
+    plot_data = df[[x_col, y_col, color_col]].dropna()
+    
+    if filters:
+        for key, value in filters.items():
+            if key in df.columns:
+                plot_data = plot_data[plot_data[key] == value]
+    
+    if len(plot_data) < 4:
         fig = go.Figure()
-        fig.add_annotation(text='Need exactly 3 composition columns', x=0.5, y=0.5, showarrow=False)
+        fig.add_annotation(text="Insufficient data points for heatmap", 
+                          showarrow=False, font=dict(size=16))
         return fig
     
-    fig = go.Figure(data=go.Scatterternary(
-        a=data[comp_cols[0]],
-        b=data[comp_cols[1]],
-        c=data[comp_cols[2]],
+    # Create heatmap using scatter with interpolation
+    fig = go.Figure()
+    
+    # Add scatter points
+    fig.add_trace(go.Scatter(
+        x=plot_data[x_col],
+        y=plot_data[y_col],
         mode='markers',
         marker=dict(
-            size=8,
-            color=data[color_col],
+            size=10,
+            color=plot_data[color_col],
             colorscale='Viridis',
             showscale=True,
-            colorbar=dict(title=color_col)
+            colorbar=dict(title=color_col),
+            line=dict(width=1, color='black')
         ),
-        text=[f'{comp_cols[0]}: {a:.3f}<br>{comp_cols[1]}: {b:.3f}<br>{comp_cols[2]}: {c:.3f}<br>{color_col}: {col:.3f}' 
-              for a, b, c, col in zip(data[comp_cols[0]], data[comp_cols[1]], 
-                                      data[comp_cols[2]], data[color_col])],
+        text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{color_col}: {c:.3f}' 
+              for x, y, c in zip(plot_data[x_col], plot_data[y_col], plot_data[color_col])],
         hoverinfo='text'
     ))
     
     fig.update_layout(
-        title=f'Ternary Plot: {color_col}',
-        ternary=dict(
-            sum=1,
-            aaxis=dict(title=comp_cols[0], min=0, max=1),
-            baxis=dict(title=comp_cols[1], min=0, max=1),
-            caxis=dict(title=comp_cols[2], min=0, max=1)
-        ),
-        width=800,
-        height=600,
-        template='plotly_white'
-    )
-    
-    return fig
-
-# 9.5 Bubble charts
-def create_bubble_4d(df: pd.DataFrame, x_col: str, y_col: str, 
-                     color_col: str, size_col: str, shape_col: Optional[str] = None) -> go.Figure:
-    """Create 4D bubble chart."""
-    data = df[[x_col, y_col, color_col, size_col] + ([shape_col] if shape_col else [])].dropna()
-    
-    if data.empty:
-        fig = go.Figure()
-        fig.add_annotation(text='No data available', x=0.5, y=0.5, showarrow=False)
-        return fig
-    
-    # Marker symbols
-    symbols = ['circle', 'square', 'diamond', 'triangle-up', 'star']
-    
-    if shape_col and shape_col in data.columns:
-        unique_shapes = data[shape_col].unique()
-        shape_map = {val: symbols[i % len(symbols)] for i, val in enumerate(unique_shapes)}
-        data['symbol'] = data[shape_col].map(shape_map)
-    else:
-        data['symbol'] = 'circle'
-    
-    fig = go.Figure()
-    
-    # Create traces for each shape category
-    if shape_col and shape_col in data.columns:
-        for shape_val in data[shape_col].unique():
-            subset = data[data[shape_col] == shape_val]
-            if not subset.empty:
-                fig.add_trace(go.Scatter(
-                    x=subset[x_col],
-                    y=subset[y_col],
-                    mode='markers',
-                    marker=dict(
-                        size=subset[size_col] * 20 + 5,
-                        color=subset[color_col],
-                        colorscale='Viridis',
-                        showscale=True,
-                        symbol=subset['symbol'].iloc[0],
-                        sizemode='diameter',
-                        sizeref=2.0,
-                        colorbar=dict(title=color_col)
-                    ),
-                    text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{color_col}: {c:.3f}<br>{size_col}: {s:.3f}' 
-                          for x, y, c, s in zip(subset[x_col], subset[y_col], 
-                                               subset[color_col], subset[size_col])],
-                    hoverinfo='text',
-                    name=f'{shape_col}={shape_val}'
-                ))
-    else:
-        fig.add_trace(go.Scatter(
-            x=data[x_col],
-            y=data[y_col],
-            mode='markers',
-            marker=dict(
-                size=data[size_col] * 20 + 5,
-                color=data[color_col],
-                colorscale='Viridis',
-                showscale=True,
-                sizemode='diameter',
-                sizeref=2.0,
-                colorbar=dict(title=color_col)
-            ),
-            text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{color_col}: {c:.3f}<br>{size_col}: {s:.3f}' 
-                  for x, y, c, s in zip(data[x_col], data[y_col], data[color_col], data[size_col])],
-            hoverinfo='text'
-        ))
-    
-    fig.update_layout(
-        title=f'4D Bubble Chart: {y_col} vs {x_col}',
+        title=f'Concentration Map: {color_col} vs {x_col} and {y_col}',
         xaxis_title=x_col,
         yaxis_title=y_col,
-        width=800,
-        height=600,
         template='plotly_white',
-        hovermode='closest'
+        height=600,
+        width=800
     )
     
     return fig
 
-def create_compositional_bubble(df: pd.DataFrame, x_col: str, y_col: str, 
-                                color_col: str, size_col: str) -> go.Figure:
-    """Create compositional bubble chart."""
-    data = df[[x_col, y_col, color_col, size_col]].dropna()
+
+def create_plotly_bubble_chart(df: pd.DataFrame, x_col: str, y_col: str, 
+                              color_col: str, size_col: str, shape_col: str = None,
+                              filters: Dict = None) -> go.Figure:
+    """
+    Create an interactive 4D bubble chart using Plotly.
+    """
+    # Prepare data
+    plot_data = df[[x_col, y_col, color_col, size_col]].dropna()
     
-    if data.empty:
+    if shape_col and shape_col in df.columns:
+        plot_data[shape_col] = df[shape_col]
+    
+    if filters:
+        for key, value in filters.items():
+            if key in df.columns:
+                plot_data = plot_data[plot_data[key] == value]
+    
+    if len(plot_data) < 3:
         fig = go.Figure()
-        fig.add_annotation(text='No data available', x=0.5, y=0.5, showarrow=False)
+        fig.add_annotation(text="Insufficient data points", 
+                          showarrow=False, font=dict(size=16))
         return fig
     
+    # Define shapes
+    shape_map = {
+        'circle': 'circle',
+        'square': 'square',
+        'diamond': 'diamond',
+        'triangle-up': 'triangle-up',
+        'star': 'star',
+        'pentagon': 'pentagon',
+        'hexagon': 'hexagon',
+        'cross': 'x'
+    }
+    
+    # Create bubble chart
     fig = go.Figure()
     
-    # Group by color column if categorical
-    if color_col in df.columns and df[color_col].dtype == 'object':
-        for category in data[color_col].unique():
-            subset = data[data[color_col] == category]
-            if not subset.empty:
-                fig.add_trace(go.Scatter(
-                    x=subset[x_col],
-                    y=subset[y_col],
-                    mode='markers',
-                    marker=dict(
-                        size=subset[size_col] * 20 + 5,
-                        sizemode='diameter',
-                        sizeref=2.0,
-                    ),
-                    name=str(category),
-                    text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{size_col}: {s:.3f}' 
-                          for x, y, s in zip(subset[x_col], subset[y_col], subset[size_col])],
-                    hoverinfo='text'
-                ))
+    if shape_col and shape_col in plot_data.columns:
+        # Separate by shape category
+        for category in plot_data[shape_col].unique():
+            data = plot_data[plot_data[shape_col] == category]
+            fig.add_trace(go.Scatter(
+                x=data[x_col],
+                y=data[y_col],
+                mode='markers',
+                marker=dict(
+                    size=data[size_col] * 30 + 5,
+                    color=data[color_col],
+                    colorscale='Viridis',
+                    showscale=True if category == plot_data[shape_col].unique()[0] else False,
+                    symbol=shape_map.get(str(category).lower(), 'circle'),
+                    line=dict(width=1, color='black'),
+                    sizemode='diameter',
+                    sizeref=2. * max(plot_data[size_col]) / (40. ** 2),
+                    sizemin=4
+                ),
+                name=f'{shape_col}: {category}',
+                text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{color_col}: {c:.3f}<br>{size_col}: {s:.3f}' 
+                      for x, y, c, s in zip(data[x_col], data[y_col], data[color_col], data[size_col])],
+                hoverinfo='text'
+            ))
     else:
         fig.add_trace(go.Scatter(
-            x=data[x_col],
-            y=data[y_col],
+            x=plot_data[x_col],
+            y=plot_data[y_col],
             mode='markers',
             marker=dict(
-                size=data[size_col] * 20 + 5,
-                color=data[color_col],
+                size=plot_data[size_col] * 30 + 5,
+                color=plot_data[color_col],
                 colorscale='Viridis',
                 showscale=True,
+                colorbar=dict(title=color_col),
+                line=dict(width=1, color='black'),
                 sizemode='diameter',
-                sizeref=2.0,
-                colorbar=dict(title=color_col)
+                sizeref=2. * max(plot_data[size_col]) / (40. ** 2),
+                sizemin=4
             ),
             text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{color_col}: {c:.3f}<br>{size_col}: {s:.3f}' 
-                  for x, y, c, s in zip(data[x_col], data[y_col], data[color_col], data[size_col])],
+                  for x, y, c, s in zip(plot_data[x_col], plot_data[y_col], 
+                                       plot_data[color_col], plot_data[size_col])],
             hoverinfo='text'
         ))
     
     fig.update_layout(
-        title=f'Compositional Bubble Chart: {y_col} vs {x_col}',
+        title=f'Bubble Chart: {y_col} vs {x_col}',
         xaxis_title=x_col,
         yaxis_title=y_col,
-        width=800,
+        template='plotly_white',
         height=600,
-        template='plotly_white'
+        width=900,
+        legend=dict(x=1.05, y=1, bgcolor='rgba(255,255,255,0.8)')
     )
     
     return fig
 
-# 9.6 Specialized plots
-def create_alpha_beta_compromise(df: pd.DataFrame, color_col: Optional[str] = None) -> plt.Figure:
-    """Create α vs β compromise diagram."""
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    data = df[['α·106 (K-1)', 'β', color_col] if color_col in df.columns else ['α·106 (K-1)', 'β']].dropna()
-    
-    if data.empty:
-        ax.text(0.5, 0.5, 'No data available', ha='center', va='center', fontsize=14)
-        return fig
-    
-    if color_col in data.columns:
-        scatter = ax.scatter(data['α·106 (K-1)'], data['β'], 
-                           c=data[color_col].astype('category').cat.codes,
-                           cmap='viridis', alpha=0.6, s=50)
-        ax.legend(*scatter.legend_elements(), title=color_col)
-    else:
-        ax.scatter(data['α·106 (K-1)'], data['β'], alpha=0.6, s=50, color='#2C3E50')
-    
-    # Add optimal region annotation
-    ax.axvline(x=11, color='green', linestyle='--', alpha=0.5, label='α = 11×10⁻⁶ K⁻¹ (typical SOFC)')
-    ax.axhline(y=0.05, color='red', linestyle='--', alpha=0.5, label='β = 0.05 (high chemical expansion)')
-    
-    ax.set_xlabel('α·10⁶ (K⁻¹) - Thermal Expansion', fontsize=12, fontweight='bold')
-    ax.set_ylabel('β - Chemical Expansion Coefficient', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-    ax.set_title('α vs β: Compromise Diagram', fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
 
-def create_t_bends_analysis(df: pd.DataFrame, color_col: Optional[str] = None) -> plt.Figure:
-    """Create T(bends) analysis plot."""
-    fig, ax = plt.subplots(figsize=(10, 8))
+def create_plotly_3d_scatter(df: pd.DataFrame, x_col: str, y_col: str, z_col: str,
+                            color_col: str = None, size_col: str = None,
+                            filters: Dict = None) -> go.Figure:
+    """
+    Create an interactive 3D scatter plot using Plotly.
+    """
+    plot_data = df[[x_col, y_col, z_col]].dropna()
     
-    data = df[['T_bends_first', 'delta_calc', color_col] if color_col in df.columns else ['T_bends_first', 'delta_calc']].dropna()
+    if color_col and color_col in df.columns:
+        plot_data[color_col] = df[color_col]
+    if size_col and size_col in df.columns:
+        plot_data[size_col] = df[size_col]
     
-    if data.empty or 'T_bends_first' not in data.columns:
-        ax.text(0.5, 0.5, 'No T(bends) data available', ha='center', va='center', fontsize=14)
-        return fig
+    if filters:
+        for key, value in filters.items():
+            if key in df.columns:
+                plot_data = plot_data[plot_data[key] == value]
     
-    if color_col in data.columns:
-        scatter = ax.scatter(data['delta_calc'], data['T_bends_first'], 
-                           c=data[color_col].astype('category').cat.codes,
-                           cmap='viridis', alpha=0.6, s=50)
-        ax.legend(*scatter.legend_elements(), title=color_col)
-    else:
-        ax.scatter(data['delta_calc'], data['T_bends_first'], alpha=0.6, s=50, color='#2C3E50')
-    
-    ax.set_xlabel('δ - Oxygen Vacancy Concentration', fontsize=12, fontweight='bold')
-    ax.set_ylabel('T(bends) - First Bending Temperature (°C)', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.set_title('T(bends) vs δ Analysis', fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
-
-def create_beta_vs_ph2o(df: pd.DataFrame, color_col: Optional[str] = None) -> plt.Figure:
-    """Create β vs pH₂O plot."""
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    data = df[['β', 'pH2O', color_col] if color_col in df.columns else ['β', 'pH2O']].dropna()
-    
-    if data.empty:
-        ax.text(0.5, 0.5, 'No data available', ha='center', va='center', fontsize=14)
-        return fig
-    
-    # Log scale for pH2O
-    data['log_pH2O'] = np.log10(data['pH2O'])
-    
-    if color_col in data.columns:
-        scatter = ax.scatter(data['log_pH2O'], data['β'], 
-                           c=data[color_col].astype('category').cat.codes,
-                           cmap='viridis', alpha=0.6, s=50)
-        ax.legend(*scatter.legend_elements(), title=color_col)
-    else:
-        ax.scatter(data['log_pH2O'], data['β'], alpha=0.6, s=50, color='#2C3E50')
-    
-    ax.set_xlabel('log(pH₂O)', fontsize=12, fontweight='bold')
-    ax.set_ylabel('β - Chemical Expansion Coefficient', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.set_title('β vs pH₂O: Effect of Water Vapor', fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
-
-def create_alpha_vs_geometric(df: pd.DataFrame, geo_col: str = 'rAav') -> plt.Figure:
-    """Create α vs geometric descriptor plot."""
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    data = df[['α·106 (K-1)', geo_col, 'B_type']].dropna()
-    
-    if data.empty:
-        ax.text(0.5, 0.5, 'No data available', ha='center', va='center', fontsize=14)
-        return fig
-    
-    for b_type in data['B_type'].unique():
-        subset = data[data['B_type'] == b_type]
-        if not subset.empty:
-            ax.scatter(subset[geo_col], subset['α·106 (K-1)'], 
-                      label=b_type, alpha=0.6, s=40)
-    
-    ax.set_xlabel(geo_col, fontsize=12, fontweight='bold')
-    ax.set_ylabel('α·10⁶ (K⁻¹) - Thermal Expansion', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.legend(title='B-cation')
-    ax.set_title(f'α vs {geo_col}', fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
-
-def create_beta_vs_electronegativity(df: pd.DataFrame) -> plt.Figure:
-    """Create β vs electronegativity plot."""
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    data = df[['β', 'chiBav', 'B_type']].dropna()
-    
-    if data.empty:
-        ax.text(0.5, 0.5, 'No data available', ha='center', va='center', fontsize=14)
-        return fig
-    
-    for b_type in data['B_type'].unique():
-        subset = data[data['B_type'] == b_type]
-        if not subset.empty:
-            ax.scatter(subset['chiBav'], subset['β'], 
-                      label=b_type, alpha=0.6, s=40)
-    
-    ax.set_xlabel('χBav - Average Electronegativity of B-site', fontsize=12, fontweight='bold')
-    ax.set_ylabel('β - Chemical Expansion Coefficient', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.legend(title='B-cation')
-    ax.set_title('β vs χBav: Effect of B-site Electronegativity', fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
-
-def create_radar_chart(df: pd.DataFrame, cluster_col: str, descriptors: List[str]) -> plt.Figure:
-    """Create radar chart for cluster comparison."""
-    fig, ax = plt.subplots(figsize=(10, 8), subplot_kw={'projection': 'polar'})
-    
-    # Calculate mean values per cluster
-    cluster_means = df.groupby(cluster_col)[descriptors].mean()
-    
-    # Standardize
-    scaler = StandardScaler()
-    cluster_means_scaled = pd.DataFrame(
-        scaler.fit_transform(cluster_means),
-        index=cluster_means.index,
-        columns=cluster_means.columns
-    )
-    
-    # Radar chart
-    angles = np.linspace(0, 2 * np.pi, len(descriptors), endpoint=False).tolist()
-    angles += angles[:1]  # Close the loop
-    
-    for i, cluster in enumerate(cluster_means_scaled.index):
-        values = cluster_means_scaled.loc[cluster].values.tolist()
-        values += values[:1]  # Close the loop
-        
-        ax.plot(angles, values, 'o-', linewidth=2, label=f'Cluster {cluster}')
-        ax.fill(angles, values, alpha=0.25)
-    
-    ax.set_xticks(angles[:-1])
-    ax.set_xticklabels(descriptors, fontsize=8)
-    ax.set_ylim(-2, 2)
-    ax.grid(True)
-    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
-    ax.set_title('Cluster Profiles Radar Chart', fontsize=14, fontweight='bold', pad=20)
-    
-    plt.tight_layout()
-    return fig
-
-def create_feature_importance(df: pd.DataFrame, target_col: str, descriptors: List[str]) -> plt.Figure:
-    """Create feature importance plot using Random Forest."""
-    fig, ax = plt.subplots(figsize=(10, 8))
-    
-    data = df[descriptors + [target_col]].dropna()
-    
-    if data.empty:
-        ax.text(0.5, 0.5, 'No data available', ha='center', va='center', fontsize=14)
-        return fig
-    
-    X = data[descriptors]
-    y = data[target_col]
-    
-    # Random Forest
-    rf = RandomForestRegressor(n_estimators=100, random_state=42)
-    rf.fit(X, y)
-    
-    # Feature importance
-    importance = pd.DataFrame({
-        'feature': descriptors,
-        'importance': rf.feature_importances_
-    }).sort_values('importance', ascending=True)
-    
-    # Plot
-    ax.barh(importance['feature'], importance['importance'], color='#2C3E50', alpha=0.7)
-    ax.set_xlabel('Feature Importance', fontsize=12, fontweight='bold')
-    ax.set_ylabel('Descriptors', fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3, axis='x')
-    ax.set_title(f'Feature Importance for {target_col} (Random Forest)', fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
-
-def create_swarm_plot(df: pd.DataFrame, target_col: str, category_col: str) -> plt.Figure:
-    """Create swarm plot for categorical comparison."""
-    fig, ax = plt.subplots(figsize=(12, 6))
-    
-    data = df[[target_col, category_col]].dropna()
-    
-    if data.empty or len(data[category_col].unique()) < 2:
-        ax.text(0.5, 0.5, 'Not enough categorical data', ha='center', va='center', fontsize=14)
-        return fig
-    
-    sns.swarmplot(data=data, x=category_col, y=target_col, ax=ax, alpha=0.6)
-    ax.set_xlabel(category_col, fontsize=12, fontweight='bold')
-    ax.set_ylabel(target_col, fontsize=12, fontweight='bold')
-    ax.grid(True, alpha=0.3)
-    ax.set_title(f'Distribution of {target_col} by {category_col}', fontsize=14, fontweight='bold')
-    
-    plt.tight_layout()
-    return fig
-
-# 9.7 Additional advanced plots
-def create_parallel_coordinates(df: pd.DataFrame, features: List[str], 
-                                target_col: str, max_categories: int = 10) -> go.Figure:
-    """Create parallel coordinates plot with filtering."""
-    data = df[features + [target_col]].dropna()
-    
-    if data.empty or len(features) < 2:
+    if len(plot_data) < 3:
         fig = go.Figure()
-        fig.add_annotation(text='Need at least 2 features', x=0.5, y=0.5, showarrow=False)
+        fig.add_annotation(text="Insufficient data points", 
+                          showarrow=False, font=dict(size=16))
         return fig
     
-    # Color by target
-    fig = go.Figure(data=go.Parcoords(
-        line=dict(
-            color=data[target_col],
+    # Create 3D scatter
+    fig = go.Figure()
+    
+    marker_size = plot_data[size_col] * 10 + 5 if size_col else 8
+    
+    fig.add_trace(go.Scatter3d(
+        x=plot_data[x_col],
+        y=plot_data[y_col],
+        z=plot_data[z_col],
+        mode='markers',
+        marker=dict(
+            size=marker_size,
+            color=plot_data[color_col] if color_col else 'blue',
             colorscale='Viridis',
-            showscale=True,
-            colorbar=dict(title=target_col)
+            showscale=True if color_col else False,
+            colorbar=dict(title=color_col) if color_col else None,
+            line=dict(width=0.5, color='black')
         ),
-        dimensions=[
-            dict(
-                label=col,
-                values=data[col],
-                range=[data[col].min(), data[col].max()]
-            ) for col in features
-        ]
+        text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{z_col}: {z:.3f}' 
+              for x, y, z in zip(plot_data[x_col], plot_data[y_col], plot_data[z_col])],
+        hoverinfo='text'
     ))
     
     fig.update_layout(
-        title=f'Parallel Coordinates: {target_col}',
-        width=900,
-        height=600,
-        template='plotly_white'
-    )
-    
-    return fig
-
-def create_3d_scatter_interactive(df: pd.DataFrame, x_col: str, y_col: str, 
-                                  z_col: str, color_col: Optional[str] = None) -> go.Figure:
-    """Create interactive 3D scatter plot."""
-    data = df[[x_col, y_col, z_col] + ([color_col] if color_col else [])].dropna()
-    
-    if data.empty:
-        fig = go.Figure()
-        fig.add_annotation(text='No data available', x=0.5, y=0.5, showarrow=False)
-        return fig
-    
-    if color_col and color_col in data.columns:
-        fig = go.Figure(data=go.Scatter3d(
-            x=data[x_col],
-            y=data[y_col],
-            z=data[z_col],
-            mode='markers',
-            marker=dict(
-                size=6,
-                color=data[color_col],
-                colorscale='Viridis',
-                showscale=True,
-                colorbar=dict(title=color_col)
-            ),
-            text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{z_col}: {z:.3f}' 
-                  for x, y, z in zip(data[x_col], data[y_col], data[z_col])],
-            hoverinfo='text'
-        ))
-    else:
-        fig = go.Figure(data=go.Scatter3d(
-            x=data[x_col],
-            y=data[y_col],
-            z=data[z_col],
-            mode='markers',
-            marker=dict(size=5, color='#2C3E50'),
-            text=[f'{x_col}: {x:.3f}<br>{y_col}: {y:.3f}<br>{z_col}: {z:.3f}' 
-                  for x, y, z in zip(data[x_col], data[y_col], data[z_col])],
-            hoverinfo='text'
-        ))
-    
-    fig.update_layout(
-        title='3D Scatter Plot',
+        title=f'3D Scatter: {z_col} vs {x_col} and {y_col}',
         scene=dict(
             xaxis_title=x_col,
             yaxis_title=y_col,
             zaxis_title=z_col
         ),
-        width=800,
-        height=600,
-        template='plotly_white'
+        template='plotly_white',
+        height=700,
+        width=900
     )
     
     return fig
 
-def create_correlation_triangle(pearson_corr: pd.DataFrame, 
-                                spearman_corr: pd.DataFrame) -> plt.Figure:
-    """Create combined Pearson-Spearman correlation triangle."""
+
+def create_network_correlation(df: pd.DataFrame, correlation_matrix: pd.DataFrame, 
+                              threshold: float = 0.5) -> plt.Figure:
+    """
+    Create a network graph of correlations.
+    """
+    apply_scientific_style()
+    
+    # Create graph
+    G = nx.Graph()
+    
+    # Add nodes
+    for node in correlation_matrix.columns:
+        G.add_node(node)
+    
+    # Add edges based on correlation threshold
+    for i in range(len(correlation_matrix.columns)):
+        for j in range(i+1, len(correlation_matrix.columns)):
+            col1 = correlation_matrix.columns[i]
+            col2 = correlation_matrix.columns[j]
+            corr = correlation_matrix.iloc[i, j]
+            if abs(corr) > threshold:
+                G.add_edge(col1, col2, weight=abs(corr))
+    
+    if len(G.edges) == 0:
+        fig, ax = plt.subplots(figsize=(10, 8))
+        ax.text(0.5, 0.5, f'No correlations above threshold {threshold}', 
+                ha='center', va='center', transform=ax.transAxes)
+        ax.set_axis_off()
+        return fig
+    
+    # Position nodes using spring layout
+    pos = nx.spring_layout(G, k=1, iterations=50)
+    
+    # Draw
     fig, ax = plt.subplots(figsize=(12, 10))
     
-    # Create combined matrix
-    combined = pearson_corr.copy()
+    # Calculate edge colors based on correlation sign
+    edge_colors = []
+    edge_widths = []
+    for (u, v, d) in G.edges(data=True):
+        corr = correlation_matrix.loc[u, v]
+        edge_colors.append('red' if corr > 0 else 'blue')
+        edge_widths.append(d['weight'] * 3)
     
-    # Upper triangle: Spearman
-    for i in range(len(spearman_corr)):
-        for j in range(i+1, len(spearman_corr)):
-            combined.iloc[i, j] = spearman_corr.iloc[i, j]
+    # Draw nodes
+    node_sizes = [500 for _ in G.nodes()]
+    nx.draw_networkx_nodes(G, pos, node_size=node_sizes, 
+                          node_color='lightblue', alpha=0.8, ax=ax)
     
-    # Mask lower triangle
-    mask = np.tril(np.ones_like(combined, dtype=bool))
+    # Draw edges
+    nx.draw_networkx_edges(G, pos, edge_color=edge_colors, 
+                          width=edge_widths, alpha=0.6, ax=ax,
+                          connectionstyle='arc3,rad=0.1')
     
-    # Heatmap
-    sns.heatmap(
-        combined,
-        mask=mask,
-        annot=True,
-        fmt='.2f',
-        cmap=COLOR_PALETTES['diverging'],
-        center=0,
-        square=True,
-        linewidths=0.5,
-        cbar_kws={"shrink": 0.8, "label": "Correlation"},
-        ax=ax
-    )
+    # Draw labels
+    nx.draw_networkx_labels(G, pos, font_size=8, font_weight='bold', ax=ax)
     
-    # Add annotations
-    ax.text(0.02, 0.98, 'Lower: Pearson', transform=ax.transAxes, 
-            fontsize=10, fontweight='bold', verticalalignment='top')
-    ax.text(0.98, 0.02, 'Upper: Spearman', transform=ax.transAxes, 
-            fontsize=10, fontweight='bold', horizontalalignment='right', verticalalignment='bottom')
+    ax.set_title(f'Correlation Network (|corr| > {threshold})', fontweight='bold', fontsize=14)
+    ax.axis('off')
     
-    ax.set_title('Correlation Triangle: Pearson (lower) vs Spearman (upper)', 
-                fontsize=14, fontweight='bold')
+    plt.tight_layout()
+    return fig
+
+
+def create_cluster_profiles(df: pd.DataFrame, clusters: np.ndarray, 
+                           features: List[str]) -> plt.Figure:
+    """
+    Create cluster profile heatmap.
+    """
+    apply_scientific_style()
+    
+    # Add cluster labels to dataframe
+    df_clust = df[features].copy()
+    df_clust['Cluster'] = clusters
+    
+    # Calculate means by cluster
+    cluster_means = df_clust.groupby('Cluster')[features].mean()
+    cluster_stds = df_clust.groupby('Cluster')[features].std()
+    
+    # Standardize means across clusters
+    means_scaled = (cluster_means - cluster_means.min()) / (cluster_means.max() - cluster_means.min() + 1e-10)
+    
+    # Create heatmap
+    fig, ax = plt.subplots(figsize=(12, max(4, len(cluster_means) * 0.5)))
+    
+    im = ax.imshow(means_scaled.values, cmap='viridis', aspect='auto')
+    
+    ax.set_xticks(range(len(features)))
+    ax.set_xticklabels(features, rotation=45, ha='right', fontsize=9)
+    ax.set_yticks(range(len(cluster_means.index)))
+    ax.set_yticklabels([f'Cluster {i}' for i in cluster_means.index], fontsize=10)
+    
+    # Add text annotations
+    for i in range(len(cluster_means.index)):
+        for j in range(len(features)):
+            value = cluster_means.iloc[i, j]
+            ax.text(j, i, f'{value:.2f}', ha='center', va='center',
+                   color='white' if means_scaled.iloc[i, j] > 0.5 else 'black',
+                   fontsize=8)
+    
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label('Normalized Value', fontweight='bold')
+    
+    ax.set_title('Cluster Profiles (Mean Values)', fontweight='bold', fontsize=14)
+    plt.tight_layout()
+    return fig
+
+
+def create_alpha_beta_compromise(df: pd.DataFrame, alpha_col: str = 'alpha', 
+                                beta_col: str = 'β', color_col: str = None) -> plt.Figure:
+    """
+    Create α vs β compromise diagram.
+    """
+    apply_scientific_style()
+    
+    fig, ax = plt.subplots(figsize=(8, 6))
+    
+    # Prepare data
+    valid_mask = df[alpha_col].notna() & df[beta_col].notna()
+    x_data = df[alpha_col][valid_mask]
+    y_data = df[beta_col][valid_mask]
+    
+    if len(x_data) < 3:
+        ax.text(0.5, 0.5, 'Insufficient data points', 
+                ha='center', va='center', transform=ax.transAxes)
+        return fig
+    
+    # Create scatter
+    if color_col and color_col in df.columns:
+        scatter = ax.scatter(x_data, y_data, c=df[color_col][valid_mask],
+                           cmap='tab10', alpha=0.7, s=80)
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label(color_col, fontweight='bold')
+    else:
+        ax.scatter(x_data, y_data, color='#3498DB', alpha=0.7, s=80)
+    
+    # Add ideal zone (low α, low β)
+    # ax.axhline(y=0.01, color='green', linestyle='--', alpha=0.5, label='β = 0.01')
+    # ax.axvline(x=10, color='red', linestyle='--', alpha=0.5, label='α = 10 × 10⁻⁶ K⁻¹')
+    
+    # Add quadrants
+    ax.axhline(y=y_data.median(), color='gray', linestyle='--', alpha=0.3)
+    ax.axvline(x=x_data.median(), color='gray', linestyle='--', alpha=0.3)
+    
+    # Highlight optimal region (low α, low β)
+    # ax.text(0.05, 0.05, 'Optimal region', transform=ax.transAxes,
+    #        fontsize=10, style='italic', bbox=dict(boxstyle='round', facecolor='green', alpha=0.1))
+    
+    ax.set_xlabel(f'{alpha_col} (×10⁻⁶ K⁻¹)', fontweight='bold')
+    ax.set_ylabel(f'{beta_col}', fontweight='bold')
+    ax.set_title('α vs β: Compromise Diagram', fontweight='bold')
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    return fig
+
+
+def create_feature_importance_plot(importance_dict: Dict, target_col: str, 
+                                  n_top: int = 15) -> plt.Figure:
+    """
+    Create feature importance bar plot from Random Forest.
+    """
+    apply_scientific_style()
+    
+    if target_col not in importance_dict or importance_dict[target_col].empty:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.text(0.5, 0.5, f'No importance data for {target_col}', 
+                ha='center', va='center', transform=ax.transAxes)
+        return fig
+    
+    importance = importance_dict[target_col].head(n_top)
+    
+    fig, ax = plt.subplots(figsize=(10, max(6, len(importance) * 0.4)))
+    
+    colors = plt.cm.viridis(np.linspace(0.3, 0.9, len(importance)))[::-1]
+    ax.barh(importance.index, importance.values, color=colors, edgecolor='black')
+    
+    ax.set_xlabel('Feature Importance', fontweight='bold')
+    ax.set_ylabel('Feature', fontweight='bold')
+    ax.set_title(f'Top {n_top} Features for {target_col}', fontweight='bold')
+    ax.grid(True, alpha=0.3, axis='x')
+    
+    plt.tight_layout()
+    return fig
+
+
+def create_cluster_radar_chart(cluster_means: pd.DataFrame, features: List[str], 
+                              max_clusters: int = 6) -> plt.Figure:
+    """
+    Create radar chart for cluster comparison.
+    """
+    apply_scientific_style()
+    
+    n_clusters = min(len(cluster_means), max_clusters)
+    if n_clusters < 2:
+        fig, ax = plt.subplots(figsize=(8, 8))
+        ax.text(0.5, 0.5, 'Need at least 2 clusters', 
+                ha='center', va='center', transform=ax.transAxes)
+        return fig
+    
+    # Normalize features
+    cluster_means_norm = cluster_means.iloc[:n_clusters].copy()
+    for col in cluster_means_norm.columns:
+        if col in features:
+            cluster_means_norm[col] = (cluster_means_norm[col] - cluster_means_norm[col].min()) / \
+                                     (cluster_means_norm[col].max() - cluster_means_norm[col].min() + 1e-10)
+    
+    # Create radar chart
+    angles = np.linspace(0, 2 * np.pi, len(features), endpoint=False)
+    angles = np.concatenate((angles, [angles[0]]))
+    
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+    
+    colors = plt.cm.tab10(np.linspace(0, 1, n_clusters))
+    
+    for i in range(n_clusters):
+        values = cluster_means_norm.iloc[i, :len(features)].values
+        values = np.concatenate((values, [values[0]]))
+        ax.plot(angles, values, 'o-', linewidth=2, color=colors[i], 
+                label=f'Cluster {i}')
+        ax.fill(angles, values, alpha=0.15, color=colors[i])
+    
+    ax.set_xticks(angles[:-1])
+    ax.set_xticklabels(features, fontsize=9)
+    ax.set_ylim(0, 1)
+    ax.set_title('Cluster Radar Chart', fontweight='bold', pad=20)
+    ax.legend(loc='upper right', bbox_to_anchor=(1.3, 1.0))
+    ax.grid(True)
     
     plt.tight_layout()
     return fig
 
 # ============================================================================
-# SECTION 10: FILTERING SYSTEM
+# SECTION 9: FILTERING SYSTEM
 # ============================================================================
 
 def apply_filters(df: pd.DataFrame, filters: Dict) -> pd.DataFrame:
     """
-    Apply filters to DataFrame.
-    
-    Args:
-        df: DataFrame to filter
-        filters: Dictionary of filter conditions
-        
-    Returns:
-        Filtered DataFrame
+    Apply multiple filters to the dataframe.
     """
-    df_filtered = df.copy()
+    if df.empty:
+        return df
     
-    # Basic filters
-    if 'method' in filters and filters['method'] and filters['method'] != 'All':
-        df_filtered = df_filtered[df_filtered['method'] == filters['method']]
+    filtered_df = df.copy()
     
-    if 'A_type' in filters and filters['A_type'] and filters['A_type'] != 'All':
-        df_filtered = df_filtered[df_filtered['A_type'] == filters['A_type']]
-    
-    if 'B_type' in filters and filters['B_type'] and filters['B_type'] != 'All':
-        df_filtered = df_filtered[df_filtered['B_type'] == filters['B_type']]
-    
-    # Advanced filters
-    if 'delta_min' in filters and 'delta_max' in filters:
-        df_filtered = df_filtered[(df_filtered['delta_calc'] >= filters['delta_min']) & 
-                                  (df_filtered['delta_calc'] <= filters['delta_max'])]
-    
-    if 'pH2O_min' in filters and 'pH2O_max' in filters:
-        df_filtered = df_filtered[(df_filtered['pH2O'] >= filters['pH2O_min']) & 
-                                  (df_filtered['pH2O'] <= filters['pH2O_max'])]
-    
-    if 'T_min' in filters and 'T_max' in filters:
-        df_filtered = df_filtered[(df_filtered['T_min'] >= filters['T_min']) & 
-                                  (df_filtered['T_max'] <= filters['T_max'])]
-    
-    if 'has_bends' in filters and filters['has_bends']:
-        df_filtered = df_filtered[df_filtered['n_bends'] > 0]
-    
-    if 'has_alpha' in filters and filters['has_alpha']:
-        df_filtered = df_filtered[df_filtered['α·106 (K-1)'].notna()]
-    
-    if 'has_beta' in filters and filters['has_beta']:
-        df_filtered = df_filtered[df_filtered['β'].notna()]
-    
-    # Descriptor filters
-    if 'rAav_min' in filters and 'rAav_max' in filters:
-        df_filtered = df_filtered[(df_filtered['rAav'] >= filters['rAav_min']) & 
-                                  (df_filtered['rAav'] <= filters['rAav_max'])]
-    
-    if 't_min' in filters and 't_max' in filters:
-        df_filtered = df_filtered[(df_filtered['t'] >= filters['t_min']) & 
-                                  (df_filtered['t'] <= filters['t_max'])]
-    
-    if 'chiBav_min' in filters and 'chiBav_max' in filters:
-        df_filtered = df_filtered[(df_filtered['chiBav'] >= filters['chiBav_min']) & 
-                                  (df_filtered['chiBav'] <= filters['chiBav_max'])]
-    
-    return df_filtered
-
-# ============================================================================
-# SECTION 11: UI COMPONENTS
-# ============================================================================
-
-def render_sidebar_filters(df: pd.DataFrame) -> Dict:
-    """Render filters in sidebar."""
-    st.sidebar.markdown("## 🔍 Filters")
-    
-    filters = {}
-    
-    # Basic filters
-    with st.sidebar.expander("📌 Basic Filters", expanded=True):
-        col1, col2 = st.columns(2)
-        with col1:
-            method_options = ['All'] + sorted(df['method'].dropna().unique().tolist())
-            filters['method'] = st.selectbox('Method', method_options)
-        with col2:
-            A_options = ['All'] + sorted(df['A_type'].dropna().unique().tolist())
-            filters['A_type'] = st.selectbox('A-cation', A_options)
+    for key, value in filters.items():
+        if value is None or value == 'All' or (isinstance(value, list) and not value):
+            continue
         
-        B_options = ['All'] + sorted(df['B_type'].dropna().unique().tolist())
-        filters['B_type'] = st.selectbox('B-cation', B_options)
-    
-    # Advanced filters
-    with st.sidebar.expander("📊 Advanced Filters", expanded=False):
-        # Delta range
-        delta_min = float(df['delta_calc'].min()) if df['delta_calc'].notna().any() else 0
-        delta_max = float(df['delta_calc'].max()) if df['delta_calc'].notna().any() else 0.5
-        filters['delta_min'], filters['delta_max'] = st.slider(
-            'δ range',
-            min_value=0.0,
-            max_value=0.5,
-            value=(delta_min, delta_max),
-            step=0.01
-        )
-        
-        # pH2O range
-        pH_min = float(df['pH2O'].min()) if df['pH2O'].notna().any() else 1e-6
-        pH_max = float(df['pH2O'].max()) if df['pH2O'].notna().any() else 0.1
-        filters['pH2O_min'], filters['pH2O_max'] = st.slider(
-            'pH₂O range (log scale)',
-            min_value=-6.0,
-            max_value=0.0,
-            value=(np.log10(pH_min), np.log10(pH_max)),
-            step=0.1
-        )
-        filters['pH2O_min'] = 10 ** filters['pH2O_min']
-        filters['pH2O_max'] = 10 ** filters['pH2O_max']
-        
-        # Temperature range
-        T_min = float(df['T_min'].min()) if df['T_min'].notna().any() else 20
-        T_max = float(df['T_max'].max()) if df['T_max'].notna().any() else 1200
-        filters['T_min'], filters['T_max'] = st.slider(
-            'Temperature range (°C)',
-            min_value=0,
-            max_value=1500,
-            value=(int(T_min), int(T_max)),
-            step=10
-        )
-        
-        # Checkboxes
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            filters['has_bends'] = st.checkbox('Has T(bends)', value=False)
-        with col2:
-            filters['has_alpha'] = st.checkbox('Has α', value=False)
-        with col3:
-            filters['has_beta'] = st.checkbox('Has β', value=False)
-    
-    # Descriptor filters
-    with st.sidebar.expander("📐 Descriptor Filters", expanded=False):
-        if 'rAav' in df.columns:
-            rA_min = float(df['rAav'].min()) if df['rAav'].notna().any() else 0.8
-            rA_max = float(df['rAav'].max()) if df['rAav'].notna().any() else 1.8
-            filters['rAav_min'], filters['rAav_max'] = st.slider(
-                'rAav range (Å)',
-                min_value=0.8,
-                max_value=1.8,
-                value=(rA_min, rA_max),
-                step=0.01
-            )
-        
-        if 't' in df.columns:
-            t_min = float(df['t'].min()) if df['t'].notna().any() else 0.8
-            t_max = float(df['t'].max()) if df['t'].notna().any() else 1.1
-            filters['t_min'], filters['t_max'] = st.slider(
-                'tolerance factor range',
-                min_value=0.8,
-                max_value=1.1,
-                value=(t_min, t_max),
-                step=0.01
-            )
-        
-        if 'chiBav' in df.columns:
-            chi_min = float(df['chiBav'].min()) if df['chiBav'].notna().any() else 0.8
-            chi_max = float(df['chiBav'].max()) if df['chiBav'].notna().any() else 2.0
-            filters['chiBav_min'], filters['chiBav_max'] = st.slider(
-                'χBav range',
-                min_value=0.8,
-                max_value=2.0,
-                value=(chi_min, chi_max),
-                step=0.05
-            )
-    
-    if st.sidebar.button('🔄 Reset Filters'):
-        st.session_state['filters_reset'] = True
-        st.rerun()
-    
-    return filters
-
-def render_upload_page():
-    """Render the data upload page."""
-    st.markdown("# 📤 Upload Data")
-    st.markdown("Paste your tab-separated data below (including header row):")
-    
-    # Text area for pasting data
-    text_data = st.text_area(
-        "Paste data here",
-        height=300,
-        placeholder="№\tA\tA'\tB\tB'\tD1\tD2\t[A']\t[B']\t[D1]\t[D2]\tδ\tmethod\tβ\t∆T, °C\tα·106 (K-1)\tT(bends), °C\tαav·106 (K-1)\tpH2O\tRef\n1\tBa\t-\tCe\tZr\tY\tYb\t0\t0.1\t0.1\t0.1\t0.1\tdilatometry\t0.0073\t27-1000\t10.6\t400;600\t10.6;4.73;10.1\t0.0001\t10.15826/chimtech.2024.11.4.22"
-    )
-    
-    col1, col2 = st.columns([1, 3])
-    with col1:
-        if st.button('📊 Load Data', type='primary'):
-            if text_data.strip():
-                with st.spinner('Loading data...'):
-                    df = parse_uploaded_data(text_data)
-                    if not df.empty:
-                        st.session_state['raw_data'] = df
-                        st.session_state['processed'] = False
-                        st.success(f'✅ Data loaded! {len(df)} rows, {len(df.columns)} columns')
-                    else:
-                        st.error('❌ Failed to parse data. Check format.')
+        if key in filtered_df.columns:
+            if isinstance(value, (list, tuple)):
+                if len(value) == 2 and isinstance(value[0], (int, float)):
+                    # Range filter
+                    filtered_df = filtered_df[(filtered_df[key] >= value[0]) & 
+                                             (filtered_df[key] <= value[1])]
+                else:
+                    # List filter
+                    filtered_df = filtered_df[filtered_df[key].isin(value)]
             else:
-                st.warning('⚠️ Please paste data first.')
+                # Single value filter
+                filtered_df = filtered_df[filtered_df[key] == value]
     
-    # Show example data
-    if 'raw_data' in st.session_state and st.session_state['raw_data'] is not None:
-        st.markdown("### 📋 Data Preview")
-        st.dataframe(st.session_state['raw_data'].head(10))
-        
-        st.markdown("### 📊 Data Summary")
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.metric("Rows", len(st.session_state['raw_data']))
-        with col2:
-            st.metric("Columns", len(st.session_state['raw_data'].columns))
-        with col3:
-            missing = st.session_state['raw_data'].isna().sum().sum()
-            st.metric("Missing Values", missing)
-        with col4:
-            duplicates = st.session_state['raw_data'].duplicated().sum()
-            st.metric("Duplicates", duplicates)
-
-def render_descriptor_page(df: pd.DataFrame):
-    """Render the descriptors page."""
-    st.markdown("# 🔬 Descriptor Engine")
-    
-    if df is None or df.empty:
-        st.warning('⚠️ No data loaded. Please upload data first.')
-        return
-    
-    if st.button('🚀 Calculate All Descriptors', type='primary'):
-        with st.spinner('Calculating descriptors... This may take a moment.'):
-            df_desc = calculate_descriptors(df)
-            df_desc = clean_data(df_desc)
-            st.session_state['descriptors'] = df_desc
-            st.session_state['processed'] = True
-            st.success('✅ Descriptors calculated!')
-    
-    if 'descriptors' in st.session_state and st.session_state['descriptors'] is not None:
-        df_desc = st.session_state['descriptors']
-        
-        # Display descriptor columns
-        desc_cols = [col for col in df_desc.columns if col not in df.columns or col in 
-                    ['rAav', 'rBav', 't', 'D_t', 'chiAav', 'chiBav', 'Dchi_AB', 
-                     'V_Bav', 'Vo_proxy', 'M_total', 'delta_calc', "B'_conc", 'D_total']]
-        
-        st.markdown("### 📊 Calculated Descriptors")
-        
-        # Show descriptor table with selected columns
-        display_cols = ['№'] + desc_cols[:20]
-        display_cols = [col for col in display_cols if col in df_desc.columns]
-        st.dataframe(df_desc[display_cols].head(10))
-        
-        # Statistics
-        st.markdown("### 📈 Descriptor Statistics")
-        stats_df = df_desc[desc_cols].describe().T
-        st.dataframe(stats_df)
-        
-        # Download button
-        csv = df_desc.to_csv(index=False)
-        st.download_button(
-            label='📥 Download Descriptors CSV',
-            data=csv,
-            file_name='perovskite_descriptors.csv',
-            mime='text/csv'
-        )
-
-def render_correlation_page(df: pd.DataFrame):
-    """Render the correlation analysis page."""
-    st.markdown("# 📊 Correlation Analysis")
-    
-    if df is None or df.empty or 'descriptors' not in st.session_state:
-        st.warning('⚠️ Please calculate descriptors first.')
-        return
-    
-    df_desc = st.session_state['descriptors']
-    
-    # Target variables
-    target_cols = ['α·106 (K-1)', 'β', 'αav·106 (K-1)', 'alpha_beta_ratio', 'T_bends_first']
-    target_cols = [col for col in target_cols if col in df_desc.columns]
-    
-    if not target_cols:
-        st.warning('⚠️ No target variables found in data.')
-        return
-    
-    # Calculate correlations
-    with st.spinner('Calculating correlations...'):
-        corr_data = calculate_correlations(df_desc, target_cols)
-        st.session_state['correlation_data'] = corr_data
-    
-    # Display correlation results
-    st.markdown("### 🔍 Top Correlations with Targets")
-    
-    for target in target_cols:
-        if target in corr_data['top_correlations']:
-            st.markdown(f"#### {target}")
-            top = corr_data['top_correlations'][target]
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown("**Top Positive Correlations**")
-                st.dataframe(top['positive'].head(5))
-            with col2:
-                st.markdown("**Top Negative Correlations**")
-                st.dataframe(top['negative'].head(5))
-    
-    # Correlation matrices
-    st.markdown("### 📈 Correlation Matrices")
-    
-    tab1, tab2, tab3, tab4 = st.tabs([
-        'Pearson', 'Spearman', 'Partial (pH₂O)', 'Network'
-    ])
-    
-    with tab1:
-        if corr_data['pearson'] is not None:
-            fig = create_correlation_matrix_plot(
-                corr_data['pearson'], 
-                'Pearson Correlation Matrix'
-            )
-            st.pyplot(fig)
-            plt.close(fig)
-    
-    with tab2:
-        if corr_data['spearman'] is not None:
-            fig = create_correlation_matrix_plot(
-                corr_data['spearman'],
-                'Spearman Correlation Matrix'
-            )
-            st.pyplot(fig)
-            plt.close(fig)
-    
-    with tab3:
-        if corr_data['partial'] is not None:
-            fig = create_correlation_matrix_plot(
-                corr_data['partial'],
-                'Partial Correlation Matrix (Controlling pH₂O)'
-            )
-            st.pyplot(fig)
-            plt.close(fig)
-        else:
-            st.info('Partial correlation requires pH₂O data.')
-    
-    with tab4:
-        if corr_data['pearson'] is not None:
-            threshold = st.slider('Correlation threshold', 0.3, 0.9, 0.5, 0.1)
-            fig = create_correlation_network_plot(
-                corr_data['pearson'],
-                threshold
-            )
-            st.pyplot(fig)
-            plt.close(fig)
-    
-    # Top descriptors
-    st.markdown("### 🏆 Top 20 Descriptors")
-    top_descriptors = find_top_descriptors(corr_data, target_cols, 20)
-    st.session_state['top_descriptors'] = top_descriptors
-    
-    # Display with importance
-    desc_importance = {}
-    for target in target_cols:
-        if target in corr_data['top_correlations']:
-            for desc, corr in corr_data['top_correlations'][target]['all'].items():
-                if desc in top_descriptors:
-                    desc_importance[desc] = desc_importance.get(desc, 0) + abs(corr)
-    
-    importance_df = pd.DataFrame({
-        'Descriptor': list(desc_importance.keys()),
-        'Importance': list(desc_importance.values())
-    }).sort_values('Importance', ascending=False)
-    
-    st.dataframe(importance_df)
-    
-    # Pairplot
-    st.markdown("### 🎨 Pairplot of Top Features")
-    
-    if len(top_descriptors) >= 2:
-        # Select features for pairplot
-        selected_features = st.multiselect(
-            'Select features for pairplot (2-5)',
-            top_descriptors,
-            default=top_descriptors[:min(4, len(top_descriptors))]
-        )
-        
-        if len(selected_features) >= 2:
-            hue_col = st.selectbox(
-                'Color by (optional)',
-                ['None'] + [col for col in df_desc.columns if col not in selected_features and 
-                           df_desc[col].dtype == 'object'],
-                index=0
-            )
-            
-            fig = create_pairplot_colored(
-                df_desc,
-                selected_features,
-                hue_col if hue_col != 'None' else None
-            )
-            st.pyplot(fig)
-            plt.close(fig)
-    
-    # Scatter regression
-    st.markdown("### 📉 Best Linear Correlations")
-    
-    # Find best correlations
-    best_corr = []
-    for target in target_cols:
-        if target in corr_data['top_correlations']:
-            for desc, corr in corr_data['top_correlations'][target]['all'].head(10).items():
-                if abs(corr) > 0.3 and desc != target:
-                    best_corr.append((target, desc, abs(corr)))
-    
-    if best_corr:
-        best_corr.sort(key=lambda x: x[2], reverse=True)
-        target, desc, _ = best_corr[0]
-        
-        fig = create_scatter_regression(df_desc, desc, target)
-        st.pyplot(fig)
-        plt.close(fig)
-        
-        # Residual plot
-        fig = create_residual_plot(df_desc, desc, target)
-        st.pyplot(fig)
-        plt.close(fig)
-    
-    # Correlation triangle
-    if corr_data['pearson'] is not None and corr_data['spearman'] is not None:
-        st.markdown("### 🔺 Pearson-Spearman Comparison Triangle")
-        
-        # Select subset of columns
-        selected_cols = st.multiselect(
-            'Select columns for triangle (max 10)',
-            corr_data['pearson'].columns.tolist(),
-            default=corr_data['pearson'].columns[:min(8, len(corr_data['pearson'].columns))].tolist()
-        )
-        
-        if len(selected_cols) >= 3:
-            pearson_subset = corr_data['pearson'].loc[selected_cols, selected_cols]
-            spearman_subset = corr_data['spearman'].loc[selected_cols, selected_cols]
-            
-            fig = create_correlation_triangle(pearson_subset, spearman_subset)
-            st.pyplot(fig)
-            plt.close(fig)
-
-def render_pca_clustering_page(df: pd.DataFrame):
-    """Render PCA and clustering page."""
-    st.markdown("# 🧬 PCA & Clustering Analysis")
-    
-    if df is None or df.empty or 'descriptors' not in st.session_state:
-        st.warning('⚠️ Please calculate descriptors first.')
-        return
-    
-    if 'top_descriptors' not in st.session_state:
-        st.warning('⚠️ Please run correlation analysis to identify top descriptors.')
-        return
-    
-    df_desc = st.session_state['descriptors']
-    top_descriptors = st.session_state['top_descriptors']
-    
-    # Select descriptors for PCA
-    selected_desc = st.multiselect(
-        'Select descriptors for PCA',
-        top_descriptors,
-        default=top_descriptors[:min(10, len(top_descriptors))]
-    )
-    
-    if len(selected_desc) < 3:
-        st.warning('Please select at least 3 descriptors.')
-        return
-    
-    # Perform PCA
-    with st.spinner('Performing PCA...'):
-        pca_results = perform_pca_analysis(df_desc, selected_desc, n_components=10)
-        st.session_state['pca_results'] = pca_results
-    
-    # Display PCA results
-    st.markdown("### 📊 PCA Results")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.metric("Explained Variance (PC1+PC2)", 
-                 f"{pca_results['explained_variance'][:2].sum()*100:.1f}%")
-    with col2:
-        st.metric("Number of Components", 
-                 len(pca_results['explained_variance']))
-    
-    # Explained variance plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    components = range(1, len(pca_results['explained_variance']) + 1)
-    ax.bar(components, pca_results['explained_variance'] * 100, 
-           alpha=0.7, label='Individual')
-    ax.plot(components, pca_results['cumsum_variance'] * 100, 
-            'o-', color='red', label='Cumulative')
-    ax.set_xlabel('Principal Component')
-    ax.set_ylabel('Explained Variance (%)')
-    ax.set_title('PCA Explained Variance')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-    st.pyplot(fig)
-    plt.close(fig)
-    
-    # Biplot
-    st.markdown("### 📈 PCA Biplot")
-    fig = create_pca_biplot(pca_results, n_components=2)
-    st.pyplot(fig)
-    plt.close(fig)
-    
-    # 3D PCA
-    st.markdown("### 🔮 3D PCA Interactive")
-    fig = create_pca_3d(pca_results)
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # t-SNE
-    st.markdown("### 🧪 t-SNE Visualization")
-    
-    if st.button('Run t-SNE (may take a moment)'):
-        with st.spinner('Computing t-SNE...'):
-            X_tsne = perform_tsne(df_desc, selected_desc, perplexity=30)
-            st.session_state['tsne_results'] = X_tsne
-    
-    if 'tsne_results' in st.session_state:
-        X_tsne = st.session_state['tsne_results']
-        
-        # Get labels if available
-        if 'clustering_results' in st.session_state:
-            labels = st.session_state['clustering_results']['labels']
-        else:
-            labels = None
-        
-        fig = create_tsne_plot(X_tsne, labels)
-        st.pyplot(fig)
-        plt.close(fig)
-    
-    # Clustering
-    st.markdown("### 📊 Clustering Analysis")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        method = st.selectbox('Clustering Method', ['kmeans', 'dbscan', 'hierarchical'])
-    with col2:
-        if method in ['kmeans', 'hierarchical']:
-            n_clusters = st.slider('Number of Clusters', 2, 8, 3)
-        else:
-            n_clusters = 3
-    
-    if st.button('Run Clustering'):
-        with st.spinner('Performing clustering...'):
-            X_pca = pca_results['X_pca'][:, :min(5, pca_results['X_pca'].shape[1])]
-            clustering_results = perform_clustering(X_pca, method, n_clusters)
-            st.session_state['clustering_results'] = clustering_results
-    
-    if 'clustering_results' in st.session_state:
-        clustering_results = st.session_state['clustering_results']
-        labels = clustering_results['labels']
-        
-        # Display cluster info
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            n_clusters_found = len(np.unique(labels))
-            st.metric("Number of Clusters", n_clusters_found)
-        with col2:
-            if 'silhouette' in clustering_results:
-                st.metric("Silhouette Score", f"{clustering_results['silhouette']:.3f}")
-        with col3:
-            n_outliers = np.sum(labels == -1) if method == 'dbscan' else 0
-            if n_outliers > 0:
-                st.metric("Outliers", n_outliers)
-        
-        # Add labels to DataFrame
-        df_desc['cluster'] = labels
-        st.session_state['descriptors'] = df_desc
-        
-        # Silhouette plot
-        if len(np.unique(labels)) > 1 and method != 'dbscan':
-            X_pca = pca_results['X_pca'][:, :min(5, pca_results['X_pca'].shape[1])]
-            fig = create_silhouette_plot(X_pca, labels)
-            st.pyplot(fig)
-            plt.close(fig)
-        
-        # Cluster profiles
-        st.markdown("### 📊 Cluster Profiles")
-        
-        # Select descriptors for profiles
-        profile_descriptors = st.multiselect(
-            'Select descriptors for cluster profiles',
-            top_descriptors,
-            default=top_descriptors[:min(6, len(top_descriptors))]
-        )
-        
-        if len(profile_descriptors) >= 2:
-            fig = create_cluster_profiles(
-                df_desc[df_desc['cluster'] != -1] if method == 'dbscan' else df_desc,
-                'cluster',
-                profile_descriptors
-            )
-            st.pyplot(fig)
-            plt.close(fig)
-            
-            # Radar chart
-            st.markdown("### 🎯 Radar Chart Comparison")
-            fig = create_radar_chart(
-                df_desc[df_desc['cluster'] != -1] if method == 'dbscan' else df_desc,
-                'cluster',
-                profile_descriptors
-            )
-            st.pyplot(fig)
-            plt.close(fig)
-
-def render_visualization_page(df: pd.DataFrame):
-    """Render the visualization dashboard page."""
-    st.markdown("# 📈 Visualization Dashboard")
-    
-    if df is None or df.empty or 'descriptors' not in st.session_state:
-        st.warning('⚠️ Please calculate descriptors first.')
-        return
-    
-    df_desc = st.session_state['descriptors']
-    top_descriptors = st.session_state.get('top_descriptors', 
-                                         [col for col in df_desc.columns 
-                                          if col not in ['№', 'Ref', 'method', 'A', 'B'] 
-                                          and df_desc[col].dtype in ['float64', 'int64']])[:20]
-    
-    # Visualization selector
-    viz_type = st.selectbox(
-        'Select Visualization Type',
-        [
-            'Concentration Heatmap',
-            'Concentration Contour',
-            '4D Bubble Chart',
-            'Compositional Bubble',
-            '3D Scatter Interactive',
-            'α vs β Compromise',
-            'T(bends) Analysis',
-            'β vs pH₂O',
-            'α vs Geometric',
-            'β vs Electronegativity',
-            'Parallel Coordinates',
-            'Swarm Plot',
-            'Feature Importance'
-        ]
-    )
-    
-    # Target variables
-    target_cols = ['α·106 (K-1)', 'β', 'αav·106 (K-1)', 'alpha_beta_ratio', 'T_bends_first']
-    target_cols = [col for col in target_cols if col in df_desc.columns]
-    
-    if not target_cols:
-        st.warning('No target variables available.')
-        return
-    
-    # Common controls
-    col1, col2, col3 = st.columns(3)
-    
-    if viz_type in ['Concentration Heatmap', 'Concentration Contour']:
-        with col1:
-            x_col = st.selectbox('X-axis', top_descriptors, index=0)
-        with col2:
-            y_col = st.selectbox('Y-axis', top_descriptors, 
-                                index=min(1, len(top_descriptors)-1))
-        with col3:
-            color_col = st.selectbox('Color (target)', target_cols, index=0)
-        
-        if viz_type == 'Concentration Heatmap':
-            fig = create_concentration_heatmap(df_desc, x_col, y_col, color_col)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            fig = create_concentration_contour(df_desc, x_col, y_col, color_col)
-            st.pyplot(fig)
-            plt.close(fig)
-    
-    elif viz_type in ['4D Bubble Chart', 'Compositional Bubble']:
-        with col1:
-            x_col = st.selectbox('X-axis', top_descriptors, index=0)
-        with col2:
-            y_col = st.selectbox('Y-axis (target)', target_cols, index=0)
-        with col3:
-            color_col = st.selectbox('Color', top_descriptors, 
-                                    index=min(1, len(top_descriptors)-1))
-        
-        size_col = st.selectbox('Size', top_descriptors, 
-                               index=min(2, len(top_descriptors)-1))
-        shape_col = st.selectbox('Shape (optional, categorical)', 
-                                ['None'] + [col for col in df_desc.columns 
-                                           if df_desc[col].dtype == 'object'],
-                                index=0)
-        
-        if viz_type == '4D Bubble Chart':
-            fig = create_bubble_4d(df_desc, x_col, y_col, color_col, size_col,
-                                 shape_col if shape_col != 'None' else None)
-        else:
-            fig = create_compositional_bubble(df_desc, x_col, y_col, color_col, size_col)
-        
-        st.plotly_chart(fig, use_container_width=True)
-    
-    elif viz_type == '3D Scatter Interactive':
-        with col1:
-            x_col = st.selectbox('X-axis', top_descriptors, index=0)
-        with col2:
-            y_col = st.selectbox('Y-axis', top_descriptors, 
-                                index=min(1, len(top_descriptors)-1))
-        with col3:
-            z_col = st.selectbox('Z-axis', top_descriptors, 
-                                index=min(2, len(top_descriptors)-1))
-        
-        color_col = st.selectbox('Color (optional)', 
-                                ['None'] + target_cols, index=0)
-        
-        fig = create_3d_scatter_interactive(df_desc, x_col, y_col, z_col,
-                                           color_col if color_col != 'None' else None)
-        st.plotly_chart(fig, use_container_width=True)
-    
-    elif viz_type == 'α vs β Compromise':
-        color_col = st.selectbox('Color by', 
-                                 ['None'] + [col for col in df_desc.columns 
-                                            if df_desc[col].dtype == 'object'],
-                                 index=0)
-        fig = create_alpha_beta_compromise(df_desc, color_col if color_col != 'None' else None)
-        st.pyplot(fig)
-        plt.close(fig)
-    
-    elif viz_type == 'T(bends) Analysis':
-        color_col = st.selectbox('Color by', 
-                                 ['None'] + [col for col in df_desc.columns 
-                                            if df_desc[col].dtype == 'object'],
-                                 index=0)
-        fig = create_t_bends_analysis(df_desc, color_col if color_col != 'None' else None)
-        st.pyplot(fig)
-        plt.close(fig)
-    
-    elif viz_type == 'β vs pH₂O':
-        color_col = st.selectbox('Color by', 
-                                 ['None'] + [col for col in df_desc.columns 
-                                            if df_desc[col].dtype == 'object'],
-                                 index=0)
-        fig = create_beta_vs_ph2o(df_desc, color_col if color_col != 'None' else None)
-        st.pyplot(fig)
-        plt.close(fig)
-    
-    elif viz_type == 'α vs Geometric':
-        geo_cols = ['rAav', 'rBav', 't', 'V_cell', 'r_ratio_AB']
-        geo_cols = [col for col in geo_cols if col in df_desc.columns]
-        geo_col = st.selectbox('Geometric descriptor', geo_cols, index=0)
-        fig = create_alpha_vs_geometric(df_desc, geo_col)
-        st.pyplot(fig)
-        plt.close(fig)
-    
-    elif viz_type == 'β vs Electronegativity':
-        fig = create_beta_vs_electronegativity(df_desc)
-        st.pyplot(fig)
-        plt.close(fig)
-    
-    elif viz_type == 'Parallel Coordinates':
-        features = st.multiselect('Select features', top_descriptors,
-                                 default=top_descriptors[:min(6, len(top_descriptors))])
-        if len(features) >= 2:
-            target = st.selectbox('Color by (target)', target_cols, index=0)
-            fig = create_parallel_coordinates(df_desc, features, target)
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.warning('Select at least 2 features.')
-    
-    elif viz_type == 'Swarm Plot':
-        cat_cols = [col for col in df_desc.columns if df_desc[col].dtype == 'object']
-        cat_col = st.selectbox('Categorical variable', cat_cols, index=0)
-        target = st.selectbox('Target variable', target_cols, index=0)
-        fig = create_swarm_plot(df_desc, target, cat_col)
-        st.pyplot(fig)
-        plt.close(fig)
-    
-    elif viz_type == 'Feature Importance':
-        target = st.selectbox('Target variable', target_cols, index=0)
-        desc_for_importance = st.multiselect('Descriptors', top_descriptors,
-                                            default=top_descriptors[:min(15, len(top_descriptors))])
-        if len(desc_for_importance) >= 2:
-            fig = create_feature_importance(df_desc, target, desc_for_importance)
-            st.pyplot(fig)
-            plt.close(fig)
-        else:
-            st.warning('Select at least 2 descriptors.')
-
-def render_export_page(df: pd.DataFrame):
-    """Render the export page."""
-    st.markdown("# 💾 Export Results")
-    
-    if df is None or df.empty:
-        st.warning('⚠️ No data to export.')
-        return
-    
-    st.markdown("### 📥 Download Data")
-    
-    # Export options
-    export_options = st.multiselect(
-        'Select data to export',
-        ['Raw Data', 'Descriptors', 'PCA Results', 'Clustering Results', 'Correlation Results'],
-        default=['Raw Data', 'Descriptors']
-    )
-    
-    if 'Raw Data' in export_options:
-        csv = df.to_csv(index=False)
-        st.download_button(
-            label='📥 Download Raw Data (CSV)',
-            data=csv,
-            file_name='perovskite_data.csv',
-            mime='text/csv'
-        )
-    
-    if 'Descriptors' in export_options and 'descriptors' in st.session_state:
-        csv = st.session_state['descriptors'].to_csv(index=False)
-        st.download_button(
-            label='📥 Download Descriptors (CSV)',
-            data=csv,
-            file_name='perovskite_descriptors_full.csv',
-            mime='text/csv'
-        )
-    
-    if 'PCA Results' in export_options and 'pca_results' in st.session_state:
-        pca_results = st.session_state['pca_results']
-        # Export loadings
-        loadings_csv = pca_results['loadings'].to_csv()
-        st.download_button(
-            label='📥 Download PCA Loadings (CSV)',
-            data=loadings_csv,
-            file_name='pca_loadings.csv',
-            mime='text/csv'
-        )
-        
-        # Export transformed data
-        X_pca_df = pd.DataFrame(
-            pca_results['X_pca'],
-            columns=[f'PC{i+1}' for i in range(pca_results['X_pca'].shape[1])]
-        )
-        csv = X_pca_df.to_csv(index=False)
-        st.download_button(
-            label='📥 Download PCA Transformed Data (CSV)',
-            data=csv,
-            file_name='pca_transformed.csv',
-            mime='text/csv'
-        )
-    
-    if 'Clustering Results' in export_options and 'clustering_results' in st.session_state:
-        clustering = st.session_state['clustering_results']
-        if 'labels' in clustering:
-            labels_df = pd.DataFrame({'cluster': clustering['labels']})
-            csv = labels_df.to_csv(index=False)
-            st.download_button(
-                label='📥 Download Clustering Labels (CSV)',
-                data=csv,
-                file_name='clustering_labels.csv',
-                mime='text/csv'
-            )
-    
-    if 'Correlation Results' in export_options and 'correlation_data' in st.session_state:
-        corr_data = st.session_state['correlation_data']
-        if corr_data['pearson'] is not None:
-            csv = corr_data['pearson'].to_csv()
-            st.download_button(
-                label='📥 Download Pearson Correlation Matrix (CSV)',
-                data=csv,
-                file_name='pearson_correlation.csv',
-                mime='text/csv'
-            )
-        
-        if corr_data['spearman'] is not None:
-            csv = corr_data['spearman'].to_csv()
-            st.download_button(
-                label='📥 Download Spearman Correlation Matrix (CSV)',
-                data=csv,
-                file_name='spearman_correlation.csv',
-                mime='text/csv'
-            )
+    return filtered_df
 
 # ============================================================================
-# SECTION 12: MAIN APPLICATION
+# SECTION 10: MAIN UI
 # ============================================================================
 
 def main():
-    """Main application entry point."""
+    """
+    Main application entry point.
+    """
+    st.title("🔬 Proton-Conducting Perovskite Analysis Dashboard")
+    st.markdown("""
+    **Analyze composition-structure-property relationships in proton-conducting perovskite oxides**
     
-    # Apply scientific style
-    apply_scientific_style()
+    This dashboard provides comprehensive analysis of thermal and chemical expansion coefficients
+    for perovskite materials used in solid oxide fuel cells (SOFCs).
+    """)
     
     # Initialize session state
-    if 'raw_data' not in st.session_state:
-        st.session_state['raw_data'] = None
-    if 'descriptors' not in st.session_state:
-        st.session_state['descriptors'] = None
-    if 'processed' not in st.session_state:
-        st.session_state['processed'] = False
-    if 'filters_reset' not in st.session_state:
-        st.session_state['filters_reset'] = False
+    if 'df_raw' not in st.session_state:
+        st.session_state.df_raw = pd.DataFrame()
+    if 'df_descriptors' not in st.session_state:
+        st.session_state.df_descriptors = pd.DataFrame()
+    if 'correlations' not in st.session_state:
+        st.session_state.correlations = {}
+    if 'top_descriptors' not in st.session_state:
+        st.session_state.top_descriptors = []
+    if 'pca_results' not in st.session_state:
+        st.session_state.pca_results = {}
+    if 'clustering_results' not in st.session_state:
+        st.session_state.clustering_results = {}
     
-    # Title and description
-    st.markdown("# 🔬 Proton-Conducting Perovskites Analyzer")
-    st.markdown("""
-    **Interactive tool for analyzing correlations between chemical composition, 
-    structure, and thermal/chemical expansion properties of proton-conducting perovskite oxides.**
-    
-    *Upload your data, calculate descriptors, and explore hidden correlations through 
-    interactive visualizations.*
-    """)
-    
-    # Sidebar filters (if data is loaded)
-    if st.session_state['raw_data'] is not None:
-        filters = render_sidebar_filters(st.session_state['raw_data'])
-        filtered_data = apply_filters(st.session_state['raw_data'], filters)
+    # Sidebar - Filters
+    with st.sidebar:
+        st.header("🔍 Filters")
         
-        # Update session state with filtered data
-        if 'filtered_data' not in st.session_state or st.session_state['filtered_data'] is not None:
-            st.session_state['filtered_data'] = filtered_data
+        # Data upload section
+        st.subheader("📤 Data Input")
+        
+        data_input = st.text_area(
+            "Paste your data here (tab-separated, with headers):",
+            height=200,
+            help="Paste data in the format shown in the example"
+        )
+        
+        if st.button("🔄 Load Data", type="primary"):
+            if data_input:
+                with st.spinner("Loading and processing data..."):
+                    st.session_state.df_raw = parse_uploaded_data(data_input)
+                    if not st.session_state.df_raw.empty:
+                        st.session_state.df_descriptors = calculate_descriptors(st.session_state.df_raw)
+                        st.success(f"Loaded {len(st.session_state.df_descriptors)} rows")
+                    else:
+                        st.error("Failed to parse data. Please check format.")
+            else:
+                st.warning("Please paste data first.")
+        
+        # Show status
+        if not st.session_state.df_raw.empty:
+            st.info(f"📊 Data loaded: {len(st.session_state.df_raw)} rows, {len(st.session_state.df_raw.columns)} columns")
+        
+        st.divider()
+        
+        # Filter section (only if data loaded)
+        if not st.session_state.df_descriptors.empty:
+            st.subheader("📊 Data Filters")
+            
+            df = st.session_state.df_descriptors
+            
+            # Basic filters
+            with st.expander("Basic Filters", expanded=True):
+                # Method filter
+                if 'method' in df.columns:
+                    methods = ['All'] + sorted(df['method'].dropna().unique().tolist())
+                    selected_method = st.selectbox("Method", methods)
+                else:
+                    selected_method = 'All'
+                
+                # A-cation filter
+                if 'A' in df.columns:
+                    a_cations = ['All'] + sorted(df['A'].dropna().unique().tolist())
+                    selected_a = st.selectbox("A-cation", a_cations)
+                else:
+                    selected_a = 'All'
+                
+                # B-cation filter
+                if 'B' in df.columns:
+                    b_cations = ['All'] + sorted(df['B'].dropna().unique().tolist())
+                    selected_b = st.selectbox("B-cation", b_cations)
+                else:
+                    selected_b = 'All'
+            
+            # Advanced filters
+            with st.expander("Advanced Filters"):
+                # Delta range
+                if 'δ' in df.columns:
+                    delta_min = float(df['δ'].min())
+                    delta_max = float(df['δ'].max())
+                    delta_range = st.slider("δ range", delta_min, delta_max, (delta_min, delta_max))
+                else:
+                    delta_range = (0.0, 1.0)
+                
+                # pH2O range
+                if 'pH2O' in df.columns:
+                    pH_min = float(df['pH2O'].min())
+                    pH_max = float(df['pH2O'].max())
+                    pH_range = st.slider("pH₂O range", pH_min, pH_max, (pH_min, pH_max))
+                else:
+                    pH_range = (0.0, 1.0)
+                
+                # Temperature range
+                if 'delta_T_low' in df.columns and 'delta_T_high' in df.columns:
+                    t_min = float(df['delta_T_low'].min())
+                    t_max = float(df['delta_T_high'].max())
+                    t_range = st.slider("Temperature range (°C)", t_min, t_max, (t_min, t_max))
+                else:
+                    t_range = (0.0, 1200.0)
+                
+                # Has T_bends
+                has_bends = st.checkbox("Only with T(bends) data")
+            
+            # Descriptor filters
+            with st.expander("Descriptor Filters"):
+                # rAav range
+                if 'rAav' in df.columns:
+                    rA_min = float(df['rAav'].min())
+                    rA_max = float(df['rAav'].max())
+                    rA_range = st.slider("rAav range (Å)", rA_min, rA_max, (rA_min, rA_max))
+                else:
+                    rA_range = (0.0, 3.0)
+                
+                # Tolerance factor
+                if 't' in df.columns:
+                    t_min = float(df['t'].min())
+                    t_max = float(df['t'].max())
+                    t_range = st.slider("Tolerance factor (t)", t_min, t_max, (t_min, t_max))
+                else:
+                    t_range = (0.7, 1.1)
+                
+                # chiBav range
+                if 'chiBav' in df.columns:
+                    chi_min = float(df['chiBav'].min())
+                    chi_max = float(df['chiBav'].max())
+                    chi_range = st.slider("χBav range", chi_min, chi_max, (chi_min, chi_max))
+                else:
+                    chi_range = (0.0, 3.0)
+            
+            # Apply filters button
+            if st.button("Apply Filters", type="primary"):
+                # Build filter dictionary
+                filter_dict = {}
+                if selected_method != 'All':
+                    filter_dict['method'] = selected_method
+                if selected_a != 'All':
+                    filter_dict['A'] = selected_a
+                if selected_b != 'All':
+                    filter_dict['B'] = selected_b
+                if 'δ' in df.columns:
+                    filter_dict['δ'] = delta_range
+                if 'pH2O' in df.columns:
+                    filter_dict['pH2O'] = pH_range
+                if 'rAav' in df.columns:
+                    filter_dict['rAav'] = rA_range
+                if 't' in df.columns:
+                    filter_dict['t'] = t_range
+                if 'chiBav' in df.columns:
+                    filter_dict['chiBav'] = chi_range
+                if has_bends:
+                    filter_dict['T_bends_count'] = (1, 100)
+                
+                st.session_state.filtered_data = apply_filters(df, filter_dict)
+                st.success(f"Filtered to {len(st.session_state.filtered_data)} rows")
     
-    # Main tabs
+    # Main content area
+    if st.session_state.df_descriptors.empty:
+        st.info("👈 Please load data using the sidebar")
+        return
+    
+    # Create tabs
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        '📤 Upload',
-        '🔬 Descriptors',
-        '📊 Correlations',
-        '🧬 PCA & Clustering',
-        '📈 Visualizations',
-        '💾 Export'
+        "📊 Data Overview",
+        "🔬 Descriptors",
+        "📈 Correlations",
+        "🧬 PCA & Clustering",
+        "📉 Visualizations",
+        "💾 Export"
     ])
     
+    # Tab 1: Data Overview
     with tab1:
-        render_upload_page()
+        st.header("Data Overview")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Total Rows", len(st.session_state.df_raw))
+        with col2:
+            st.metric("Total Columns", len(st.session_state.df_raw.columns))
+        with col3:
+            if 'method' in st.session_state.df_raw.columns:
+                methods = st.session_state.df_raw['method'].value_counts()
+                st.metric("Methods", len(methods))
+        
+        st.subheader("Sample Data")
+        st.dataframe(st.session_state.df_raw.head(10))
+        
+        st.subheader("Data Statistics")
+        st.dataframe(st.session_state.df_raw.describe())
     
+    # Tab 2: Descriptors
     with tab2:
-        if st.session_state['raw_data'] is not None:
-            render_descriptor_page(st.session_state['raw_data'])
+        st.header("Descriptor Analysis")
+        
+        # Show calculated descriptors
+        st.subheader("Calculated Descriptors")
+        descriptor_cols = [col for col in st.session_state.df_descriptors.columns 
+                          if col in ['rAav', 'rBav', 't', 'D_t', 'chiAav', 'chiBav',
+                                    'delta_chi_AB', 'V_cell', 'S_config_A', 'S_config_B',
+                                    'M_total', 'Vo_proxy', 'proton_affinity', 'T_stab',
+                                    "B'_conc", 'D_total']]
+        
+        if descriptor_cols:
+            st.dataframe(st.session_state.df_descriptors[descriptor_cols].head(10))
         else:
-            st.info('📤 Please upload data first.')
+            st.warning("No descriptor columns available")
+        
+        # Distribution plots
+        st.subheader("Descriptor Distributions")
+        selected_descriptors = st.multiselect(
+            "Select descriptors to visualize",
+            descriptor_cols,
+            default=descriptor_cols[:min(6, len(descriptor_cols))]
+        )
+        
+        if selected_descriptors:
+            fig = create_distribution_plots(st.session_state.df_descriptors, selected_descriptors)
+            st.pyplot(fig)
     
+    # Tab 3: Correlations
     with tab3:
-        if st.session_state.get('descriptors') is not None:
-            render_correlation_page(st.session_state['descriptors'])
+        st.header("Correlation Analysis")
+        
+        # Target variables
+        target_cols = ['alpha', 'β', 'alpha_av', 'T_bends_first']
+        available_targets = [col for col in target_cols if col in st.session_state.df_descriptors.columns]
+        
+        if available_targets:
+            with st.spinner("Calculating correlations..."):
+                st.session_state.correlations = calculate_correlations(
+                    st.session_state.df_descriptors, 
+                    available_targets
+                )
+        
+        if st.session_state.correlations:
+            # Correlation matrix
+            st.subheader("Correlation Matrix")
+            if 'pearson' in st.session_state.correlations:
+                corr_matrix = st.session_state.correlations['pearson']
+                fig = create_correlation_heatmap(corr_matrix, "Pearson Correlation Matrix")
+                st.pyplot(fig)
+            
+            # Top descriptors
+            st.subheader("Top Descriptors")
+            
+            # Find top descriptors if not already
+            if not st.session_state.top_descriptors:
+                st.session_state.top_descriptors = find_top_descriptors(
+                    st.session_state.correlations,
+                    available_targets,
+                    n_top=20
+                )
+            
+            if st.session_state.top_descriptors:
+                st.write("Top 20 descriptors by correlation with target variables:")
+                st.dataframe(pd.DataFrame({
+                    'Descriptor': st.session_state.top_descriptors,
+                    'Rank': range(1, len(st.session_state.top_descriptors) + 1)
+                }))
+                
+                # Feature importance
+                if 'rf_importance' in st.session_state.correlations:
+                    st.subheader("Feature Importance (Random Forest)")
+                    for target in available_targets:
+                        if target in st.session_state.correlations['rf_importance']:
+                            fig = create_feature_importance_plot(
+                                st.session_state.correlations['rf_importance'],
+                                target
+                            )
+                            st.pyplot(fig)
+            
+            # Network correlation
+            st.subheader("Correlation Network")
+            threshold = st.slider("Correlation threshold", 0.3, 0.8, 0.5, 0.05)
+            if 'pearson' in st.session_state.correlations:
+                fig = create_network_correlation(
+                    st.session_state.df_descriptors,
+                    st.session_state.correlations['pearson'],
+                    threshold
+                )
+                st.pyplot(fig)
         else:
-            st.info('🔬 Please calculate descriptors first.')
+            st.warning("Insufficient data for correlation analysis")
     
+    # Tab 4: PCA & Clustering
     with tab4:
-        if st.session_state.get('descriptors') is not None:
-            render_pca_clustering_page(st.session_state['descriptors'])
+        st.header("PCA and Clustering Analysis")
+        
+        # Ensure we have top descriptors
+        if not st.session_state.top_descriptors and st.session_state.correlations:
+            st.session_state.top_descriptors = find_top_descriptors(
+                st.session_state.correlations,
+                available_targets,
+                n_top=20
+            )
+        
+        if st.session_state.top_descriptors:
+            # PCA
+            st.subheader("Principal Component Analysis")
+            
+            # Select descriptors for PCA
+            pca_descriptors = st.multiselect(
+                "Select descriptors for PCA",
+                st.session_state.top_descriptors,
+                default=st.session_state.top_descriptors[:min(10, len(st.session_state.top_descriptors))]
+            )
+            
+            if len(pca_descriptors) >= 3:
+                with st.spinner("Performing PCA..."):
+                    st.session_state.pca_results = perform_pca_analysis(
+                        st.session_state.df_descriptors,
+                        pca_descriptors
+                    )
+                
+                if st.session_state.pca_results:
+                    # Show explained variance
+                    fig, ax = plt.subplots(figsize=(8, 5))
+                    explained = st.session_state.pca_results['explained_variance']
+                    cumulative = st.session_state.pca_results['cumulative_variance']
+                    
+                    ax.bar(range(1, len(explained) + 1), explained * 100, 
+                          alpha=0.7, color='#3498DB', label='Individual')
+                    ax.plot(range(1, len(cumulative) + 1), cumulative * 100, 
+                           'ro-', linewidth=2, label='Cumulative')
+                    ax.axhline(y=85, color='red', linestyle='--', alpha=0.5)
+                    ax.set_xlabel('Principal Component', fontweight='bold')
+                    ax.set_ylabel('Variance Explained (%)', fontweight='bold')
+                    ax.set_title('PCA Explained Variance', fontweight='bold')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+                    st.pyplot(fig)
+                    
+                    # Biplot
+                    st.subheader("PCA Biplot")
+                    fig = create_pca_biplot(
+                        st.session_state.pca_results['pca_result'],
+                        st.session_state.pca_results['loadings']
+                    )
+                    st.pyplot(fig)
+            
+            # Clustering
+            st.subheader("Clustering Analysis")
+            
+            if st.session_state.pca_results and 'pca_result' in st.session_state.pca_results:
+                n_clusters = st.number_input("Number of clusters (0 for automatic)", 
+                                            min_value=0, max_value=10, value=0)
+                
+                with st.spinner("Performing clustering..."):
+                    st.session_state.clustering_results = perform_clustering(
+                        st.session_state.pca_results['pca_result'],
+                        n_clusters if n_clusters > 0 else None
+                    )
+                
+                if st.session_state.clustering_results:
+                    # Show silhouette
+                    st.metric("Silhouette Score", 
+                             f"{st.session_state.clustering_results['silhouette_avg']:.3f}")
+                    st.metric("Optimal Clusters", 
+                             st.session_state.clustering_results['optimal_k'])
+                    
+                    # Cluster profiles
+                    if 'cluster_means' not in locals():
+                        df_clust = st.session_state.df_descriptors[pca_descriptors].copy()
+                        df_clust['Cluster'] = st.session_state.clustering_results['labels']
+                        cluster_means = df_clust.groupby('Cluster')[pca_descriptors].mean()
+                    
+                    fig = create_cluster_profiles(
+                        st.session_state.df_descriptors,
+                        st.session_state.clustering_results['labels'],
+                        pca_descriptors[:min(10, len(pca_descriptors))]
+                    )
+                    st.pyplot(fig)
+        
         else:
-            st.info('🔬 Please calculate descriptors first.')
+            st.warning("Not enough descriptors for PCA. Please load data and calculate correlations first.")
     
+    # Tab 5: Visualizations
     with tab5:
-        if st.session_state.get('descriptors') is not None:
-            # Use filtered data if available
-            data_for_viz = st.session_state.get('filtered_data', st.session_state['descriptors'])
-            render_visualization_page(data_for_viz)
-        else:
-            st.info('🔬 Please calculate descriptors first.')
+        st.header("Advanced Visualizations")
+        
+        # Get filtered data or use full dataset
+        df_viz = getattr(st.session_state, 'filtered_data', st.session_state.df_descriptors)
+        
+        # Target variables for visualization
+        target_vars = ['alpha', 'β', 'alpha_av', 'T_bends_first']
+        available_targets = [col for col in target_vars if col in df_viz.columns]
+        
+        if not available_targets:
+            st.warning("No target variables available for visualization")
+            return
+        
+        # Select target
+        selected_target = st.selectbox("Select target variable", available_targets)
+        
+        # Get top descriptors
+        if not st.session_state.top_descriptors and st.session_state.correlations:
+            st.session_state.top_descriptors = find_top_descriptors(
+                st.session_state.correlations,
+                available_targets,
+                n_top=20
+            )
+        
+        # Add compositional descriptors
+        comp_descriptors = ["B'_conc", 'D_total', 'δ', 'D_ratio']
+        all_descriptors = comp_descriptors + st.session_state.top_descriptors[:15]
+        
+        # Visualization type selector
+        viz_type = st.selectbox(
+            "Select visualization type",
+            ["Concentration Heatmap", "Bubble Chart", "3D Scatter", 
+             "Pairplot", "Scatter with Regression", "α vs β Compromise"]
+        )
+        
+        if viz_type == "Concentration Heatmap":
+            col1, col2 = st.columns(2)
+            with col1:
+                x_col = st.selectbox("X-axis", all_descriptors, key='heat_x')
+            with col2:
+                y_col = st.selectbox("Y-axis", all_descriptors, key='heat_y')
+            
+            if x_col and y_col and x_col != y_col:
+                fig = create_plotly_concentration_heatmap(
+                    df_viz, x_col, y_col, selected_target
+                )
+                st.plotly_chart(fig, use_container_width=True)
+        
+        elif viz_type == "Bubble Chart":
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                x_col = st.selectbox("X-axis", all_descriptors, key='bub_x')
+            with col2:
+                color_col = st.selectbox("Color by", all_descriptors, key='bub_color')
+            with col3:
+                size_col = st.selectbox("Size by", all_descriptors, key='bub_size')
+            
+            # Shape options
+            shape_col = st.selectbox("Shape by (optional)", ['None'] + 
+                                    ['B', 'A', 'method'], key='bub_shape')
+            
+            if x_col and color_col and size_col:
+                fig = create_plotly_bubble_chart(
+                    df_viz, x_col, selected_target, color_col, size_col,
+                    shape_col if shape_col != 'None' else None
+                )
+                st.plotly_chart(fig, use_container_width=True)
+        
+        elif viz_type == "3D Scatter":
+            col1, col2 = st.columns(2)
+            with col1:
+                x_col = st.selectbox("X-axis", all_descriptors, key='3d_x')
+                y_col = st.selectbox("Y-axis", all_descriptors, key='3d_y')
+            with col2:
+                z_col = st.selectbox("Z-axis", ['alpha', 'β', 'alpha_av'], key='3d_z')
+                color_3d = st.selectbox("Color by (optional)", ['None'] + all_descriptors, key='3d_color')
+            
+            if x_col and y_col and z_col:
+                fig = create_plotly_3d_scatter(
+                    df_viz, x_col, y_col, z_col,
+                    color_3d if color_3d != 'None' else None
+                )
+                st.plotly_chart(fig, use_container_width=True)
+        
+        elif viz_type == "Pairplot":
+            selected_features = st.multiselect(
+                "Select features for pairplot",
+                all_descriptors,
+                default=all_descriptors[:min(4, len(all_descriptors))]
+            )
+            
+            hue_opt = st.selectbox("Hue (optional)", ['None'] + ['A', 'B', 'method'], key='pair_hue')
+            
+            if len(selected_features) >= 2:
+                fig = create_pairplot(
+                    df_viz, selected_features,
+                    hue_opt if hue_opt != 'None' else None
+                )
+                st.pyplot(fig)
+        
+        elif viz_type == "Scatter with Regression":
+            col1, col2 = st.columns(2)
+            with col1:
+                x_col = st.selectbox("X-axis", all_descriptors, key='reg_x')
+            with col2:
+                color_reg = st.selectbox("Color by (optional)", ['None'] + all_descriptors, key='reg_color')
+            
+            if x_col:
+                fig = create_scatter_with_regression(
+                    df_viz, x_col, selected_target,
+                    color_reg if color_reg != 'None' else None
+                )
+                st.pyplot(fig)
+        
+        elif viz_type == "α vs β Compromise":
+            alpha_col = st.selectbox("Alpha column", ['alpha', 'alpha_av'], key='ab_alpha')
+            beta_col = st.selectbox("Beta column", ['β'], key='ab_beta')
+            color_ab = st.selectbox("Color by", ['None', 'A', 'B', 'method'], key='ab_color')
+            
+            fig = create_alpha_beta_compromise(
+                df_viz, alpha_col, beta_col,
+                color_ab if color_ab != 'None' else None
+            )
+            st.pyplot(fig)
     
+    # Tab 6: Export
     with tab6:
-        if st.session_state.get('descriptors') is not None:
-            render_export_page(st.session_state['descriptors'])
+        st.header("Export Results")
+        
+        st.subheader("Export Data")
+        
+        # Export options
+        export_type = st.radio("Export type", ["Raw Data", "Descriptors", "Filtered Data"])
+        
+        if export_type == "Raw Data":
+            export_df = st.session_state.df_raw
+        elif export_type == "Descriptors":
+            export_df = st.session_state.df_descriptors
         else:
-            st.info('🔬 Please calculate descriptors first.')
-    
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-    **🔬 Proton-Conducting Perovskites Analyzer v1.0**  
-    *Built with Streamlit • Data-driven materials science*
-    """)
+            export_df = getattr(st.session_state, 'filtered_data', st.session_state.df_descriptors)
+        
+        if not export_df.empty:
+            # Download as CSV
+            csv = export_df.to_csv(index=False)
+            st.download_button(
+                label="📥 Download CSV",
+                data=csv,
+                file_name=f"{export_type.lower().replace(' ', '_')}.csv",
+                mime="text/csv"
+            )
+            
+            # Download as Excel
+            from io import BytesIO
+            buffer = BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                export_df.to_excel(writer, index=False, sheet_name='Data')
+            st.download_button(
+                label="📥 Download Excel",
+                data=buffer.getvalue(),
+                file_name=f"{export_type.lower().replace(' ', '_')}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        
+        st.subheader("Export Plots")
+        st.info("Plots can be saved individually by clicking the download icon on each plot.")
+        
+        st.subheader("Session Summary")
+        st.write(f"Data rows: {len(st.session_state.df_raw)}")
+        st.write(f"Descriptors calculated: {len(st.session_state.df_descriptors.columns)}")
+        if st.session_state.top_descriptors:
+            st.write(f"Top descriptors identified: {len(st.session_state.top_descriptors)}")
+        if st.session_state.correlations:
+            st.write("Correlation analysis: Completed")
+        if st.session_state.pca_results:
+            st.write("PCA analysis: Completed")
+        if st.session_state.clustering_results:
+            st.write("Clustering analysis: Completed")
+        
+        # Reset option
+        if st.button("🔄 Reset All Data", type="primary"):
+            st.session_state.df_raw = pd.DataFrame()
+            st.session_state.df_descriptors = pd.DataFrame()
+            st.session_state.correlations = {}
+            st.session_state.top_descriptors = []
+            st.session_state.pca_results = {}
+            st.session_state.clustering_results = {}
+            st.rerun()
+
 
 if __name__ == "__main__":
     main()

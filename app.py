@@ -1467,7 +1467,13 @@ def create_cluster_profiles(df: pd.DataFrame, clusters: np.ndarray,
     cbar.set_label('Normalized Value', fontweight='bold')
     
     ax.set_title('Cluster Profiles (Mean Values)', fontweight='bold', fontsize=14)
-    plt.tight_layout()
+    
+    # Исправленная версия с try/except
+    try:
+        plt.tight_layout()
+    except RuntimeError:
+        plt.subplots_adjust(left=0.15, right=0.95, top=0.95, bottom=0.15)
+    
     return fig
 
 

@@ -586,8 +586,6 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
     # B-O bond energy proxy (Coulombic)
     df_desc['E_BO'] = (df_desc['V_Bav'] * 2) / (df_desc['rBav'] + 1e-10)
     
-    # Mass density proxy
-    df_desc['rho'] = df_desc['M_total'] / df_desc['V_cell']
     
     # ========================================================================
     # Group 4: Mass descriptors
@@ -611,6 +609,8 @@ def calculate_descriptors(df: pd.DataFrame) -> pd.DataFrame:
     df_desc['M_ratio_AB'] = df_desc['M_Aav'] / (df_desc['M_Bav'] + 1e-10)
     df_desc['M_rA'] = df_desc['M_Aav'] * df_desc['rAav']
     df_desc['M_chiA'] = df_desc['M_Aav'] * df_desc['chiAav']
+
+    df_desc['rho'] = df_desc['M_total'] / df_desc['V_cell']
     
     # ========================================================================
     # Group 5: Defect descriptors

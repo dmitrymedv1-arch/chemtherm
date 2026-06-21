@@ -1,4 +1,45 @@
 # ============================================================================
+# 0. ГЛОБАЛЬНЫЙ ХАК ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ LAYOUT ENGINE
+# ============================================================================
+
+import matplotlib.pyplot as plt
+import matplotlib as mpl
+
+# Сохраняем оригинальный метод tight_layout
+_original_tight_layout = plt.tight_layout
+
+# Создаем обертку, которая автоматически находит текущую фигуру
+def _patched_tight_layout(*args, **kwargs):
+    """Патч для plt.tight_layout() - использует fig.tight_layout() вместо plt"""
+    fig = plt.gcf()
+    if fig is not None:
+        try:
+            fig.tight_layout(*args, **kwargs)
+        except RuntimeError as e:
+            # Если возникает ошибка с colorbar, пробуем альтернативный подход
+            if 'Colorbar layout' in str(e):
+                # Отключаем автоматическую компоновку и используем subplots_adjust
+                try:
+                    fig.subplots_adjust(left=0.1, right=0.95, top=0.95, bottom=0.1)
+                except:
+                    pass
+            else:
+                raise e
+
+# Подменяем глобальную функцию
+plt.tight_layout = _patched_tight_layout
+
+# Также патчим для pyplot (на всякий случай)
+import matplotlib.pyplot as plt_orig
+if hasattr(plt_orig, 'tight_layout'):
+    plt_orig.tight_layout = _patched_tight_layout
+
+# Отключаем constrained_layout по умолчанию для избежания конфликтов
+mpl.rcParams['figure.constrained_layout.use'] = False
+mpl.rcParams['figure.autolayout'] = False
+
+
+# ============================================================================
 # 1. ИМПОРТЫ И НАСТРОЙКИ
 # ============================================================================
 

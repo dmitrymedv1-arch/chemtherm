@@ -50,12 +50,12 @@ import re
 import warnings
 warnings.filterwarnings('ignore')
 
-# Визуализация
+# Визуализация (ТОЛЬКО Matplotlib и Seaborn)
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 import seaborn as sns
-import plotly.express as px
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 # Статистика и ML
 from scipy import stats
@@ -201,7 +201,7 @@ REQUIRED_COLUMNS = ['№', 'A', 'A\'', 'B', 'B\'', 'D1', 'D2', '[A\']', '[B\']',
                    'δ', 'method', 'β', '∆T, °C', 'α·106 (K-1)', 'T(bends), °C', 
                    'αav·106 (K-1)', 'pH2O', 'Ref']
 
-# 2.9. Топ-25 дескрипторов для визуализации (НОВЫЙ СПИСОК)
+# 2.9. Топ-25 дескрипторов для визуализации
 TOP_DESCRIPTORS = [
     # --- Составные (5) ---
     'δ', '[B\']', 'D_total', 'B\'_conc', 'D_B_ratio',
@@ -249,27 +249,27 @@ TERNARY_VERTEX_OPTIONS = [
 ]
 
 # ============================================================================
-# 3. НАСТРОЙКИ НАУЧНОГО СТИЛЯ
+# 3. НАСТРОЙКИ НАУЧНОГО СТИЛЯ (ОБНОВЛЕННЫЕ)
 # ============================================================================
 
 def apply_scientific_style():
     """Улучшенный научный стиль для matplotlib для материаловедческих публикаций"""
     plt.style.use('seaborn-v0_8-whitegrid')
     plt.rcParams.update({
-        # Шрифты
-        'font.size': 11,
+        # Основные шрифты
+        'font.size': 10,
         'font.family': 'serif',
         'font.serif': ['Times New Roman', 'DejaVu Serif'],
         'mathtext.fontset': 'stix',
         
         # Оси
-        'axes.labelsize': 12,
+        'axes.labelsize': 11,
         'axes.labelweight': 'bold',
-        'axes.titlesize': 13,
+        'axes.titlesize': 12,
         'axes.titleweight': 'bold',
         'axes.facecolor': '#FFFFFF',
-        'axes.edgecolor': '#000000',
-        'axes.linewidth': 1.5,
+        'axes.edgecolor': 'black',
+        'axes.linewidth': 1.0,
         'axes.spines.top': False,
         'axes.spines.right': False,
         'axes.grid': True,
@@ -278,44 +278,44 @@ def apply_scientific_style():
         'grid.linewidth': 0.8,
         
         # Метки
-        'xtick.color': '#000000',
-        'ytick.color': '#000000',
-        'xtick.labelsize': 11,
-        'ytick.labelsize': 11,
+        'xtick.color': 'black',
+        'ytick.color': 'black',
+        'xtick.labelsize': 10,
+        'ytick.labelsize': 10,
         'xtick.direction': 'in',
         'ytick.direction': 'in',
-        'xtick.major.size': 7,
-        'xtick.major.width': 1.5,
-        'ytick.major.size': 7,
-        'ytick.major.width': 1.5,
+        'xtick.major.size': 6,
+        'xtick.major.width': 1.0,
+        'ytick.major.size': 6,
+        'ytick.major.width': 1.0,
         'xtick.minor.size': 3,
-        'xtick.minor.width': 1.0,
+        'xtick.minor.width': 0.8,
         'ytick.minor.size': 3,
-        'ytick.minor.width': 1.0,
+        'ytick.minor.width': 0.8,
         
-        # Легенда
+        # Легенда (ОБНОВЛЕНО)
         'legend.fontsize': 10,
         'legend.frameon': True,
         'legend.framealpha': 0.9,
-        'legend.edgecolor': '#000000',
+        'legend.edgecolor': 'black',
         'legend.fancybox': False,
         'legend.borderaxespad': 0.5,
         'legend.handlelength': 1.5,
         'legend.handletextpad': 0.8,
         
         # Фигура
-        'figure.dpi': 300,
-        'savefig.dpi': 300,
+        'figure.dpi': 600,
+        'savefig.dpi': 600,
         'savefig.bbox': 'tight',
-        'savefig.pad_inches': 0.05,
+        'savefig.pad_inches': 0.1,
         'figure.facecolor': 'white',
-        'figure.constrained_layout.use': True,
+        'figure.constrained_layout.use': False,
         'figure.figsize': (8, 6),
         
         # Линии
-        'lines.linewidth': 2,
-        'lines.markersize': 7,
-        'lines.markeredgewidth': 1.0,
+        'lines.linewidth': 1.5,
+        'lines.markersize': 6,
+        'lines.markeredgewidth': 0.8,
         'errorbar.capsize': 3,
         
         # PDF для публикаций
@@ -323,85 +323,55 @@ def apply_scientific_style():
         'ps.fonttype': 42,
     })
 
-def get_plotly_layout(title, xlabel, ylabel, width=None, height=None, showlegend=True):
-    """Стандартный layout для Plotly графиков в научном стиле с увеличенными шрифтами"""
-    layout = go.Layout(
-        title=dict(
-            text=title,
-            font=dict(size=16, family='Times New Roman', color='#000000'),
-            x=0.5,
-            xanchor='center'
-        ),
-        xaxis=dict(
-            title=dict(text=xlabel, font=dict(size=14, family='Times New Roman', color='#000000')),
-            tickfont=dict(size=12, family='Times New Roman', color='#000000'),
-            showline=True,
-            linewidth=1.5,
-            linecolor='#000000',
-            mirror=True,
-            ticks='inside',
-            tickwidth=1.5,
-            ticklen=6,
-            gridcolor='#e0e0e0',
-            gridwidth=0.5,
-            zeroline=False
-        ),
-        yaxis=dict(
-            title=dict(text=ylabel, font=dict(size=14, family='Times New Roman', color='#000000')),
-            tickfont=dict(size=12, family='Times New Roman', color='#000000'),
-            showline=True,
-            linewidth=1.5,
-            linecolor='#000000',
-            mirror=True,
-            ticks='inside',
-            tickwidth=1.5,
-            ticklen=6,
-            gridcolor='#e0e0e0',
-            gridwidth=0.5,
-            zeroline=False
-        ),
-        plot_bgcolor='white',
-        paper_bgcolor='white',
-        font=dict(family='Times New Roman', color='#000000'),
-        legend=dict(
-            font=dict(size=11, family='Times New Roman'),
-            borderwidth=1.5,
-            bordercolor='#000000',
-            x=1.02,
-            y=1,
-            xanchor='left',
-            yanchor='top'
-        ) if showlegend else dict(showlegend=False),
-        width=width,
-        height=height,
-        margin=dict(l=80, r=40, t=60, b=60),
-        hovermode='closest'
-    )
-    return layout
 
-def add_bubble_legend(fig, data, size_feature, position='top-right'):
-    """Добавление легенды размера пузырьков для Plotly"""
+def create_bubble_legend(ax, data, size_feature, min_val, max_val, mean_val, position='upper left'):
+    """
+    Создание легенды размера пузырьков для Matplotlib с использованием Line2D
     
-    min_val = data[size_feature].min()
-    max_val = data[size_feature].max()
-    mean_val = data[size_feature].mean()
+    Parameters:
+    -----------
+    ax : matplotlib.axes.Axes
+        Ось, на которую добавляется легенда
+    data : pandas.DataFrame
+        Данные с размером
+    size_feature : str
+        Название признака размера
+    min_val, max_val, mean_val : float
+        Минимальное, максимальное и среднее значения размера
+    position : str
+        Позиция легенды (по умолчанию 'upper left')
     
-    # Добавляем фиктивные точки для легенды
-    for label, val in [('Min', min_val), ('Mean', mean_val), ('Max', max_val)]:
-        fig.add_trace(go.Scatter(
-            x=[None],
-            y=[None],
-            mode='markers',
-            marker=dict(
-                size=10 + (val - min_val) / (max_val - min_val + 1e-10) * 40,
-                color='#2C3E50',
-                line=dict(width=1, color='black')
-            ),
-            name=f'{label}: {val:.3f}',
-            showlegend=True
-        ))
+    Returns:
+    --------
+    matplotlib.legend.Legend
+        Объект легенды
+    """
+    # Нормализация для размера маркеров (от 20 до 80)
+    size_range = max_val - min_val if max_val - min_val > 0 else 1.0
     
-    return fig
+    # Создаем элементы легенды
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='black', label=f'Min: {min_val:.4f}',
+               markersize=4, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
+        Line2D([0], [0], marker='o', color='black', label=f'Mean: {mean_val:.4f}',
+               markersize=8, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
+        Line2D([0], [0], marker='o', color='black', label=f'Max: {max_val:.4f}',
+               markersize=12, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5)
+    ]
+    
+    # Добавляем легенду
+    legend = ax.legend(
+        handles=legend_elements,
+        title=f'Size: {size_feature}',
+        loc=position,
+        frameon=True,
+        framealpha=0.9,
+        edgecolor='black',
+        fontsize=10,
+        title_fontsize=10
+    )
+    
+    return legend
 
 
 # ============================================================================
@@ -1406,7 +1376,7 @@ class CorrelationAnalyzer:
 
 
 class VisualizationEngine:
-    """Генерация всех графиков"""
+    """Генерация всех графиков с использованием Matplotlib"""
     
     def __init__(self, df):
         self.df = df.copy()
@@ -2111,94 +2081,8 @@ class VisualizationEngine:
         plt.tight_layout()
         return fig
     
-    def plot_pca_3d(self, features=None):
-        """14. 3D PCA (интерактивный)"""
-        if features is None:
-            features = self.all_features
-        
-        if len(features) < 3:
-            return None
-        
-        # Фильтруем признаки
-        valid_features = []
-        for feature in features:
-            if feature in self.df.columns:
-                non_na = self.df[feature].dropna()
-                if len(non_na) > 10:
-                    valid_features.append(feature)
-        
-        if len(valid_features) < 3:
-            return None
-        
-        data = self.df[valid_features].dropna()
-        if len(data) < 5:
-            return None
-        
-        # Стандартизация
-        scaler = StandardScaler()
-        data_scaled = scaler.fit_transform(data)
-        
-        # PCA
-        pca = PCA(n_components=3)
-        pca_result = pca.fit_transform(data_scaled)
-        
-        # Создаём 3D scatter plot с помощью Plotly
-        fig = go.Figure()
-        
-        # Добавляем точки
-        fig.add_trace(go.Scatter3d(
-            x=pca_result[:, 0],
-            y=pca_result[:, 1],
-            z=pca_result[:, 2],
-            mode='markers',
-            marker=dict(
-                size=5,
-                color=pca_result[:, 0],
-                colorscale='Viridis',
-                colorbar=dict(title='PC1'),
-                showscale=True,
-                opacity=0.8
-            ),
-            text=data.index,
-            hoverinfo='text'
-        ))
-        
-        # Настройки layout
-        fig.update_layout(
-            title=dict(
-                text='3D PCA Projection',
-                font=dict(size=14, family='Times New Roman', color='#000000'),
-                x=0.5
-            ),
-            scene=dict(
-                xaxis=dict(
-                    title=f'PC1 ({pca.explained_variance_ratio_[0]*100:.1f}%)',
-                    gridcolor='lightgray',
-                    showbackground=True,
-                    backgroundcolor='white'
-                ),
-                yaxis=dict(
-                    title=f'PC2 ({pca.explained_variance_ratio_[1]*100:.1f}%)',
-                    gridcolor='lightgray',
-                    showbackground=True,
-                    backgroundcolor='white'
-                ),
-                zaxis=dict(
-                    title=f'PC3 ({pca.explained_variance_ratio_[2]*100:.1f}%)',
-                    gridcolor='lightgray',
-                    showbackground=True,
-                    backgroundcolor='white'
-                )
-            ),
-            width=900,
-            height=700,
-            margin=dict(l=0, r=0, b=0, t=50)
-        )
-        
-        return fig
-    
     def plot_tsne_umap(self, features=None, perplexity=30, n_neighbors=15, min_dist=0.1):
-        """15. t-SNE и UMAP"""
+        """14. t-SNE и UMAP"""
         if features is None:
             features = self.all_features
         
@@ -2271,7 +2155,7 @@ class VisualizationEngine:
         return fig
     
     def plot_silhouette(self, features=None, max_clusters=10):
-        """16. Silhouette plot"""
+        """15. Silhouette plot"""
         if features is None:
             features = self.all_features
         
@@ -2370,7 +2254,7 @@ class VisualizationEngine:
     # --- КАТЕГОРИЯ 4: КОНЦЕНТРАЦИОННЫЕ КАРТЫ ---
     
     def plot_heatmap_2d(self, x_feature, y_feature, target, grid_resolution=50):
-        """17. 2D Heatmap - только целевая переменная фильтруется"""
+        """16. 2D Heatmap - только целевая переменная фильтруется"""
         if x_feature not in self.df.columns or y_feature not in self.df.columns:
             return None
         
@@ -2427,7 +2311,7 @@ class VisualizationEngine:
         return fig
     
     def plot_contour(self, x_feature, y_feature, target, grid_resolution=50):
-        """18. Contour plot с изолиниями - только целевая переменная фильтруется"""
+        """17. Contour plot с изолиниями - только целевая переменная фильтруется"""
         if x_feature not in self.df.columns or y_feature not in self.df.columns:
             return None
         
@@ -2482,7 +2366,7 @@ class VisualizationEngine:
         return fig
     
     def plot_heatmap_with_points(self, x_feature, y_feature, target, grid_resolution=50):
-        """19. Heatmap + overlay точек - только целевая переменная фильтруется"""
+        """18. Heatmap + overlay точек - только целевая переменная фильтруется"""
         if x_feature not in self.df.columns or y_feature not in self.df.columns:
             return None
         
@@ -2543,7 +2427,7 @@ class VisualizationEngine:
     # --- КАТЕГОРИЯ 4.5: TERNARY PLOT (РАСШИРЕННЫЙ) ---
     
     def plot_ternary_advanced(self, a_feature, b_feature, c_feature, target, plot_type='scatter', grid_resolution=50):
-        """20. Advanced Ternary plot с выбором типа визуализации"""
+        """19. Advanced Ternary plot с выбором типа визуализации"""
         
         if target is None:
             target = 'α·106 (K-1)'
@@ -2781,7 +2665,7 @@ class VisualizationEngine:
         return fig
     
     def plot_temperature_slice(self, feature=None, target=None):
-        """21. α vs T для разных составов"""
+        """20. α vs T для разных составов"""
         if target is None:
             target = 'α·106 (K-1)'
         
@@ -2824,10 +2708,10 @@ class VisualizationEngine:
         plt.tight_layout()
         return fig
     
-    # --- КАТЕГОРИЯ 5: ПУЗЫРЬКОВЫЕ ДИАГРАММЫ (НАУЧНЫЙ СТИЛЬ) ---
+    # --- КАТЕГОРИЯ 5: ПУЗЫРЬКОВЫЕ ДИАГРАММЫ (MATPLOTLIB) ---
     
     def plot_bubble_4d(self, x_feature, y_target, color_feature, size_feature, shape_by='method'):
-        """22. 4D Bubble с формами маркеров - научный стиль"""
+        """21. 4D Bubble с формами маркеров - Matplotlib с научным стилем"""
         if x_feature not in self.df.columns or color_feature not in self.df.columns:
             return None
         
@@ -2848,65 +2732,51 @@ class VisualizationEngine:
         if len(data) < len(self.df):
             st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
-        # Создаём интерактивный график с Plotly
-        fig = go.Figure()
+        fig, ax = plt.subplots(figsize=(10, 8))
         
-        # Преобразование размера
+        # Нормализация размера
         size_min = data[size_feature].min()
         size_max = data[size_feature].max()
         size_norm = (data[size_feature] - size_min) / (size_max - size_min + 1e-10)
-        size_scaled = 10 + size_norm * 40
+        size_scaled = 20 + size_norm * 60  # От 20 до 80
         
-        # Добавляем точки
-        fig.add_trace(go.Scatter(
-            x=data[x_feature],
-            y=data[y_target],
-            mode='markers',
-            marker=dict(
-                size=size_scaled,
-                color=data[color_feature],
-                colorscale='Viridis',
-                showscale=True,
-                colorbar=dict(title=color_feature, tickfont=dict(size=12)),
-                line=dict(width=1, color='black'),
-                opacity=0.7
-            ),
-            text=[f'{x_feature}: {x:.3f}<br>{y_target}: {y:.3f}<br>{color_feature}: {c:.3f}<br>{size_feature}: {s:.3f}' 
-                  for x, y, c, s in zip(data[x_feature], data[y_target], data[color_feature], data[size_feature])],
-            hoverinfo='text'
-        ))
+        # Цветовая карта
+        cmap = plt.cm.viridis
+        norm = plt.Normalize(data[color_feature].min(), data[color_feature].max())
         
-        # Добавляем легенду размера
-        fig = add_bubble_legend(fig, data, size_feature)
-        
-        # Добавляем аннотацию с размером
-        fig.add_annotation(
-            x=0.98, y=0.98, xref='paper', yref='paper',
-            text=f'Size: {size_feature}',
-            showarrow=False,
-            font=dict(size=12, family='Times New Roman'),
-            bgcolor='white',
-            bordercolor='black',
-            borderwidth=1,
-            borderpad=4,
-            xanchor='right',
-            yanchor='top'
+        # Scatter plot с размером
+        scatter = ax.scatter(
+            data[x_feature], 
+            data[y_target],
+            s=size_scaled,
+            c=data[color_feature],
+            cmap='viridis',
+            norm=norm,
+            alpha=0.7,
+            edgecolors='black',
+            linewidth=0.8
         )
         
-        # Настройки layout
-        layout = get_plotly_layout(
-            title=f'{y_target} vs {x_feature}',
-            xlabel=x_feature,
-            ylabel=y_target,
-            width=900,
-            height=600
-        )
-        fig.update_layout(layout)
+        # Цветовая шкаба
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label(color_feature, fontsize=11, fontweight='bold')
         
+        # Легенда размера
+        legend = create_bubble_legend(
+            ax, data, size_feature, size_min, size_max, data[size_feature].mean()
+        )
+        
+        # Оформление
+        ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')
+        ax.set_ylabel(y_target, fontsize=12, fontweight='bold')
+        ax.set_title(f'{y_target} vs {x_feature}', fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
         return fig
     
     def plot_compositional_bubble(self, target='α·106 (K-1)'):
-        """23. Compositional Bubble ([B'] vs α) - научный стиль"""
+        """22. Compositional Bubble ([B'] vs α) - Matplotlib с научным стилем"""
         if target not in self.df.columns:
             return None
         
@@ -2924,74 +2794,70 @@ class VisualizationEngine:
         if len(data) < len(self.df):
             st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
-        fig = go.Figure()
+        fig, ax = plt.subplots(figsize=(10, 8))
         
-        # Группировка по B-катиону
-        for b_cation in data['B'].unique():
-            group = data[data['B'] == b_cation]
-            
-            fig.add_trace(go.Scatter(
-                x=group['[B\']'],
-                y=group[target],
-                mode='markers',
-                name=b_cation,
-                marker=dict(
-                    size=10 + (group['δ'] - data['δ'].min()) / (data['δ'].max() - data['δ'].min() + 1e-10) * 40,
-                    sizemin=5,
-                    line=dict(width=1, color='black')
-                ),
-                text=[f'B: {b_cation}<br>[B\']: {b:.3f}<br>{target}: {t:.3f}<br>δ: {d:.3f}' 
-                      for b, t, d in zip(group['[B\']'], group[target], group['δ'])],
-                hoverinfo='text'
-            ))
-        
-        # Добавляем легенду размера (δ)
+        # Нормализация размера по δ
         delta_min = data['δ'].min()
         delta_max = data['δ'].max()
-        delta_mean = data['δ'].mean()
+        delta_norm = (data['δ'] - delta_min) / (delta_max - delta_min + 1e-10)
+        size_scaled = 20 + delta_norm * 60
         
-        for label, val in [('Min δ', delta_min), ('Mean δ', delta_mean), ('Max δ', delta_max)]:
-            fig.add_trace(go.Scatter(
-                x=[None],
-                y=[None],
-                mode='markers',
-                marker=dict(
-                    size=10 + (val - delta_min) / (delta_max - delta_min + 1e-10) * 40,
-                    color='#2C3E50',
-                    line=dict(width=1, color='black')
-                ),
-                name=f'{label}: {val:.3f}',
-                showlegend=True
-            ))
+        # Цвета по B-катиону
+        b_cations = data['B'].unique()
+        color_map = COLOR_PALETTES['B_cation']
+        colors = [color_map.get(b, '#2C3E50') for b in data['B']]
         
-        # Добавляем аннотацию с размером
-        fig.add_annotation(
-            x=0.98, y=0.98, xref='paper', yref='paper',
-            text='Size: δ (oxygen vacancy concentration)',
-            showarrow=False,
-            font=dict(size=12, family='Times New Roman'),
-            bgcolor='white',
-            bordercolor='black',
-            borderwidth=1,
-            borderpad=4,
-            xanchor='right',
-            yanchor='top'
+        # Scatter plot
+        scatter = ax.scatter(
+            data['[B\']'],
+            data[target],
+            s=size_scaled,
+            c=colors,
+            alpha=0.7,
+            edgecolors='black',
+            linewidth=0.8
         )
         
-        # Настройки layout
-        layout = get_plotly_layout(
-            title=f'{target} vs [B\'] (Size = δ)',
-            xlabel='[B\'] Concentration',
-            ylabel=target,
-            width=900,
-            height=600
-        )
-        fig.update_layout(layout)
+        # Легенда для B-катионов
+        legend_elements = []
+        for b_cation in b_cations:
+            color = color_map.get(b_cation, '#2C3E50')
+            legend_elements.append(
+                Line2D([0], [0], marker='o', color='black', label=b_cation,
+                       markersize=8, markerfacecolor=color, linestyle='None')
+            )
         
+        # Легенда размера
+        size_legend = create_bubble_legend(
+            ax, data, 'δ', delta_min, delta_max, data['δ'].mean(), position='lower right'
+        )
+        
+        # Добавляем легенду для B-катионов
+        ax.legend(
+            handles=legend_elements,
+            title='B-cation',
+            loc='upper left',
+            frameon=True,
+            framealpha=0.9,
+            edgecolor='black',
+            fontsize=10,
+            title_fontsize=10
+        )
+        
+        # Добавляем размерную легенду
+        ax.add_artist(size_legend)
+        
+        # Оформление
+        ax.set_xlabel('[B\'] Concentration', fontsize=12, fontweight='bold')
+        ax.set_ylabel(target, fontsize=12, fontweight='bold')
+        ax.set_title(f'{target} vs [B\'] (Size = δ)', fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
         return fig
     
     def plot_bubble_with_trend(self, x_feature, y_target, color_feature=None):
-        """24. Bubble + trend line - научный стиль"""
+        """23. Bubble + trend line - Matplotlib с научным стилем"""
         if x_feature not in self.df.columns or y_target not in self.df.columns:
             return None
         
@@ -3006,101 +2872,50 @@ class VisualizationEngine:
         if len(data) < len(self.df):
             st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Scatter plot
+        if color_feature and color_feature in self.df.columns:
+            color_data = self.df.loc[data.index, color_feature]
+            scatter = ax.scatter(
+                data[x_feature], data[y_target],
+                c=color_data, cmap='viridis',
+                s=50, alpha=0.7, edgecolors='black', linewidth=0.8
+            )
+            cbar = plt.colorbar(scatter, ax=ax)
+            cbar.set_label(color_feature, fontsize=11, fontweight='bold')
+        else:
+            ax.scatter(data[x_feature], data[y_target], 
+                      color='#3498DB', s=50, alpha=0.7, edgecolors='black', linewidth=0.8)
+        
         # Линейная регрессия
         try:
             X = data[[x_feature]].values
             y = data[y_target].values
             
             reg = LinearRegression().fit(X, y)
-            y_pred = reg.predict(X)
             r2 = reg.score(X, y)
             
             x_range = np.linspace(X.min(), X.max(), 100)
             y_range = reg.predict(x_range.reshape(-1, 1))
-        except:
-            y_pred = None
-            r2 = None
-            x_range = None
-            y_range = None
-        
-        fig = go.Figure()
-        
-        # Точки
-        if color_feature and color_feature in self.df.columns:
-            color_data = self.df.loc[data.index, color_feature]
-            fig.add_trace(go.Scatter(
-                x=data[x_feature],
-                y=data[y_target],
-                mode='markers',
-                marker=dict(
-                    size=12,
-                    color=color_data,
-                    colorscale='Viridis',
-                    showscale=True,
-                    colorbar=dict(title=color_feature, tickfont=dict(size=12)),
-                    line=dict(width=1, color='black'),
-                    opacity=0.7
-                ),
-                text=[f'{x_feature}: {x:.3f}<br>{y_target}: {y:.3f}' for x, y in zip(data[x_feature], data[y_target])],
-                hoverinfo='text',
-                name='Data points'
-            ))
-        else:
-            fig.add_trace(go.Scatter(
-                x=data[x_feature],
-                y=data[y_target],
-                mode='markers',
-                marker=dict(
-                    size=12,
-                    color='#3498DB',
-                    line=dict(width=1, color='black'),
-                    opacity=0.7
-                ),
-                text=[f'{x_feature}: {x:.3f}<br>{y_target}: {y:.3f}' for x, y in zip(data[x_feature], data[y_target])],
-                hoverinfo='text',
-                name='Data points'
-            ))
-        
-        # Линия регрессии
-        if x_range is not None and y_range is not None:
-            fig.add_trace(go.Scatter(
-                x=x_range.flatten(),
-                y=y_range.flatten(),
-                mode='lines',
-                name=f'Regression (R² = {r2:.3f})',
-                line=dict(color='red', width=2)
-            ))
             
-            # Добавляем R² в аннотацию
-            fig.add_annotation(
-                x=0.95,
-                y=0.95,
-                xref='paper',
-                yref='paper',
-                text=f'R² = {r2:.3f}',
-                showarrow=False,
-                font=dict(size=12, color='red', family='Times New Roman'),
-                bordercolor='black',
-                borderwidth=1,
-                borderpad=4,
-                bgcolor='white',
-                opacity=0.8
-            )
+            ax.plot(x_range, y_range, color='red', linewidth=2, label=f'Regression (R² = {r2:.3f})')
+            ax.legend(loc='upper left', frameon=True, framealpha=0.9, edgecolor='black', fontsize=10)
+            
+        except:
+            pass
         
-        # Настройки layout
-        layout = get_plotly_layout(
-            title=f'{y_target} vs {x_feature}',
-            xlabel=x_feature,
-            ylabel=y_target,
-            width=900,
-            height=600
-        )
-        fig.update_layout(layout)
+        # Оформление
+        ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')
+        ax.set_ylabel(y_target, fontsize=12, fontweight='bold')
+        ax.set_title(f'{y_target} vs {x_feature}', fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3)
         
+        plt.tight_layout()
         return fig
     
     def plot_bubble_filtered_by_ph2o(self, x_feature, y_target, color_feature=None):
-        """25. Bubble с фильтрацией по pH₂O - научный стиль"""
+        """24. Bubble с фильтрацией по pH₂O - Matplotlib с научным стилем"""
         if x_feature not in self.df.columns or y_target not in self.df.columns:
             return None
         
@@ -3118,48 +2933,36 @@ class VisualizationEngine:
         if len(data) < len(self.df):
             st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
-        # Создаём интерактивный график с цветом по pH2O
-        fig = go.Figure()
+        fig, ax = plt.subplots(figsize=(10, 8))
         
         # Группировка по диапазонам pH2O
         ph2o_groups = pd.cut(data['pH2O'], bins=4, labels=['Very Low', 'Low', 'Medium', 'High'])
-        
-        # Цветовая карта для групп
         colors = ['#2C3E50', '#3498DB', '#F39C12', '#E74C3C']
         
         for i, group in enumerate(ph2o_groups.cat.categories):
             group_data = data[ph2o_groups == group]
             if len(group_data) > 0:
-                fig.add_trace(go.Scatter(
-                    x=group_data[x_feature],
-                    y=group_data[y_target],
-                    mode='markers',
-                    name=group,
-                    marker=dict(
-                        size=12,
-                        color=colors[i % len(colors)],
-                        line=dict(width=1, color='black'),
-                        opacity=0.7
-                    ),
-                    text=[f'{x_feature}: {x:.3f}<br>{y_target}: {y:.3f}<br>pH2O: {p:.5f}' 
-                          for x, y, p in zip(group_data[x_feature], group_data[y_target], group_data['pH2O'])],
-                    hoverinfo='text'
-                ))
+                ax.scatter(
+                    group_data[x_feature], group_data[y_target],
+                    color=colors[i % len(colors)],
+                    label=group,
+                    s=50, alpha=0.7, edgecolors='black', linewidth=0.8
+                )
         
-        # Настройки layout
-        layout = get_plotly_layout(
-            title=f'{y_target} vs {x_feature} (colored by pH₂O)',
-            xlabel=x_feature,
-            ylabel=y_target,
-            width=900,
-            height=600
-        )
-        fig.update_layout(layout)
+        # Легенда
+        ax.legend(loc='upper left', frameon=True, framealpha=0.9, edgecolor='black', fontsize=10)
         
+        # Оформление
+        ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')
+        ax.set_ylabel(y_target, fontsize=12, fontweight='bold')
+        ax.set_title(f'{y_target} vs {x_feature} (colored by pH₂O)', fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
         return fig
     
     def plot_bubble_size_delta(self, x_feature, y_target, color_feature=None):
-        """26. Bubble с размером = δ - научный стиль с легендой"""
+        """25. Bubble с размером = δ - Matplotlib с научным стилем и легендой"""
         if x_feature not in self.df.columns or y_target not in self.df.columns:
             return None
         
@@ -3177,85 +2980,56 @@ class VisualizationEngine:
         if len(data) < len(self.df):
             st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
-        # Создаём интерактивный график с размером по δ
-        fig = go.Figure()
+        fig, ax = plt.subplots(figsize=(10, 8))
         
-        # Размер пропорционален δ
+        # Нормализация размера по δ
         delta_min = data['δ'].min()
         delta_max = data['δ'].max()
-        size_norm = (data['δ'] - delta_min) / (delta_max - delta_min + 1e-10)
-        size_scaled = 10 + size_norm * 50
+        delta_norm = (data['δ'] - delta_min) / (delta_max - delta_min + 1e-10)
+        size_scaled = 20 + delta_norm * 60
         
-        # Цвет по целевому параметру или по feature
+        # Цвет
         if color_feature and color_feature in self.df.columns:
             color_data = self.df.loc[data.index, color_feature]
+            scatter = ax.scatter(
+                data[x_feature], data[y_target],
+                s=size_scaled,
+                c=color_data,
+                cmap='viridis',
+                alpha=0.7,
+                edgecolors='black',
+                linewidth=0.8
+            )
+            cbar = plt.colorbar(scatter, ax=ax)
+            cbar.set_label(color_feature, fontsize=11, fontweight='bold')
         else:
-            color_data = data[y_target]
+            scatter = ax.scatter(
+                data[x_feature], data[y_target],
+                s=size_scaled,
+                c='#3498DB',
+                alpha=0.7,
+                edgecolors='black',
+                linewidth=0.8
+            )
         
-        fig.add_trace(go.Scatter(
-            x=data[x_feature],
-            y=data[y_target],
-            mode='markers',
-            marker=dict(
-                size=size_scaled,
-                color=color_data,
-                colorscale='Viridis',
-                showscale=True,
-                colorbar=dict(title=color_feature if color_feature else y_target, tickfont=dict(size=12)),
-                line=dict(width=1, color='black'),
-                opacity=0.7,
-                sizemin=5
-            ),
-            text=[f'{x_feature}: {x:.3f}<br>{y_target}: {y:.3f}<br>δ: {d:.3f}' 
-                  for x, y, d in zip(data[x_feature], data[y_target], data['δ'])],
-            hoverinfo='text'
-        ))
-        
-        # Добавляем легенду размера (δ)
-        for label, val in [('Min δ', delta_min), ('Mean δ', data['δ'].mean()), ('Max δ', delta_max)]:
-            fig.add_trace(go.Scatter(
-                x=[None],
-                y=[None],
-                mode='markers',
-                marker=dict(
-                    size=10 + (val - delta_min) / (delta_max - delta_min + 1e-10) * 50,
-                    color='#2C3E50',
-                    line=dict(width=1, color='black')
-                ),
-                name=f'{label}: {val:.3f}',
-                showlegend=True
-            ))
-        
-        # Добавляем аннотацию с размером
-        fig.add_annotation(
-            x=0.98, y=0.98, xref='paper', yref='paper',
-            text='Size: δ (oxygen vacancy concentration)',
-            showarrow=False,
-            font=dict(size=12, family='Times New Roman'),
-            bgcolor='white',
-            bordercolor='black',
-            borderwidth=1,
-            borderpad=4,
-            xanchor='right',
-            yanchor='top'
+        # Легенда размера
+        legend = create_bubble_legend(
+            ax, data, 'δ', delta_min, delta_max, data['δ'].mean()
         )
         
-        # Настройки layout
-        layout = get_plotly_layout(
-            title=f'{y_target} vs {x_feature} (Size = δ)',
-            xlabel=x_feature,
-            ylabel=y_target,
-            width=900,
-            height=600
-        )
-        fig.update_layout(layout)
+        # Оформление
+        ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')
+        ax.set_ylabel(y_target, fontsize=12, fontweight='bold')
+        ax.set_title(f'{y_target} vs {x_feature} (Size = δ)', fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3)
         
+        plt.tight_layout()
         return fig
     
     # --- КАТЕГОРИЯ 6: СПЕЦИАЛИЗИРОВАННЫЕ ГРАФИКИ ---
     
     def plot_t_bends_vs_delta(self):
-        """27. T(bends) vs δ"""
+        """26. T(bends) vs δ"""
         if 'δ' not in self.df.columns or 'T_bends_1' not in self.df.columns:
             return None
         
@@ -3281,7 +3055,7 @@ class VisualizationEngine:
         return fig
     
     def plot_alpha_vs_beta(self):
-        """28. α vs β (компромиссная диаграмма)"""
+        """27. α vs β (компромиссная диаграмма)"""
         if 'α·106 (K-1)' not in self.df.columns or 'β' not in self.df.columns:
             return None
         
@@ -3307,7 +3081,7 @@ class VisualizationEngine:
         return fig
     
     def plot_beta_vs_ph2o(self):
-        """29. β vs pH₂O"""
+        """28. β vs pH₂O"""
         if 'β' not in self.df.columns or 'pH2O' not in self.df.columns:
             return None
         
@@ -3334,7 +3108,7 @@ class VisualizationEngine:
         return fig
     
     def plot_alpha_vs_rAav(self):
-        """30. α vs rAav"""
+        """29. α vs rAav"""
         if 'α·106 (K-1)' not in self.df.columns or 'rAav' not in self.df.columns:
             return None
         
@@ -3360,7 +3134,7 @@ class VisualizationEngine:
         return fig
     
     def plot_beta_vs_chiBav(self):
-        """31. β vs χBav"""
+        """30. β vs χBav"""
         if 'β' not in self.df.columns or 'χBav' not in self.df.columns:
             return None
         
@@ -3386,7 +3160,7 @@ class VisualizationEngine:
         return fig
     
     def plot_t_bends_vs_t_stab(self):
-        """32. T(bends) vs T_stab"""
+        """31. T(bends) vs T_stab"""
         if 'T_bends_1' not in self.df.columns or 'T_stab' not in self.df.columns:
             return None
         
@@ -3414,7 +3188,7 @@ class VisualizationEngine:
     # --- ДОПОЛНИТЕЛЬНЫЕ ГРАФИКИ ---
     
     def plot_pairplot_colored(self, features, hue='method'):
-        """33. Pairplot с многоцветным исполнением (базовый)"""
+        """32. Pairplot с многоцветным исполнением (базовый)"""
         if len(features) < 2 or len(features) > 5:
             return None
         
@@ -3468,7 +3242,7 @@ class VisualizationEngine:
         return g.fig
     
     def plot_pairplot_with_params(self, features, hue='method', diag_kind='kde', alpha=0.6, marker_size=30):
-        """34. Pairplot с настраиваемыми параметрами (для отдельного раздела)"""
+        """33. Pairplot с настраиваемыми параметрами (для отдельного раздела)"""
         if len(features) < 2 or len(features) > 5:
             return None
         
@@ -3526,7 +3300,7 @@ class VisualizationEngine:
         return g.fig
     
     def plot_radar_chart(self, features, group_by='method'):
-        """35. Радарная диаграмма для сравнения групп"""
+        """34. Радарная диаграмма для сравнения групп"""
         if len(features) < 3:
             return None
         
@@ -3585,7 +3359,7 @@ class VisualizationEngine:
         return fig
     
     def plot_parallel_coordinates(self, features, target='α·106 (K-1)'):
-        """36. Параллельные координаты (опционально)"""
+        """35. Параллельные координаты (опционально)"""
         if len(features) < 3:
             return None
         
@@ -3616,44 +3390,27 @@ class VisualizationEngine:
         data_scaled = data.copy()
         data_scaled[valid_features] = scaler.fit_transform(data[valid_features])
         
-        # Создаём параллельные координаты с Plotly
-        fig = go.Figure()
+        # Создаём параллельные координаты с помощью Matplotlib
+        fig, ax = plt.subplots(figsize=(12, 6))
         
-        # Сортируем по целевому параметру для лучшей визуализации
-        data_sorted = data_scaled.sort_values(target)
+        # Нормализуем целевую переменную для цвета
+        target_norm = (data[target] - data[target].min()) / (data[target].max() - data[target].min() + 1e-10)
+        colors = plt.cm.viridis(target_norm)
         
-        for i, row in data_sorted.iterrows():
-            fig.add_trace(go.Scatter(
-                x=valid_features + [target],
-                y=row[valid_features + [target]].values,
-                mode='lines',
-                line=dict(color=plt.cm.viridis(row[target] / data_sorted[target].max())),
-                showlegend=False,
-                hoverinfo='text',
-                text=[f'{col}: {val:.3f}' for col, val in zip(valid_features + [target], row[valid_features + [target]].values)]
-            ))
+        # Рисуем линии
+        for i, row in data_scaled.iterrows():
+            ax.plot(range(len(valid_features) + 1), 
+                   row[valid_features + [target]].values,
+                   color=colors[i], alpha=0.5, linewidth=0.8)
         
-        # Настройки layout
-        fig.update_layout(
-            title=dict(
-                text=f'Parallel Coordinates (colored by {target})',
-                font=dict(size=14, family='Times New Roman', color='#000000'),
-                x=0.5
-            ),
-            xaxis=dict(
-                title='Features',
-                tickfont=dict(size=10, family='Times New Roman'),
-                gridcolor='lightgray'
-            ),
-            yaxis=dict(
-                title='Standardized Value',
-                gridcolor='lightgray'
-            ),
-            width=1000,
-            height=600,
-            margin=dict(l=80, r=40, t=60, b=60)
-        )
+        # Оформление
+        ax.set_xticks(range(len(valid_features) + 1))
+        ax.set_xticklabels(valid_features + [target], rotation=45, ha='right', fontsize=10)
+        ax.set_ylabel('Standardized Value', fontsize=12, fontweight='bold')
+        ax.set_title(f'Parallel Coordinates (colored by {target})', fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3)
         
+        plt.tight_layout()
         return fig
 
 
@@ -4171,15 +3928,6 @@ def main():
                             else:
                                 st.warning("Недостаточно данных для PCA")
                     
-                    # 3D PCA
-                    if st.button("🎯 Построить 3D PCA", use_container_width=True):
-                        with st.spinner("Построение 3D PCA..."):
-                            fig = viz.plot_pca_3d()
-                            if fig is not None:
-                                st.plotly_chart(fig, use_container_width=True)
-                            else:
-                                st.warning("Недостаточно данных для 3D PCA")
-                    
                     # Elbow plot
                     st.subheader("📉 Elbow Plot")
                     max_components = st.slider("Максимальное число компонент:", 5, 20, 10)
@@ -4327,7 +4075,7 @@ def main():
                             with st.spinner("Построение..."):
                                 fig = viz.plot_bubble_4d(x_feature, y_target, color_feature, size_feature)
                                 if fig is not None:
-                                    st.plotly_chart(fig, use_container_width=True)
+                                    st.pyplot(fig)
                                 else:
                                     st.warning("Недостаточно данных для построения")
                     
@@ -4337,7 +4085,7 @@ def main():
                             target_comp = st.selectbox("Целевая переменная:", [t for t in TARGET_VARIABLES if t in df.columns], key="comp_target")
                             fig = viz.plot_compositional_bubble(target=target_comp)
                             if fig is not None:
-                                st.plotly_chart(fig, use_container_width=True)
+                                st.pyplot(fig)
                             else:
                                 st.warning("Недостаточно данных")
                     
@@ -4353,7 +4101,7 @@ def main():
                             with st.spinner("Построение..."):
                                 fig = viz.plot_bubble_size_delta(x_feat, y_targ)
                                 if fig is not None:
-                                    st.plotly_chart(fig, use_container_width=True)
+                                    st.pyplot(fig)
                                 else:
                                     st.warning("Недостаточно данных")
                 
@@ -4562,9 +4310,10 @@ def main():
         - 📈 Расширенный корреляционный анализ (7 целевых переменных)
         - 🗺️ Концентрационные карты и кластеризация
         - 📐 Advanced Ternary Plot (4 типа визуализации)
-        - 🎯 36 типов интерактивных графиков
+        - 🎯 35 типов интерактивных графиков (все на Matplotlib)
         - 🔍 Фильтрация по составу и условиям эксперимента
         - 🎨 Настраиваемый Pairplot с отдельным разделом
+        - 📊 Научный стиль оформления с легендами через Line2D
         """)
 
 

@@ -1,5 +1,5 @@
 # ============================================================================
-# 0. ГЛОБАЛЬНЫЙ ПАТЧ ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ LAYOUT ENGINE
+# 0. ГЛОБАЛЬНЫЙ ХАК ДЛЯ ИСПРАВЛЕНИЯ ОШИБКИ LAYOUT ENGINE
 # ============================================================================
 
 import matplotlib.pyplot as plt
@@ -8,6 +8,7 @@ import matplotlib as mpl
 # Сохраняем оригинальный метод tight_layout
 _original_tight_layout = plt.tight_layout
 
+# Создаем обертку, которая автоматически находит текущую фигуру
 def _patched_tight_layout(*args, **kwargs):
     """Патч для plt.tight_layout() - использует fig.tight_layout() вместо plt"""
     fig = plt.gcf()
@@ -15,7 +16,9 @@ def _patched_tight_layout(*args, **kwargs):
         try:
             fig.tight_layout(*args, **kwargs)
         except RuntimeError as e:
+            # Если возникает ошибка с colorbar, пробуем альтернативный подход
             if 'Colorbar layout' in str(e):
+                # Отключаем автоматическую компоновку и используем subplots_adjust
                 try:
                     fig.subplots_adjust(left=0.1, right=0.95, top=0.95, bottom=0.1)
                 except:
@@ -23,11 +26,18 @@ def _patched_tight_layout(*args, **kwargs):
             else:
                 raise e
 
+# Подменяем глобальную функцию
 plt.tight_layout = _patched_tight_layout
 
-# Отключаем constrained_layout по умолчанию
+# Также патчим для pyplot (на всякий случай)
+import matplotlib.pyplot as plt_orig
+if hasattr(plt_orig, 'tight_layout'):
+    plt_orig.tight_layout = _patched_tight_layout
+
+# Отключаем constrained_layout по умолчанию для избежания конфликтов
 mpl.rcParams['figure.constrained_layout.use'] = False
 mpl.rcParams['figure.autolayout'] = False
+
 
 # ============================================================================
 # 1. ИМПОРТЫ И НАСТРОЙКИ
@@ -172,31 +182,71 @@ COLOR_PALETTES = {
 }
 
 # 2.6. Список целевых переменных (РАСШИРЕННЫЙ)
-TARGET_VARIABLES = ['α·106 (K-1)', 'β', 'αav·106 (K-1)', 'T(bends), °C', 
-                   'α/β', 'αav_LT/α', 'αav_HT/α']
-
-# 2.7. Список топ-25 дескрипторов для визуализации
-TOP_25_DESCRIPTORS = [
-    # Геометрические (10)
-    'rAav', 'rBav', 't', 'D_t', 'octahedral_factor', 'Δr_AB', 'σ²_rA', 'σ²_rB', 'V_cell', 'r_ratio_AB',
-    # Электроотрицательные (7)
-    'χAav', 'χBav', 'Δχ_AB', 'χ_ratio_AB', 'ionicity_AO', 'ionicity_BO', 'χ_total',
-    # Массовые (5)
-    'M_Aav', 'M_Bav', 'M_total', 'M_ratio_AB', 'M_rA',
-    # Термодинамические (3)
-    'S_config_A', 'S_config_B', 'ρ',
-    # Дефектные и смешанные (5) - итого 30
-    'δ_actual', 'Z_eff_B', 'proton_affinity', 'E_vac', 'total_dopant'
+TARGET_VARIABLES = [
+    'α·106 (K-1)', 
+    'β', 
+    'αav·106 (K-1)', 
+    'T(bends), °C',
+    'α/β',
+    'αav_LT/α',
+    'αav_HT/α'
 ]
 
-# 2.8. Список всех возможных катионов
+# 2.7. Список всех возможных катионов
 ALL_CATIONS = list(IONIC_RADII.keys())
 ALL_CATIONS.remove('O')
 
-# 2.9. Обязательные колонки для данных
+# 2.8. Обязательные колонки для данных
 REQUIRED_COLUMNS = ['№', 'A', 'A\'', 'B', 'B\'', 'D1', 'D2', '[A\']', '[B\']', '[D1]', '[D2]', 
                    'δ', 'method', 'β', '∆T, °C', 'α·106 (K-1)', 'T(bends), °C', 
                    'αav·106 (K-1)', 'pH2O', 'Ref']
+
+# 2.9. Топ-25 дескрипторов для визуализации (НОВЫЙ СПИСОК)
+TOP_DESCRIPTORS = [
+    # --- Составные (5) ---
+    'δ', '[B\']', 'D_total', 'B\'_conc', 'D_B_ratio',
+    
+    # --- Геометрические (8) ---
+    'rAav', 'rBav', 't', 'D_t', 'octahedral_factor', 'Δr_AB', 'σ²_rB', 'r_ratio_AB',
+    
+    # --- Электроотрицательные (6) ---
+    'χAav', 'χBav', 'Δχ_AB', 'χ_ratio_AB', 'ionicity_AO', 'ionicity_BO',
+    
+    # --- Термодинамические (3) ---
+    'V_Bav', 'Vo_proxy', 'E_BO',
+    
+    # --- Массовые (3) ---
+    'M_Aav', 'M_Bav', 'M_total',
+    
+    # --- Дефектные (2) ---
+    'Z_eff_B', 'proton_affinity'
+]
+
+# 2.10. Дополнительные дескрипторы для расширенного выбора
+ADDITIONAL_DESCRIPTORS = [
+    'δ_actual', 'χ_total', 'acidity_AO', 'acidity_BO', 'Δacidity',
+    'S_config_A', 'S_config_B', 'ΔH_hydr', 'ρ',
+    'M_ratio_AB', 'M_rA', 'M_χA',
+    'total_dopant', 'δ_χB', 'δ_rB',
+    'alpha_beta_ratio', 'T_stab', 'σ²_rA', 'Δr_AB_norm',
+    'V_cell', 'octahedral_factor'
+]
+
+# 2.11. Полный список дескрипторов для выбора (TOP + ADDITIONAL)
+ALL_DESCRIPTORS_FOR_SELECT = TOP_DESCRIPTORS + ADDITIONAL_DESCRIPTORS
+# Убираем дубликаты, сохраняя порядок
+seen = set()
+ALL_DESCRIPTORS_FOR_SELECT = [x for x in ALL_DESCRIPTORS_FOR_SELECT if not (x in seen or seen.add(x))]
+
+# 2.12. Дескрипторы для Ternary Plot (вершины)
+TERNARY_VERTEX_OPTIONS = [
+    '[B\']', '[D1]', '[D2]', 
+    'D_total', 'δ', 
+    'rAav', 'rBav', 'χAav', 'χBav',
+    'M_Aav', 'M_Bav', 'M_total',
+    'V_Bav', 'Vo_proxy', 'E_BO',
+    'Z_eff_B', 'proton_affinity'
+]
 
 # ============================================================================
 # 3. НАСТРОЙКИ НАУЧНОГО СТИЛЯ
@@ -274,7 +324,7 @@ def apply_scientific_style():
     })
 
 def get_plotly_layout(title, xlabel, ylabel, width=None, height=None, showlegend=True):
-    """Стандартный layout для Plotly графиков в научном стиле"""
+    """Стандартный layout для Plotly графиков в научном стиле с увеличенными шрифтами"""
     layout = go.Layout(
         title=dict(
             text=title,
@@ -314,7 +364,7 @@ def get_plotly_layout(title, xlabel, ylabel, width=None, height=None, showlegend
         paper_bgcolor='white',
         font=dict(family='Times New Roman', color='#000000'),
         legend=dict(
-            font=dict(size=12, family='Times New Roman'),
+            font=dict(size=11, family='Times New Roman'),
             borderwidth=1.5,
             bordercolor='#000000',
             x=1.02,
@@ -324,10 +374,35 @@ def get_plotly_layout(title, xlabel, ylabel, width=None, height=None, showlegend
         ) if showlegend else dict(showlegend=False),
         width=width,
         height=height,
-        margin=dict(l=80, r=40, t=80, b=80),
+        margin=dict(l=80, r=40, t=60, b=60),
         hovermode='closest'
     )
     return layout
+
+def add_bubble_legend(fig, data, size_feature, position='top-right'):
+    """Добавление легенды размера пузырьков для Plotly"""
+    
+    min_val = data[size_feature].min()
+    max_val = data[size_feature].max()
+    mean_val = data[size_feature].mean()
+    
+    # Добавляем фиктивные точки для легенды
+    for label, val in [('Min', min_val), ('Mean', mean_val), ('Max', max_val)]:
+        fig.add_trace(go.Scatter(
+            x=[None],
+            y=[None],
+            mode='markers',
+            marker=dict(
+                size=10 + (val - min_val) / (max_val - min_val + 1e-10) * 40,
+                color='#2C3E50',
+                line=dict(width=1, color='black')
+            ),
+            name=f'{label}: {val:.3f}',
+            showlegend=True
+        ))
+    
+    return fig
+
 
 # ============================================================================
 # 4. КЛАССЫ ДЛЯ ОБРАБОТКИ ДАННЫХ
@@ -408,6 +483,7 @@ class DataProcessor:
         
         # Обработка αav - извлечение значений (РАСШИРЕННАЯ)
         if 'αav·106 (K-1)' in df.columns:
+            # Извлекаем все значения
             df['αav_1'] = df['αav·106 (K-1)'].apply(
                 lambda x: float(str(x).split(';')[0].strip()) if pd.notna(x) and str(x).strip() != '' else np.nan
             )
@@ -421,35 +497,28 @@ class DataProcessor:
                 lambda x: len(str(x).split(';')) if pd.notna(x) and str(x).strip() != '' else 0
             )
             
-            # Создание αav_LT и αav_HT
-            def get_av_lt(row):
-                if pd.isna(row['αav_1']):
-                    return np.nan
-                return row['αav_1']
-            
-            def get_av_ht(row):
-                if pd.isna(row['αav_1']):
-                    return np.nan
-                if row['αav_count'] == 1:
-                    return row['αav_1']
-                elif row['αav_count'] == 2:
-                    return row['αav_2']
-                else:  # 3 и более
-                    return row['αav_3']
-            
-            df['αav_LT'] = df.apply(get_av_lt, axis=1)
-            df['αav_HT'] = df.apply(get_av_ht, axis=1)
-            
-            # Расчет новых целевых переменных
-            if 'α·106 (K-1)' in df.columns:
-                # α/β
+            # НОВЫЕ: αav_LT (первое значение) и αav_HT (последнее значение)
+            df['αav_LT'] = df['αav·106 (K-1)'].apply(
+                lambda x: float(str(x).split(';')[0].strip()) if pd.notna(x) and str(x).strip() != '' else np.nan
+            )
+            df['αav_HT'] = df['αav·106 (K-1)'].apply(
+                lambda x: float(str(x).split(';')[-1].strip()) if pd.notna(x) and str(x).strip() != '' else np.nan
+            )
+            # Если одно значение - LT = HT
+            df['αav_LT'] = df['αav_LT'].fillna(df['αav_HT'])
+            df['αav_HT'] = df['αav_HT'].fillna(df['αav_LT'])
+        
+        # Расчёт нормированных отношений (после того как α и αav определены)
+        if 'α·106 (K-1)' in df.columns and 'αav_LT' in df.columns:
+            # α/β
+            if 'β' in df.columns:
                 df['α/β'] = df['α·106 (K-1)'] / df['β']
-                
-                # αav_LT/α
-                df['αav_LT/α'] = df['αav_LT'] / df['α·106 (K-1)']
-                
-                # αav_HT/α
-                df['αav_HT/α'] = df['αav_HT'] / df['α·106 (K-1)']
+            
+            # αav_LT/α
+            df['αav_LT/α'] = df['αav_LT'] / df['α·106 (K-1)']
+            
+            # αav_HT/α
+            df['αav_HT/α'] = df['αav_HT'] / df['α·106 (K-1)']
         
         return df
     
@@ -1068,12 +1137,15 @@ class CorrelationAnalyzer:
         for col in features[:]:
             if self.df[col].isna().sum() / len(self.df) > 0.5:
                 features.remove(col)
+            # Убираем колонки с одним уникальным значением
+            elif self.df[col].nunique() < 2:
+                features.remove(col)
         
         self.all_descriptors = features
         return features
     
     def pearson_correlation(self, features=None, target=None):
-        """Корреляция Пирсона с p-value"""
+        """Корреляция Пирсона с p-value и отладочной информацией"""
         if features is None:
             features = self.get_numeric_features()
         
@@ -1081,21 +1153,39 @@ class CorrelationAnalyzer:
             target = self.targets[0]
         
         if target not in self.df.columns:
+            st.session_state['correlation_debug'] = f"Целевая переменная {target} не найдена"
             return None
         
-        results = []
+        # Фильтруем только числовые колонки с достаточным количеством данных
+        valid_features = []
         for feature in features:
             if feature in self.df.columns and feature != target:
-                data = self.df[[feature, target]].dropna()
-                if len(data) > 2:
-                    corr, p_value = pearsonr(data[feature], data[target])
-                    if not np.isnan(corr):
-                        results.append({
-                            'feature': feature,
-                            'correlation': corr,
-                            'p_value': p_value,
-                            'n': len(data)
-                        })
+                non_na = self.df[feature].dropna()
+                if len(non_na) > 10 and self.df[feature].nunique() > 1:
+                    valid_features.append(feature)
+        
+        if len(valid_features) == 0:
+            st.session_state['correlation_debug'] = f"Нет валидных признаков для {target}"
+            return None
+        
+        st.session_state['correlation_debug'] = f"Найдено {len(valid_features)} валидных признаков"
+        
+        results = []
+        for feature in valid_features:
+            data = self.df[[feature, target]].dropna()
+            if len(data) > 10:
+                corr, p_value = pearsonr(data[feature], data[target])
+                if not np.isnan(corr):
+                    results.append({
+                        'feature': feature,
+                        'correlation': corr,
+                        'p_value': p_value,
+                        'n': len(data)
+                    })
+        
+        if len(results) == 0:
+            st.session_state['correlation_debug'] = f"Нет значимых корреляций для {target}"
+            return None
         
         results_df = pd.DataFrame(results)
         if len(results_df) > 0:
@@ -1115,19 +1205,32 @@ class CorrelationAnalyzer:
         if target not in self.df.columns:
             return None
         
-        results = []
+        # Фильтруем только числовые колонки с достаточным количеством данных
+        valid_features = []
         for feature in features:
             if feature in self.df.columns and feature != target:
-                data = self.df[[feature, target]].dropna()
-                if len(data) > 2:
-                    corr, p_value = spearmanr(data[feature], data[target])
-                    if not np.isnan(corr):
-                        results.append({
-                            'feature': feature,
-                            'correlation': corr,
-                            'p_value': p_value,
-                            'n': len(data)
-                        })
+                non_na = self.df[feature].dropna()
+                if len(non_na) > 10 and self.df[feature].nunique() > 1:
+                    valid_features.append(feature)
+        
+        if len(valid_features) == 0:
+            return None
+        
+        results = []
+        for feature in valid_features:
+            data = self.df[[feature, target]].dropna()
+            if len(data) > 10:
+                corr, p_value = spearmanr(data[feature], data[target])
+                if not np.isnan(corr):
+                    results.append({
+                        'feature': feature,
+                        'correlation': corr,
+                        'p_value': p_value,
+                        'n': len(data)
+                    })
+        
+        if len(results) == 0:
+            return None
         
         results_df = pd.DataFrame(results)
         if len(results_df) > 0:
@@ -1179,7 +1282,7 @@ class CorrelationAnalyzer:
         return results_df
     
     def get_top_features(self, target=None, n=20):
-        """Топ-N дескрипторов для целевой переменной"""
+        """Топ-N дескрипторов для целевой переменной (без VIF фильтрации)"""
         if target is None:
             target = self.targets[0]
         
@@ -1190,43 +1293,40 @@ class CorrelationAnalyzer:
         pearson_results = self.pearson_correlation(target=target)
         spearman_results = self.spearman_correlation(target=target)
         
-        if pearson_results is None or len(pearson_results) == 0:
+        # Если оба пустые -> возвращаем пустой список
+        if pearson_results is None and spearman_results is None:
             return []
         
-        # Объединяем результаты
-        merged = pearson_results.merge(
-            spearman_results, 
-            on='feature', 
-            suffixes=('_pearson', '_spearman')
-        )
+        # Если один из них None, используем только другой
+        if pearson_results is None:
+            merged = spearman_results.copy()
+            merged['combined_score'] = np.abs(merged['correlation'])
+        elif spearman_results is None:
+            merged = pearson_results.copy()
+            merged['combined_score'] = np.abs(merged['correlation'])
+        else:
+            # Объединяем
+            merged = pearson_results.merge(
+                spearman_results, 
+                on='feature', 
+                suffixes=('_pearson', '_spearman')
+            )
+            
+            # Если объединение не дало результатов
+            if len(merged) == 0:
+                # Используем только Пирсона
+                merged = pearson_results.copy()
+                merged['combined_score'] = np.abs(merged['correlation'])
+            else:
+                merged['abs_pearson'] = np.abs(merged['correlation_pearson'])
+                merged['abs_spearman'] = np.abs(merged['correlation_spearman'])
+                merged['combined_score'] = (merged['abs_pearson'] + merged['abs_spearman']) / 2
         
-        # Вычисляем комбинированный рейтинг
-        merged['abs_pearson'] = np.abs(merged['correlation_pearson'])
-        merged['abs_spearman'] = np.abs(merged['correlation_spearman'])
-        merged['combined_score'] = (merged['abs_pearson'] + merged['abs_spearman']) / 2
-        
-        # Сортируем по комбинированному рейтингу
+        # Сортируем
         merged = merged.sort_values('combined_score', ascending=False)
         
-        # Выбираем топ-N
+        # Выбираем топ-N (без VIF фильтрации)
         top_features = merged['feature'].head(n).tolist()
-        
-        # Проверяем на мультиколлинеарность (с мягким порогом)
-        if len(top_features) > 1:
-            try:
-                data = self.df[top_features].dropna()
-                if len(data) > len(top_features):
-                    X = add_constant(data)
-                    vif = pd.DataFrame()
-                    vif['Variable'] = X.columns
-                    vif['VIF'] = [variance_inflation_factor(X.values, i) for i in range(X.shape[1])]
-                    vif = vif[vif['Variable'] != 'const']
-                    # Используем мягкий порог VIF < 20 вместо 10
-                    vif = vif[vif['VIF'] < 20]
-                    if len(vif) > 0:
-                        top_features = vif['Variable'].tolist()
-            except:
-                pass
         
         self.top_features[target] = top_features
         return top_features[:n]
@@ -1348,7 +1448,7 @@ class VisualizationEngine:
         for i in range(len(features), len(axes)):
             axes[i].set_visible(False)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_missing_matrix(self):
@@ -1383,7 +1483,7 @@ class VisualizationEngine:
             pct = missing[col]
             ax.text(len(data) + 1, i, f'{pct:.1f}%', va='center', fontsize=8)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_box_by_method(self, target=None):
@@ -1417,7 +1517,7 @@ class VisualizationEngine:
         ax.set_ylabel(target, fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_violin_by_B(self, target=None):
@@ -1461,7 +1561,7 @@ class VisualizationEngine:
         ax.set_ylabel(target, fontsize=12, fontweight='bold')
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     # --- КАТЕГОРИЯ 2: КОРРЕЛЯЦИОННЫЕ ГРАФИКИ ---
@@ -1516,7 +1616,7 @@ class VisualizationEngine:
         )
         
         ax.set_title('Pearson Correlation Matrix', fontsize=14, fontweight='bold')
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_partial_correlation_matrix(self, target=None, control_vars=['pH2O']):
@@ -1577,7 +1677,7 @@ class VisualizationEngine:
                     fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_correlation_network(self, features=None, threshold=0.5):
@@ -1668,7 +1768,7 @@ class VisualizationEngine:
                     fontsize=14, fontweight='bold')
         ax.axis('off')
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_pairplot_top5(self, features=None, target=None):
@@ -1798,7 +1898,7 @@ class VisualizationEngine:
         for i in range(len(top_features), len(axes)):
             axes[i].set_visible(False)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_residuals(self, feature=None, target=None):
@@ -1843,7 +1943,7 @@ class VisualizationEngine:
             axes[1].set_title('Normal Q-Q Plot', fontsize=12)
             axes[1].grid(True, alpha=0.3)
             
-            fig.tight_layout()
+            plt.tight_layout()
             return fig
         
         except:
@@ -1895,7 +1995,7 @@ class VisualizationEngine:
         )
         
         ax.set_title('Correlation Heatmap of Top Features', fontsize=14, fontweight='bold')
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     # --- КАТЕГОРИЯ 3: PCA И КЛАСТЕРИЗАЦИЯ ---
@@ -1953,7 +2053,7 @@ class VisualizationEngine:
         axes[1].legend()
         axes[1].grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_pca_biplot(self, features=None, n_components=2):
@@ -2008,7 +2108,7 @@ class VisualizationEngine:
         ax.axvline(0, color='black', linewidth=0.5, linestyle='--')
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_pca_3d(self, features=None):
@@ -2167,7 +2267,7 @@ class VisualizationEngine:
             axes[1].text(0.5, 0.5, 'UMAP failed', transform=axes[1].transAxes, 
                         ha='center', va='center')
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_silhouette(self, features=None, max_clusters=10):
@@ -2264,52 +2364,45 @@ class VisualizationEngine:
             axes[1].text(0.5, 0.5, 'Could not compute silhouette for optimal K', 
                         transform=axes[1].transAxes, ha='center', va='center')
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
-    # --- КАТЕГОРИЯ 4: КОНЦЕНТРАЦИОННЫЕ КАРТЫ (УЛУЧШЕННЫЕ) ---
+    # --- КАТЕГОРИЯ 4: КОНЦЕНТРАЦИОННЫЕ КАРТЫ ---
     
     def plot_heatmap_2d(self, x_feature, y_feature, target, grid_resolution=50):
-        """17. 2D Heatmap (улучшенная - показывает все точки)"""
+        """17. 2D Heatmap - только целевая переменная фильтруется"""
         if x_feature not in self.df.columns or y_feature not in self.df.columns:
             return None
         
         if target not in self.df.columns:
             return None
         
-        # Используем dropna только для целевой переменной
+        # Фильтруем только по целевой переменной (X и Y могут содержать NaN)
         data = self.df[[x_feature, y_feature, target]].dropna(subset=[target])
         
-        total_points = len(self.df)
-        used_points = len(data)
-        
-        if used_points < 5:
+        if len(data) < 3:
             return None
+        
+        # Выводим информацию о количестве точек
+        st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
+        if len(data) < len(self.df):
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
         # Создаём сетку для интерполяции
         x = data[x_feature].values
         y = data[y_feature].values
         z = data[target].values
         
-        # Удаляем NaN из x и y для интерполяции
-        valid_idx = ~(np.isnan(x) | np.isnan(y))
-        if valid_idx.sum() < 5:
-            return None
-        
-        x_valid = x[valid_idx]
-        y_valid = y[valid_idx]
-        z_valid = z[valid_idx]
-        
-        xi = np.linspace(np.nanmin(x_valid), np.nanmax(x_valid), grid_resolution)
-        yi = np.linspace(np.nanmin(y_valid), np.nanmax(y_valid), grid_resolution)
+        xi = np.linspace(x.min(), x.max(), grid_resolution)
+        yi = np.linspace(y.min(), y.max(), grid_resolution)
         xi_grid, yi_grid = np.meshgrid(xi, yi)
         
         # Интерполяция
         try:
-            zi = griddata((x_valid, y_valid), z_valid, (xi_grid, yi_grid), method='cubic')
+            zi = griddata((x, y), z, (xi_grid, yi_grid), method='cubic')
         except:
             try:
-                zi = griddata((x_valid, y_valid), z_valid, (xi_grid, yi_grid), method='linear')
+                zi = griddata((x, y), z, (xi_grid, yi_grid), method='linear')
             except:
                 return None
         
@@ -2318,13 +2411,8 @@ class VisualizationEngine:
         # Тепловая карта
         im = ax.contourf(xi, yi, zi, levels=20, cmap='viridis')
         
-        # Точки данных (все, включая те, что с NaN в x или y)
-        ax.scatter(x, y, c='red', s=30, alpha=0.6, edgecolors='black', linewidth=0.5, label=f'Data points (n={used_points})')
-        
-        # Добавляем информацию о количестве точек
-        ax.text(0.02, 0.98, f'Total: {total_points} rows\nUsed: {used_points} points', 
-                transform=ax.transAxes, fontsize=10, verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        # Точки данных
+        ax.scatter(x, y, c='red', s=20, alpha=0.5, edgecolors='black', linewidth=0.5)
         
         # Оформление
         cbar = plt.colorbar(im, ax=ax)
@@ -2333,53 +2421,45 @@ class VisualizationEngine:
         ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')
         ax.set_ylabel(y_feature, fontsize=12, fontweight='bold')
         ax.set_title(f'{target} vs {x_feature} and {y_feature}', fontsize=14, fontweight='bold')
-        ax.legend(loc='upper right')
         ax.grid(True, alpha=0.2)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_contour(self, x_feature, y_feature, target, grid_resolution=50):
-        """18. Contour plot с изолиниями (улучшенная)"""
+        """18. Contour plot с изолиниями - только целевая переменная фильтруется"""
         if x_feature not in self.df.columns or y_feature not in self.df.columns:
             return None
         
         if target not in self.df.columns:
             return None
         
-        # Используем dropna только для целевой переменной
+        # Фильтруем только по целевой переменной
         data = self.df[[x_feature, y_feature, target]].dropna(subset=[target])
         
-        total_points = len(self.df)
-        used_points = len(data)
-        
-        if used_points < 5:
+        if len(data) < 3:
             return None
+        
+        # Выводим информацию о количестве точек
+        st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
+        if len(data) < len(self.df):
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
         # Создаём сетку для интерполяции
         x = data[x_feature].values
         y = data[y_feature].values
         z = data[target].values
         
-        # Удаляем NaN из x и y для интерполяции
-        valid_idx = ~(np.isnan(x) | np.isnan(y))
-        if valid_idx.sum() < 5:
-            return None
-        
-        x_valid = x[valid_idx]
-        y_valid = y[valid_idx]
-        z_valid = z[valid_idx]
-        
-        xi = np.linspace(np.nanmin(x_valid), np.nanmax(x_valid), grid_resolution)
-        yi = np.linspace(np.nanmin(y_valid), np.nanmax(y_valid), grid_resolution)
+        xi = np.linspace(x.min(), x.max(), grid_resolution)
+        yi = np.linspace(y.min(), y.max(), grid_resolution)
         xi_grid, yi_grid = np.meshgrid(xi, yi)
         
         # Интерполяция
         try:
-            zi = griddata((x_valid, y_valid), z_valid, (xi_grid, yi_grid), method='cubic')
+            zi = griddata((x, y), z, (xi_grid, yi_grid), method='cubic')
         except:
             try:
-                zi = griddata((x_valid, y_valid), z_valid, (xi_grid, yi_grid), method='linear')
+                zi = griddata((x, y), z, (xi_grid, yi_grid), method='linear')
             except:
                 return None
         
@@ -2390,64 +2470,51 @@ class VisualizationEngine:
         ax.clabel(contour, inline=True, fontsize=10, fmt='%1.2f')
         
         # Точки данных
-        ax.scatter(x, y, c='red', s=30, alpha=0.6, edgecolors='black', linewidth=0.5, label=f'Data points (n={used_points})')
-        
-        # Добавляем информацию о количестве точек
-        ax.text(0.02, 0.98, f'Total: {total_points} rows\nUsed: {used_points} points', 
-                transform=ax.transAxes, fontsize=10, verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
+        ax.scatter(x, y, c='red', s=20, alpha=0.5, edgecolors='black', linewidth=0.5)
         
         # Оформление
         ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')
         ax.set_ylabel(y_feature, fontsize=12, fontweight='bold')
         ax.set_title(f'{target} Contour Plot', fontsize=14, fontweight='bold')
-        ax.legend(loc='upper right')
         ax.grid(True, alpha=0.2)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_heatmap_with_points(self, x_feature, y_feature, target, grid_resolution=50):
-        """19. Heatmap + overlay точек (улучшенная)"""
+        """19. Heatmap + overlay точек - только целевая переменная фильтруется"""
         if x_feature not in self.df.columns or y_feature not in self.df.columns:
             return None
         
         if target not in self.df.columns:
             return None
         
-        # Используем dropna только для целевой переменной
+        # Фильтруем только по целевой переменной
         data = self.df[[x_feature, y_feature, target]].dropna(subset=[target])
         
-        total_points = len(self.df)
-        used_points = len(data)
-        
-        if used_points < 5:
+        if len(data) < 3:
             return None
+        
+        # Выводим информацию о количестве точек
+        st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
+        if len(data) < len(self.df):
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
         # Создаём сетку для интерполяции
         x = data[x_feature].values
         y = data[y_feature].values
         z = data[target].values
         
-        # Удаляем NaN из x и y для интерполяции
-        valid_idx = ~(np.isnan(x) | np.isnan(y))
-        if valid_idx.sum() < 5:
-            return None
-        
-        x_valid = x[valid_idx]
-        y_valid = y[valid_idx]
-        z_valid = z[valid_idx]
-        
-        xi = np.linspace(np.nanmin(x_valid), np.nanmax(x_valid), grid_resolution)
-        yi = np.linspace(np.nanmin(y_valid), np.nanmax(y_valid), grid_resolution)
+        xi = np.linspace(x.min(), x.max(), grid_resolution)
+        yi = np.linspace(y.min(), y.max(), grid_resolution)
         xi_grid, yi_grid = np.meshgrid(xi, yi)
         
         # Интерполяция
         try:
-            zi = griddata((x_valid, y_valid), z_valid, (xi_grid, yi_grid), method='cubic')
+            zi = griddata((x, y), z, (xi_grid, yi_grid), method='cubic')
         except:
             try:
-                zi = griddata((x_valid, y_valid), z_valid, (xi_grid, yi_grid), method='linear')
+                zi = griddata((x, y), z, (xi_grid, yi_grid), method='linear')
             except:
                 return None
         
@@ -2461,11 +2528,6 @@ class VisualizationEngine:
         scatter = ax.scatter(x, y, c=z, s=50, cmap='viridis', 
                            edgecolors='black', linewidth=1, vmin=zi.min(), vmax=zi.max())
         
-        # Добавляем информацию о количестве точек
-        ax.text(0.02, 0.98, f'Total: {total_points} rows\nUsed: {used_points} points', 
-                transform=ax.transAxes, fontsize=10, verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-        
         # Оформление
         cbar = plt.colorbar(im, ax=ax)
         cbar.set_label(target, fontsize=12, fontweight='bold')
@@ -2475,11 +2537,17 @@ class VisualizationEngine:
         ax.set_title(f'{target} Heatmap with Data Points', fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.2)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
-    def plot_ternary_advanced(self, a_feature, b_feature, c_feature, target, map_type='Heatmap', grid_resolution=50):
-        """20. Ternary plot с выбором вершин и типами карт (улучшенная)"""
+    # --- КАТЕГОРИЯ 4.5: TERNARY PLOT (РАСШИРЕННЫЙ) ---
+    
+    def plot_ternary_advanced(self, a_feature, b_feature, c_feature, target, plot_type='scatter', grid_resolution=50):
+        """20. Advanced Ternary plot с выбором типа визуализации"""
+        
+        if target is None:
+            target = 'α·106 (K-1)'
+        
         if target not in self.df.columns:
             return None
         
@@ -2487,17 +2555,22 @@ class VisualizationEngine:
         if a_feature not in self.df.columns or b_feature not in self.df.columns or c_feature not in self.df.columns:
             return None
         
-        # Используем dropna только для целевой переменной
+        # Фильтруем только по целевой переменной
         data = self.df[[a_feature, b_feature, c_feature, target]].dropna(subset=[target])
         
-        total_points = len(self.df)
-        used_points = len(data)
-        
-        if used_points < 5:
+        if len(data) < 3:
             return None
+        
+        # Выводим информацию о количестве точек
+        st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
+        if len(data) < len(self.df):
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
         # Нормализация для ternary plot
         total = data[a_feature] + data[b_feature] + data[c_feature]
+        # Защита от деления на ноль
+        total = total.replace(0, np.nan)
+        
         data_a = data[a_feature] / total
         data_b = data[b_feature] / total
         data_c = data[c_feature] / total
@@ -2506,48 +2579,32 @@ class VisualizationEngine:
         x_ternary = 0.5 * (2 * data_b + data_c) / (data_a + data_b + data_c)
         y_ternary = (np.sqrt(3) / 2) * data_c / (data_a + data_b + data_c)
         
-        # Создаём сетку для интерполяции
-        x = x_ternary.values
-        y = y_ternary.values
-        z = data[target].values
+        # Убираем NaN
+        valid_idx = ~(x_ternary.isna() | y_ternary.isna())
+        x_ternary = x_ternary[valid_idx]
+        y_ternary = y_ternary[valid_idx]
+        z_ternary = data[target][valid_idx]
         
-        xi = np.linspace(0, 1, grid_resolution)
-        yi = np.linspace(0, np.sqrt(3)/2, grid_resolution)
-        xi_grid, yi_grid = np.meshgrid(xi, yi)
+        if len(x_ternary) < 3:
+            return None
         
-        # Интерполяция
-        try:
-            zi = griddata((x, y), z, (xi_grid, yi_grid), method='cubic')
-        except:
-            try:
-                zi = griddata((x, y), z, (xi_grid, yi_grid), method='linear')
-            except:
-                zi = None
-        
+        if plot_type == 'scatter':
+            return self._plot_ternary_scatter(x_ternary, y_ternary, z_ternary, a_feature, b_feature, c_feature, target)
+        elif plot_type == 'heatmap':
+            return self._plot_ternary_heatmap(x_ternary, y_ternary, z_ternary, a_feature, b_feature, c_feature, target, grid_resolution)
+        elif plot_type == 'contour':
+            return self._plot_ternary_contour(x_ternary, y_ternary, z_ternary, a_feature, b_feature, c_feature, target, grid_resolution)
+        elif plot_type == 'heatmap_with_points':
+            return self._plot_ternary_with_points(x_ternary, y_ternary, z_ternary, a_feature, b_feature, c_feature, target, grid_resolution)
+        else:
+            return self._plot_ternary_scatter(x_ternary, y_ternary, z_ternary, a_feature, b_feature, c_feature, target)
+    
+    def _plot_ternary_scatter(self, x, y, z, a_feature, b_feature, c_feature, target):
+        """Вспомогательный метод: Ternary scatter plot"""
         fig, ax = plt.subplots(figsize=(10, 8))
         
-        if map_type == 'Heatmap' and zi is not None:
-            # Тепловая карта
-            im = ax.contourf(xi, yi, zi, levels=20, cmap='viridis')
-            cbar = plt.colorbar(im, ax=ax)
-            cbar.set_label(target, fontsize=12, fontweight='bold')
-        elif map_type == 'Contour' and zi is not None:
-            # Контурный график
-            contour = ax.contour(xi, yi, zi, levels=15, cmap='viridis')
-            ax.clabel(contour, inline=True, fontsize=10, fmt='%1.2f')
-        elif map_type == 'Heatmap + точки' and zi is not None:
-            # Тепловая карта + точки
-            im = ax.contourf(xi, yi, zi, levels=20, cmap='viridis', alpha=0.7)
-            cbar = plt.colorbar(im, ax=ax)
-            cbar.set_label(target, fontsize=12, fontweight='bold')
-        
-        # Точки данных
-        scatter = ax.scatter(x, y, c=z, s=30, cmap='viridis', 
-                           edgecolors='black', linewidth=0.5, alpha=0.8)
-        
-        if map_type != 'Heatmap + точки' and map_type != 'Contour':
-            cbar = plt.colorbar(scatter, ax=ax)
-            cbar.set_label(target, fontsize=12, fontweight='bold')
+        # Создаём ternary plot с помощью scatter
+        scatter = ax.scatter(x, y, c=z, cmap='viridis', s=50, alpha=0.8, edgecolors='black', linewidth=1)
         
         # Рисуем границы треугольника
         triangle_x = [0, 1, 0.5, 0]
@@ -2559,20 +2616,168 @@ class VisualizationEngine:
         ax.text(1.05, -0.05, b_feature, fontsize=12, fontweight='bold')
         ax.text(0.5, np.sqrt(3)/2 + 0.05, c_feature, fontsize=12, fontweight='bold')
         
-        # Добавляем информацию о количестве точек
-        ax.text(0.02, 0.98, f'Total: {total_points} rows\nUsed: {used_points} points', 
-                transform=ax.transAxes, fontsize=10, verticalalignment='top',
-                bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
-        
         # Оформление
+        cbar = plt.colorbar(scatter, ax=ax)
+        cbar.set_label(target, fontsize=12, fontweight='bold')
+        
         ax.set_xlim(-0.1, 1.1)
         ax.set_ylim(-0.1, np.sqrt(3)/2 + 0.1)
         ax.set_aspect('equal')
         ax.axis('off')
-        ax.set_title(f'Ternary Plot: {a_feature} - {b_feature} - {c_feature}', 
+        ax.set_title(f'Ternary Plot: {a_feature} - {b_feature} - {c_feature} (colored by {target})', 
                     fontsize=14, fontweight='bold')
         
-        fig.tight_layout()
+        plt.tight_layout()
+        return fig
+    
+    def _plot_ternary_heatmap(self, x, y, z, a_feature, b_feature, c_feature, target, grid_resolution=50):
+        """Вспомогательный метод: Ternary heatmap"""
+        # Создаём сетку для интерполяции в треугольной области
+        xi = np.linspace(0, 1, grid_resolution)
+        yi = np.linspace(0, np.sqrt(3)/2, grid_resolution)
+        xi_grid, yi_grid = np.meshgrid(xi, yi)
+        
+        # Интерполяция
+        try:
+            zi = griddata((x, y), z, (xi_grid, yi_grid), method='cubic')
+        except:
+            try:
+                zi = griddata((x, y), z, (xi_grid, yi_grid), method='linear')
+            except:
+                return None
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Маска для треугольной области
+        mask = (yi_grid <= np.sqrt(3) * xi_grid) & (yi_grid <= -np.sqrt(3) * (xi_grid - 1))
+        zi_masked = np.ma.masked_where(~mask, zi)
+        
+        # Тепловая карта
+        im = ax.imshow(zi_masked.T, origin='lower', extent=[0, 1, 0, np.sqrt(3)/2],
+                      aspect='auto', cmap='viridis', alpha=0.9)
+        
+        # Рисуем границы треугольника
+        triangle_x = [0, 1, 0.5, 0]
+        triangle_y = [0, 0, np.sqrt(3)/2, 0]
+        ax.plot(triangle_x, triangle_y, 'k-', linewidth=2)
+        
+        # Подписи вершин
+        ax.text(-0.05, -0.05, a_feature, fontsize=12, fontweight='bold')
+        ax.text(1.05, -0.05, b_feature, fontsize=12, fontweight='bold')
+        ax.text(0.5, np.sqrt(3)/2 + 0.05, c_feature, fontsize=12, fontweight='bold')
+        
+        # Оформление
+        cbar = plt.colorbar(im, ax=ax)
+        cbar.set_label(target, fontsize=12, fontweight='bold')
+        
+        ax.set_xlim(-0.1, 1.1)
+        ax.set_ylim(-0.1, np.sqrt(3)/2 + 0.1)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        ax.set_title(f'Ternary Heatmap: {a_feature} - {b_feature} - {c_feature} (colored by {target})', 
+                    fontsize=14, fontweight='bold')
+        
+        plt.tight_layout()
+        return fig
+    
+    def _plot_ternary_contour(self, x, y, z, a_feature, b_feature, c_feature, target, grid_resolution=50):
+        """Вспомогательный метод: Ternary contour plot"""
+        # Создаём сетку для интерполяции в треугольной области
+        xi = np.linspace(0, 1, grid_resolution)
+        yi = np.linspace(0, np.sqrt(3)/2, grid_resolution)
+        xi_grid, yi_grid = np.meshgrid(xi, yi)
+        
+        # Интерполяция
+        try:
+            zi = griddata((x, y), z, (xi_grid, yi_grid), method='cubic')
+        except:
+            try:
+                zi = griddata((x, y), z, (xi_grid, yi_grid), method='linear')
+            except:
+                return None
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Маска для треугольной области
+        mask = (yi_grid <= np.sqrt(3) * xi_grid) & (yi_grid <= -np.sqrt(3) * (xi_grid - 1))
+        zi_masked = np.ma.masked_where(~mask, zi)
+        
+        # Контурный график
+        contour = ax.contour(xi_grid, yi_grid, zi_masked, levels=15, cmap='viridis')
+        ax.clabel(contour, inline=True, fontsize=10, fmt='%1.2f')
+        
+        # Рисуем границы треугольника
+        triangle_x = [0, 1, 0.5, 0]
+        triangle_y = [0, 0, np.sqrt(3)/2, 0]
+        ax.plot(triangle_x, triangle_y, 'k-', linewidth=2)
+        
+        # Подписи вершин
+        ax.text(-0.05, -0.05, a_feature, fontsize=12, fontweight='bold')
+        ax.text(1.05, -0.05, b_feature, fontsize=12, fontweight='bold')
+        ax.text(0.5, np.sqrt(3)/2 + 0.05, c_feature, fontsize=12, fontweight='bold')
+        
+        ax.set_xlim(-0.1, 1.1)
+        ax.set_ylim(-0.1, np.sqrt(3)/2 + 0.1)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        ax.set_title(f'Ternary Contour: {a_feature} - {b_feature} - {c_feature} (colored by {target})', 
+                    fontsize=14, fontweight='bold')
+        
+        plt.tight_layout()
+        return fig
+    
+    def _plot_ternary_with_points(self, x, y, z, a_feature, b_feature, c_feature, target, grid_resolution=50):
+        """Вспомогательный метод: Ternary heatmap with points overlay"""
+        # Создаём сетку для интерполяции в треугольной области
+        xi = np.linspace(0, 1, grid_resolution)
+        yi = np.linspace(0, np.sqrt(3)/2, grid_resolution)
+        xi_grid, yi_grid = np.meshgrid(xi, yi)
+        
+        # Интерполяция
+        try:
+            zi = griddata((x, y), z, (xi_grid, yi_grid), method='cubic')
+        except:
+            try:
+                zi = griddata((x, y), z, (xi_grid, yi_grid), method='linear')
+            except:
+                return None
+        
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Маска для треугольной области
+        mask = (yi_grid <= np.sqrt(3) * xi_grid) & (yi_grid <= -np.sqrt(3) * (xi_grid - 1))
+        zi_masked = np.ma.masked_where(~mask, zi)
+        
+        # Тепловая карта
+        im = ax.imshow(zi_masked.T, origin='lower', extent=[0, 1, 0, np.sqrt(3)/2],
+                      aspect='auto', cmap='viridis', alpha=0.7)
+        
+        # Точки данных
+        scatter = ax.scatter(x, y, c=z, s=40, cmap='viridis', 
+                           edgecolors='black', linewidth=1, vmin=zi.min(), vmax=zi.max())
+        
+        # Рисуем границы треугольника
+        triangle_x = [0, 1, 0.5, 0]
+        triangle_y = [0, 0, np.sqrt(3)/2, 0]
+        ax.plot(triangle_x, triangle_y, 'k-', linewidth=2)
+        
+        # Подписи вершин
+        ax.text(-0.05, -0.05, a_feature, fontsize=12, fontweight='bold')
+        ax.text(1.05, -0.05, b_feature, fontsize=12, fontweight='bold')
+        ax.text(0.5, np.sqrt(3)/2 + 0.05, c_feature, fontsize=12, fontweight='bold')
+        
+        # Оформление
+        cbar = plt.colorbar(im, ax=ax)
+        cbar.set_label(target, fontsize=12, fontweight='bold')
+        
+        ax.set_xlim(-0.1, 1.1)
+        ax.set_ylim(-0.1, np.sqrt(3)/2 + 0.1)
+        ax.set_aspect('equal')
+        ax.axis('off')
+        ax.set_title(f'Ternary Heatmap with Points: {a_feature} - {b_feature} - {c_feature} (colored by {target})', 
+                    fontsize=14, fontweight='bold')
+        
+        plt.tight_layout()
         return fig
     
     def plot_temperature_slice(self, feature=None, target=None):
@@ -2616,13 +2821,13 @@ class VisualizationEngine:
         ax.legend()
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     # --- КАТЕГОРИЯ 5: ПУЗЫРЬКОВЫЕ ДИАГРАММЫ (НАУЧНЫЙ СТИЛЬ) ---
     
     def plot_bubble_4d(self, x_feature, y_target, color_feature, size_feature, shape_by='method'):
-        """22. 4D Bubble с формами маркеров (научный стиль)"""
+        """22. 4D Bubble с формами маркеров - научный стиль"""
         if x_feature not in self.df.columns or color_feature not in self.df.columns:
             return None
         
@@ -2632,11 +2837,16 @@ class VisualizationEngine:
         if y_target not in self.df.columns:
             return None
         
-        # Используем dropna только для целевой переменной
+        # Фильтруем только по целевой переменной
         data = self.df[[x_feature, y_target, color_feature, size_feature]].dropna(subset=[y_target])
         
-        if len(data) < 5:
+        if len(data) < 3:
             return None
+        
+        # Выводим информацию о количестве точек
+        st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
+        if len(data) < len(self.df):
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
         # Создаём интерактивный график с Plotly
         fig = go.Figure()
@@ -2644,8 +2854,6 @@ class VisualizationEngine:
         # Преобразование размера
         size_min = data[size_feature].min()
         size_max = data[size_feature].max()
-        size_mean = data[size_feature].mean()
-        
         size_norm = (data[size_feature] - size_min) / (size_max - size_min + 1e-10)
         size_scaled = 10 + size_norm * 40
         
@@ -2659,29 +2867,33 @@ class VisualizationEngine:
                 color=data[color_feature],
                 colorscale='Viridis',
                 showscale=True,
-                colorbar=dict(title=color_feature, title_font=dict(size=12), tickfont=dict(size=10)),
+                colorbar=dict(title=color_feature, tickfont=dict(size=12)),
                 line=dict(width=1, color='black'),
                 opacity=0.7
             ),
-            text=[f'{x_feature}: {x:.3f}<br>{y_target}: {y:.3f}<br>{color_feature}: {c}<br>{size_feature}: {s:.3f}' 
+            text=[f'{x_feature}: {x:.3f}<br>{y_target}: {y:.3f}<br>{color_feature}: {c:.3f}<br>{size_feature}: {s:.3f}' 
                   for x, y, c, s in zip(data[x_feature], data[y_target], data[color_feature], data[size_feature])],
             hoverinfo='text'
         ))
         
-        # Добавляем аннотацию с информацией о размере
+        # Добавляем легенду размера
+        fig = add_bubble_legend(fig, data, size_feature)
+        
+        # Добавляем аннотацию с размером
         fig.add_annotation(
-            x=0.02, y=0.98, xref='paper', yref='paper',
-            text=f'<b>Bubble size: {size_feature}</b><br>Min: {size_min:.4f}<br>Mean: {size_mean:.4f}<br>Max: {size_max:.4f}',
+            x=0.98, y=0.98, xref='paper', yref='paper',
+            text=f'Size: {size_feature}',
             showarrow=False,
             font=dict(size=12, family='Times New Roman'),
             bgcolor='white',
             bordercolor='black',
             borderwidth=1,
             borderpad=4,
-            align='left'
+            xanchor='right',
+            yanchor='top'
         )
         
-        # Настройки layout (научный стиль)
+        # Настройки layout
         layout = get_plotly_layout(
             title=f'{y_target} vs {x_feature}',
             xlabel=x_feature,
@@ -2694,33 +2906,29 @@ class VisualizationEngine:
         return fig
     
     def plot_compositional_bubble(self, target='α·106 (K-1)'):
-        """23. Compositional Bubble (научный стиль)"""
+        """23. Compositional Bubble ([B'] vs α) - научный стиль"""
         if target not in self.df.columns:
             return None
         
         if '[B\']' not in self.df.columns:
             return None
         
-        # Используем dropna только для целевой переменной
+        # Фильтруем только по целевой переменной
         data = self.df[['[B\']', target, 'B', 'δ']].dropna(subset=[target])
         
-        if len(data) < 5:
+        if len(data) < 3:
             return None
         
-        fig = go.Figure()
+        # Выводим информацию о количестве точек
+        st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
+        if len(data) < len(self.df):
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
-        # Вычисляем размеры для δ
-        delta_min = data['δ'].min()
-        delta_max = data['δ'].max()
-        delta_mean = data['δ'].mean()
+        fig = go.Figure()
         
         # Группировка по B-катиону
         for b_cation in data['B'].unique():
             group = data[data['B'] == b_cation]
-            
-            # Размер пропорционален δ
-            size_norm = (group['δ'] - delta_min) / (delta_max - delta_min + 1e-10)
-            size_scaled = 10 + size_norm * 40
             
             fig.add_trace(go.Scatter(
                 x=group['[B\']'],
@@ -2728,7 +2936,7 @@ class VisualizationEngine:
                 mode='markers',
                 name=b_cation,
                 marker=dict(
-                    size=size_scaled,
+                    size=10 + (group['δ'] - data['δ'].min()) / (data['δ'].max() - data['δ'].min() + 1e-10) * 40,
                     sizemin=5,
                     line=dict(width=1, color='black')
                 ),
@@ -2737,20 +2945,40 @@ class VisualizationEngine:
                 hoverinfo='text'
             ))
         
-        # Добавляем аннотацию с информацией о размере
+        # Добавляем легенду размера (δ)
+        delta_min = data['δ'].min()
+        delta_max = data['δ'].max()
+        delta_mean = data['δ'].mean()
+        
+        for label, val in [('Min δ', delta_min), ('Mean δ', delta_mean), ('Max δ', delta_max)]:
+            fig.add_trace(go.Scatter(
+                x=[None],
+                y=[None],
+                mode='markers',
+                marker=dict(
+                    size=10 + (val - delta_min) / (delta_max - delta_min + 1e-10) * 40,
+                    color='#2C3E50',
+                    line=dict(width=1, color='black')
+                ),
+                name=f'{label}: {val:.3f}',
+                showlegend=True
+            ))
+        
+        # Добавляем аннотацию с размером
         fig.add_annotation(
-            x=0.02, y=0.98, xref='paper', yref='paper',
-            text=f'<b>Bubble size: δ</b><br>Min: {delta_min:.4f}<br>Mean: {delta_mean:.4f}<br>Max: {delta_max:.4f}',
+            x=0.98, y=0.98, xref='paper', yref='paper',
+            text='Size: δ (oxygen vacancy concentration)',
             showarrow=False,
             font=dict(size=12, family='Times New Roman'),
             bgcolor='white',
             bordercolor='black',
             borderwidth=1,
             borderpad=4,
-            align='left'
+            xanchor='right',
+            yanchor='top'
         )
         
-        # Настройки layout (научный стиль)
+        # Настройки layout
         layout = get_plotly_layout(
             title=f'{target} vs [B\'] (Size = δ)',
             xlabel='[B\'] Concentration',
@@ -2763,34 +2991,31 @@ class VisualizationEngine:
         return fig
     
     def plot_bubble_with_trend(self, x_feature, y_target, color_feature=None):
-        """24. Bubble + trend line (научный стиль)"""
+        """24. Bubble + trend line - научный стиль"""
         if x_feature not in self.df.columns or y_target not in self.df.columns:
             return None
         
-        # Используем dropna только для целевой переменной
+        # Фильтруем только по целевой переменной
         data = self.df[[x_feature, y_target]].dropna(subset=[y_target])
         
-        if len(data) < 5:
+        if len(data) < 3:
             return None
+        
+        # Выводим информацию о количестве точек
+        st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
+        if len(data) < len(self.df):
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
         # Линейная регрессия
         try:
             X = data[[x_feature]].values
             y = data[y_target].values
             
-            # Удаляем NaN из X
-            valid_idx = ~np.isnan(X).flatten()
-            X_valid = X[valid_idx]
-            y_valid = y[valid_idx]
+            reg = LinearRegression().fit(X, y)
+            y_pred = reg.predict(X)
+            r2 = reg.score(X, y)
             
-            if len(X_valid) < 5:
-                return None
-                
-            reg = LinearRegression().fit(X_valid, y_valid)
-            y_pred = reg.predict(X_valid)
-            r2 = reg.score(X_valid, y_valid)
-            
-            x_range = np.linspace(X_valid.min(), X_valid.max(), 100)
+            x_range = np.linspace(X.min(), X.max(), 100)
             y_range = reg.predict(x_range.reshape(-1, 1))
         except:
             y_pred = None
@@ -2808,11 +3033,11 @@ class VisualizationEngine:
                 y=data[y_target],
                 mode='markers',
                 marker=dict(
-                    size=10,
+                    size=12,
                     color=color_data,
                     colorscale='Viridis',
                     showscale=True,
-                    colorbar=dict(title=color_feature, title_font=dict(size=12), tickfont=dict(size=10)),
+                    colorbar=dict(title=color_feature, tickfont=dict(size=12)),
                     line=dict(width=1, color='black'),
                     opacity=0.7
                 ),
@@ -2826,7 +3051,7 @@ class VisualizationEngine:
                 y=data[y_target],
                 mode='markers',
                 marker=dict(
-                    size=10,
+                    size=12,
                     color='#3498DB',
                     line=dict(width=1, color='black'),
                     opacity=0.7
@@ -2862,7 +3087,7 @@ class VisualizationEngine:
                 opacity=0.8
             )
         
-        # Настройки layout (научный стиль)
+        # Настройки layout
         layout = get_plotly_layout(
             title=f'{y_target} vs {x_feature}',
             xlabel=x_feature,
@@ -2875,18 +3100,23 @@ class VisualizationEngine:
         return fig
     
     def plot_bubble_filtered_by_ph2o(self, x_feature, y_target, color_feature=None):
-        """25. Bubble с фильтрацией по pH₂O (научный стиль)"""
+        """25. Bubble с фильтрацией по pH₂O - научный стиль"""
         if x_feature not in self.df.columns or y_target not in self.df.columns:
             return None
         
         if 'pH2O' not in self.df.columns:
             return None
         
-        # Используем dropna только для целевой переменной
+        # Фильтруем только по целевой переменной
         data = self.df[[x_feature, y_target, 'pH2O']].dropna(subset=[y_target])
         
-        if len(data) < 5:
+        if len(data) < 3:
             return None
+        
+        # Выводим информацию о количестве точек
+        st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
+        if len(data) < len(self.df):
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
         # Создаём интерактивный график с цветом по pH2O
         fig = go.Figure()
@@ -2916,7 +3146,7 @@ class VisualizationEngine:
                     hoverinfo='text'
                 ))
         
-        # Настройки layout (научный стиль)
+        # Настройки layout
         layout = get_plotly_layout(
             title=f'{y_target} vs {x_feature} (colored by pH₂O)',
             xlabel=x_feature,
@@ -2929,18 +3159,23 @@ class VisualizationEngine:
         return fig
     
     def plot_bubble_size_delta(self, x_feature, y_target, color_feature=None):
-        """26. Bubble с размером = δ (научный стиль с легендой)"""
+        """26. Bubble с размером = δ - научный стиль с легендой"""
         if x_feature not in self.df.columns or y_target not in self.df.columns:
             return None
         
         if 'δ' not in self.df.columns:
             return None
         
-        # Используем dropna только для целевой переменной
+        # Фильтруем только по целевой переменной
         data = self.df[[x_feature, y_target, 'δ']].dropna(subset=[y_target])
         
-        if len(data) < 5:
+        if len(data) < 3:
             return None
+        
+        # Выводим информацию о количестве точек
+        st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
+        if len(data) < len(self.df):
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
         # Создаём интерактивный график с размером по δ
         fig = go.Figure()
@@ -2948,8 +3183,6 @@ class VisualizationEngine:
         # Размер пропорционален δ
         delta_min = data['δ'].min()
         delta_max = data['δ'].max()
-        delta_mean = data['δ'].mean()
-        
         size_norm = (data['δ'] - delta_min) / (delta_max - delta_min + 1e-10)
         size_scaled = 10 + size_norm * 50
         
@@ -2968,8 +3201,7 @@ class VisualizationEngine:
                 color=color_data,
                 colorscale='Viridis',
                 showscale=True,
-                colorbar=dict(title=color_feature if color_feature else y_target, 
-                            title_font=dict(size=12), tickfont=dict(size=10)),
+                colorbar=dict(title=color_feature if color_feature else y_target, tickfont=dict(size=12)),
                 line=dict(width=1, color='black'),
                 opacity=0.7,
                 sizemin=5
@@ -2979,20 +3211,36 @@ class VisualizationEngine:
             hoverinfo='text'
         ))
         
-        # Добавляем аннотацию с информацией о размере
+        # Добавляем легенду размера (δ)
+        for label, val in [('Min δ', delta_min), ('Mean δ', data['δ'].mean()), ('Max δ', delta_max)]:
+            fig.add_trace(go.Scatter(
+                x=[None],
+                y=[None],
+                mode='markers',
+                marker=dict(
+                    size=10 + (val - delta_min) / (delta_max - delta_min + 1e-10) * 50,
+                    color='#2C3E50',
+                    line=dict(width=1, color='black')
+                ),
+                name=f'{label}: {val:.3f}',
+                showlegend=True
+            ))
+        
+        # Добавляем аннотацию с размером
         fig.add_annotation(
-            x=0.02, y=0.98, xref='paper', yref='paper',
-            text=f'<b>Bubble size: δ</b><br>Min: {delta_min:.4f}<br>Mean: {delta_mean:.4f}<br>Max: {delta_max:.4f}',
+            x=0.98, y=0.98, xref='paper', yref='paper',
+            text='Size: δ (oxygen vacancy concentration)',
             showarrow=False,
             font=dict(size=12, family='Times New Roman'),
             bgcolor='white',
             bordercolor='black',
             borderwidth=1,
             borderpad=4,
-            align='left'
+            xanchor='right',
+            yanchor='top'
         )
         
-        # Настройки layout (научный стиль)
+        # Настройки layout
         layout = get_plotly_layout(
             title=f'{y_target} vs {x_feature} (Size = δ)',
             xlabel=x_feature,
@@ -3029,7 +3277,7 @@ class VisualizationEngine:
         ax.legend()
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_alpha_vs_beta(self):
@@ -3055,7 +3303,7 @@ class VisualizationEngine:
         ax.legend()
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_beta_vs_ph2o(self):
@@ -3082,7 +3330,7 @@ class VisualizationEngine:
         ax.legend()
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_alpha_vs_rAav(self):
@@ -3108,7 +3356,7 @@ class VisualizationEngine:
         ax.legend()
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_beta_vs_chiBav(self):
@@ -3134,7 +3382,7 @@ class VisualizationEngine:
         ax.legend()
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_t_bends_vs_t_stab(self):
@@ -3160,13 +3408,13 @@ class VisualizationEngine:
         ax.legend()
         ax.grid(True, alpha=0.3)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     # --- ДОПОЛНИТЕЛЬНЫЕ ГРАФИКИ ---
     
     def plot_pairplot_colored(self, features, hue='method'):
-        """33. Pairplot с многоцветным исполнением (улучшенный)"""
+        """33. Pairplot с многоцветным исполнением (базовый)"""
         if len(features) < 2 or len(features) > 5:
             return None
         
@@ -3219,8 +3467,66 @@ class VisualizationEngine:
         
         return g.fig
     
+    def plot_pairplot_with_params(self, features, hue='method', diag_kind='kde', alpha=0.6, marker_size=30):
+        """34. Pairplot с настраиваемыми параметрами (для отдельного раздела)"""
+        if len(features) < 2 or len(features) > 5:
+            return None
+        
+        if hue not in self.df.columns:
+            return None
+        
+        # Фильтруем признаки
+        valid_features = []
+        for feature in features:
+            if feature in self.df.columns:
+                non_na = self.df[feature].dropna()
+                if len(non_na) > 5:
+                    valid_features.append(feature)
+        
+        if len(valid_features) < 2:
+            return None
+        
+        # Подготовка данных
+        plot_cols = valid_features + [hue]
+        plot_cols = [c for c in plot_cols if c in self.df.columns]
+        data = self.df[plot_cols].dropna()
+        
+        if len(data) < 5:
+            return None
+        
+        # Цветовая палитра для hue
+        if hue == 'method':
+            palette = COLOR_PALETTES['method']
+        elif hue == 'B':
+            palette = COLOR_PALETTES['B_cation']
+        elif hue == 'A':
+            palette = COLOR_PALETTES['A_cation']
+        else:
+            palette = 'viridis'
+        
+        # Настройка diag_kind
+        if diag_kind == 'None':
+            diag_kind = None
+        
+        # Создаём pairplot
+        g = sns.pairplot(
+            data,
+            vars=valid_features,
+            hue=hue,
+            palette=palette,
+            diag_kind=diag_kind,
+            plot_kws={'alpha': alpha, 's': marker_size},
+            diag_kws={'alpha': alpha} if diag_kind is not None else None
+        )
+        
+        g.fig.suptitle(f'Pairplot of Selected Features (colored by {hue})', 
+                      fontsize=14, fontweight='bold', y=1.02)
+        g.fig.set_size_inches(12, 10)
+        
+        return g.fig
+    
     def plot_radar_chart(self, features, group_by='method'):
-        """34. Радарная диаграмма для сравнения групп"""
+        """35. Радарная диаграмма для сравнения групп"""
         if len(features) < 3:
             return None
         
@@ -3275,11 +3581,11 @@ class VisualizationEngine:
         ax.legend(loc='upper right', bbox_to_anchor=(1.2, 1.0))
         ax.grid(True)
         
-        fig.tight_layout()
+        plt.tight_layout()
         return fig
     
     def plot_parallel_coordinates(self, features, target='α·106 (K-1)'):
-        """35. Параллельные координаты (опционально)"""
+        """36. Параллельные координаты (опционально)"""
         if len(features) < 3:
             return None
         
@@ -3417,7 +3723,6 @@ def main():
         st.markdown("---")
         
         # Фильтры (появляются после загрузки данных)
-        # Проверяем, что данные загружены и ключ существует
         if 'data_loaded' in st.session_state and st.session_state.data_loaded:
             if 'df_descriptors' in st.session_state:
                 st.subheader("🔍 Фильтры")
@@ -3539,18 +3844,16 @@ def main():
             # Инициализация визуализационного движка
             viz = VisualizationEngine(df)
             
-            # Получаем список дескрипторов (используем TOP_25_DESCRIPTORS)
-            all_descriptors = [col for col in TOP_25_DESCRIPTORS if col in df.columns]
-            # Добавляем другие числовые дескрипторы, которые могут быть в данных
-            extra_descriptors = [col for col in df.columns if col not in ['№', 'A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'Ref', 'method', '∆T, °C']]
+            # Получаем список дескрипторов (используем TOP_DESCRIPTORS как основу)
+            all_descriptors = [col for col in ALL_DESCRIPTORS_FOR_SELECT if col in df.columns]
+            # Добавляем дополнительные, которые есть в данных
+            extra_descriptors = [col for col in df.columns if col not in all_descriptors and 
+                                col not in ['№', 'A', 'A\'', 'B', 'B\'', 'D1', 'D2', 'Ref', 'method', '∆T, °C', 'T(bends), °C', 'αav·106 (K-1)']]
             extra_descriptors = [col for col in extra_descriptors if df[col].dtype in ['float64', 'int64']]
             extra_descriptors = [col for col in extra_descriptors if df[col].isna().sum() / len(df) < 0.5]
             
-            # Объединяем, сохраняя порядок TOP_25_DESCRIPTORS
-            all_descriptors = [d for d in TOP_25_DESCRIPTORS if d in df.columns]
-            for d in extra_descriptors:
-                if d not in all_descriptors:
-                    all_descriptors.append(d)
+            all_descriptors = list(set(all_descriptors + extra_descriptors))
+            all_descriptors = [col for col in all_descriptors if col in df.columns]
             
             viz.set_features(all_descriptors)
             
@@ -3592,7 +3895,7 @@ def main():
                 if numeric_cols:
                     st.dataframe(df[numeric_cols].describe(), use_container_width=True)
                 
-                # Распределение целевых переменных (включая новые)
+                # Распределение целевых переменных (расширенных)
                 st.subheader("📈 Распределение целевых переменных")
                 
                 target_cols = [t for t in TARGET_VARIABLES if t in df.columns]
@@ -3607,7 +3910,6 @@ def main():
                                 ax.set_xlabel(target, fontsize=11, fontweight='bold')
                                 ax.set_ylabel('Frequency', fontsize=11, fontweight='bold')
                                 ax.grid(True, alpha=0.3)
-                                fig.tight_layout()
                                 st.pyplot(fig)
                             else:
                                 st.write("Нет данных")
@@ -3660,7 +3962,6 @@ def main():
                             ax.set_xlabel(selected_desc, fontsize=12, fontweight='bold')
                             ax.set_ylabel('Frequency', fontsize=12, fontweight='bold')
                             ax.grid(True, alpha=0.3)
-                            fig.tight_layout()
                             st.pyplot(fig)
                         else:
                             st.warning("Нет данных для выбранного дескриптора")
@@ -3670,7 +3971,7 @@ def main():
                 st.header("📈 Расширенный корреляционный анализ")
                 
                 if len(all_descriptors) > 1:
-                    # Выбор целевой переменной (расширенный список)
+                    # Выбор целевой переменной (из расширенного списка)
                     target_options = [t for t in TARGET_VARIABLES if t in df.columns]
                     if target_options:
                         target = st.selectbox(
@@ -3689,7 +3990,11 @@ def main():
                                 # Топ-дескрипторы
                                 top_features = analyzer.get_top_features(target, n=n_features)
                                 
-                                if top_features and len(top_features) > 0:
+                                # Показываем отладочную информацию
+                                if 'correlation_debug' in st.session_state:
+                                    st.info(f"ℹ️ {st.session_state['correlation_debug']}")
+                                
+                                if top_features:
                                     st.success(f"✅ Найдено {len(top_features)} значимых дескрипторов")
                                     
                                     # Таблица топ-дескрипторов
@@ -3705,7 +4010,7 @@ def main():
                                     
                                     with col1:
                                         st.subheader("📊 Топ-20 корреляций")
-                                        if pearson_results is not None:
+                                        if pearson_results is not None and len(pearson_results) > 0:
                                             fig, ax = plt.subplots(figsize=(10, 8))
                                             top_plot = pearson_results.head(20)
                                             colors = ['red' if c < 0 else 'blue' for c in top_plot['correlation'].values]
@@ -3715,8 +4020,10 @@ def main():
                                             ax.set_ylabel('Feature', fontsize=12, fontweight='bold')
                                             ax.set_title(f'Top 20 Correlations with {target}', fontsize=14, fontweight='bold')
                                             ax.grid(True, alpha=0.3)
-                                            fig.tight_layout()
+                                            plt.tight_layout()
                                             st.pyplot(fig)
+                                        else:
+                                            st.warning("Нет корреляций для отображения")
                                     
                                     with col2:
                                         st.subheader("🔗 Сетевой граф")
@@ -3730,26 +4037,28 @@ def main():
                                             nx.draw_networkx_edges(G, pos, edge_color='gray', alpha=0.5, ax=ax)
                                             ax.set_title('Correlation Network', fontsize=14, fontweight='bold')
                                             ax.axis('off')
-                                            fig.tight_layout()
+                                            plt.tight_layout()
                                             st.pyplot(fig)
                                         else:
                                             st.warning("Недостаточно связей для построения сети")
                                     
-                                    # Матрица корреляций (используем топ-15)
+                                    # Матрица корреляций (увеличено до 15 признаков)
                                     st.subheader("📊 Матрица корреляций топ-дескрипторов")
                                     corr_fig = viz.plot_correlation_matrix(features=top_features[:15])
                                     if corr_fig is not None:
                                         st.pyplot(corr_fig)
                                     else:
-                                        st.warning("Не удалось построить матрицу корреляций")
+                                        st.warning("Недостаточно данных для матрицы корреляций")
                                     
                                     # Pairplot
                                     st.subheader("🎨 Pairplot топ-5 дескрипторов")
                                     pair_fig = viz.plot_pairplot_top5(features=top_features[:4], target=target)
                                     if pair_fig is not None:
                                         st.pyplot(pair_fig)
+                                    else:
+                                        st.warning("Недостаточно данных для Pairplot")
                                 else:
-                                    st.warning("Не удалось найти значимые корреляции. Попробуйте увеличить количество дескрипторов или выбрать другую целевую переменную.")
+                                    st.warning("Не удалось найти значимые корреляции. Попробуйте выбрать другую целевую переменную или увеличить количество признаков.")
                     else:
                         st.warning("Нет целевых переменных в данных")
                 else:
@@ -3765,22 +4074,13 @@ def main():
                 with sub_tabs[0]:
                     st.subheader("🗺️ Концентрационные карты")
                     
-                    # Выбор параметров (используем расширенный список дескрипторов)
+                    # Выбор параметров (используем TOP_DESCRIPTORS)
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        x_options = [d for d in TOP_25_DESCRIPTORS if d in df.columns]
-                        # Добавляем основные дескрипторы, которых нет в TOP_25
-                        extra_x = ['δ', '[B\']', 'D_total', 'B\'_conc']
-                        for d in extra_x:
-                            if d in df.columns and d not in x_options:
-                                x_options.append(d)
+                        x_options = [d for d in TOP_DESCRIPTORS if d in df.columns]
                         x_axis = st.selectbox("X-axis:", options=x_options, index=0 if x_options else None)
                     with col2:
-                        y_options = [d for d in TOP_25_DESCRIPTORS if d in df.columns and d != x_axis]
-                        extra_y = ['[B\']', 'D_total', 'δ', 'B\'_conc']
-                        for d in extra_y:
-                            if d in df.columns and d not in y_options and d != x_axis:
-                                y_options.append(d)
+                        y_options = [d for d in TOP_DESCRIPTORS if d in df.columns and d != x_axis]
                         y_axis = st.selectbox("Y-axis:", options=y_options, index=min(1, len(y_options)-1) if y_options else None)
                     with col3:
                         color_options = [t for t in TARGET_VARIABLES if t in df.columns]
@@ -3811,17 +4111,26 @@ def main():
                 with sub_tabs[1]:
                     st.subheader("📐 Ternary Plot (расширенный)")
                     
-                    # Выбор трех вершин из дескрипторов
+                    # Выбор вершин
                     col1, col2, col3 = st.columns(3)
                     with col1:
-                        a_options = [d for d in TOP_25_DESCRIPTORS if d in df.columns]
-                        a_feature = st.selectbox("Вершина A:", options=a_options, index=0 if a_options else None, key="ternary_a")
+                        a_vertex = st.selectbox(
+                            "Вершина A:",
+                            options=[d for d in TERNARY_VERTEX_OPTIONS if d in df.columns],
+                            index=0
+                        )
                     with col2:
-                        b_options = [d for d in TOP_25_DESCRIPTORS if d in df.columns and d != a_feature]
-                        b_feature = st.selectbox("Вершина B:", options=b_options, index=min(1, len(b_options)-1) if b_options else None, key="ternary_b")
+                        b_vertex = st.selectbox(
+                            "Вершина B:",
+                            options=[d for d in TERNARY_VERTEX_OPTIONS if d in df.columns and d != a_vertex],
+                            index=min(1, len([d for d in TERNARY_VERTEX_OPTIONS if d in df.columns and d != a_vertex])-1) if len([d for d in TERNARY_VERTEX_OPTIONS if d in df.columns and d != a_vertex]) > 0 else 0
+                        )
                     with col3:
-                        c_options = [d for d in TOP_25_DESCRIPTORS if d in df.columns and d != a_feature and d != b_feature]
-                        c_feature = st.selectbox("Вершина C:", options=c_options, index=min(2, len(c_options)-1) if c_options else None, key="ternary_c")
+                        c_vertex = st.selectbox(
+                            "Вершина C:",
+                            options=[d for d in TERNARY_VERTEX_OPTIONS if d in df.columns and d not in [a_vertex, b_vertex]],
+                            index=0
+                        )
                     
                     # Выбор целевой переменной
                     ternary_target = st.selectbox(
@@ -3830,18 +4139,21 @@ def main():
                         key="ternary_target"
                     )
                     
-                    # Тип карты для Ternary
+                    # Тип Ternary карты
                     ternary_map_type = st.radio(
-                        "Тип карты для Ternary:",
-                        options=['Heatmap', 'Contour', 'Heatmap + точки'],
-                        horizontal=True,
-                        key="ternary_map_type"
+                        "Тип Ternary карты:",
+                        options=['Scatter', 'Heatmap', 'Contour', 'Heatmap + точки'],
+                        horizontal=True
                     )
                     
-                    if a_feature and b_feature and c_feature and ternary_target:
+                    if a_vertex and b_vertex and c_vertex and ternary_target:
                         if st.button("🔺 Построить Ternary Plot", use_container_width=True):
                             with st.spinner("Построение Ternary Plot..."):
-                                fig = viz.plot_ternary_advanced(a_feature, b_feature, c_feature, ternary_target, ternary_map_type)
+                                fig = viz.plot_ternary_advanced(
+                                    a_vertex, b_vertex, c_vertex, 
+                                    ternary_target, 
+                                    plot_type=ternary_map_type.lower().replace(' ', '_')
+                                )
                                 if fig is not None:
                                     st.pyplot(fig)
                                 else:
@@ -3849,10 +4161,6 @@ def main():
                 
                 with sub_tabs[2]:
                     st.subheader("📊 PCA анализ")
-                    
-                    # Выбор компонент
-                    pc_x = st.selectbox("PC X:", [1, 2, 3], index=0)
-                    pc_y = st.selectbox("PC Y:", [1, 2, 3], index=1)
                     
                     # Biplot
                     if st.button("📊 Построить Biplot", use_container_width=True):
@@ -3895,8 +4203,7 @@ def main():
                         n_clusters = st.slider("K (количество кластеров):", 2, 10, 3)
                         if st.button("🔍 Кластеризовать (K-means)", use_container_width=True):
                             with st.spinner("Выполнение K-means кластеризации..."):
-                                # Выполняем кластеризацию
-                                features = all_descriptors[:20]  # Используем топ-20
+                                features = all_descriptors[:20]
                                 valid_features = []
                                 for feat in features:
                                     if feat in df.columns and df[feat].isna().sum() / len(df) < 0.3:
@@ -3911,15 +4218,9 @@ def main():
                                         kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
                                         labels = kmeans.fit_predict(data_scaled)
                                         
-                                        # Добавляем метки в DataFrame
-                                        df_clustered = data.copy()
-                                        df_clustered['Cluster'] = labels
-                                        
-                                        # Silhouette score
                                         score = silhouette_score(data_scaled, labels)
                                         st.success(f"✅ Silhouette Score: {score:.3f}")
                                         
-                                        # Визуализация с помощью PCA
                                         pca = PCA(n_components=2)
                                         pca_result = pca.fit_transform(data_scaled)
                                         
@@ -3931,7 +4232,7 @@ def main():
                                         ax.set_title(f'K-means Clustering (K={n_clusters})', fontsize=14, fontweight='bold')
                                         plt.colorbar(scatter, ax=ax, label='Cluster')
                                         ax.grid(True, alpha=0.3)
-                                        fig.tight_layout()
+                                        plt.tight_layout()
                                         st.pyplot(fig)
                                     else:
                                         st.warning("Недостаточно данных для кластеризации")
@@ -3963,7 +4264,6 @@ def main():
                                         
                                         st.info(f"📊 Найдено кластеров: {n_clusters}, Шумовых точек: {n_noise}")
                                         
-                                        # Визуализация с помощью PCA
                                         pca = PCA(n_components=2)
                                         pca_result = pca.fit_transform(data_scaled)
                                         
@@ -3976,7 +4276,7 @@ def main():
                                                     fontsize=14, fontweight='bold')
                                         plt.colorbar(scatter, ax=ax, label='Cluster')
                                         ax.grid(True, alpha=0.3)
-                                        fig.tight_layout()
+                                        plt.tight_layout()
                                         st.pyplot(fig)
                                     else:
                                         st.warning("Недостаточно данных для кластеризации")
@@ -3986,7 +4286,6 @@ def main():
                     else:  # Иерархическая
                         if st.button("🔍 Кластеризовать (Иерархическая)", use_container_width=True):
                             with st.spinner("Выполнение иерархической кластеризации..."):
-                                # Используем silhouette для оптимального K
                                 fig = viz.plot_silhouette()
                                 if fig is not None:
                                     st.pyplot(fig)
@@ -3997,13 +4296,14 @@ def main():
             with tabs[4]:
                 st.header("🎯 Интерактивная визуализация")
                 
-                # Категории графиков
+                # Категории графиков (включая отдельный Pairplot)
                 plot_category = st.selectbox(
                     "Выберите категорию графиков:",
                     options=[
                         "Пузырьковые диаграммы",
                         "Специализированные графики",
-                        "Pairplot (отдельный раздел)"
+                        "Радарные диаграммы",
+                        "Pairplot"  # Отдельный раздел
                     ]
                 )
                 
@@ -4034,51 +4334,24 @@ def main():
                     st.subheader("📊 Compositional Bubble")
                     if st.button("📊 Построить Compositional Bubble", use_container_width=True):
                         with st.spinner("Построение..."):
-                            fig = viz.plot_compositional_bubble()
+                            target_comp = st.selectbox("Целевая переменная:", [t for t in TARGET_VARIABLES if t in df.columns], key="comp_target")
+                            fig = viz.plot_compositional_bubble(target=target_comp)
                             if fig is not None:
                                 st.plotly_chart(fig, use_container_width=True)
                             else:
                                 st.warning("Недостаточно данных")
                     
                     st.subheader("📈 Bubble с размером = δ")
-                    if st.button("📈 Построить Bubble с размером = δ", use_container_width=True):
-                        with st.spinner("Построение..."):
-                            x_feat = st.selectbox("X:", options=all_descriptors, key="bubble_delta_x")
-                            y_targ = st.selectbox("Y:", options=[t for t in TARGET_VARIABLES if t in df.columns], key="bubble_delta_y")
-                            if x_feat and y_targ:
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        x_feat = st.selectbox("X:", options=all_descriptors, key="bubble_delta_x")
+                    with col2:
+                        y_targ = st.selectbox("Y (целевая):", options=[t for t in TARGET_VARIABLES if t in df.columns], key="bubble_delta_y")
+                    
+                    if x_feat and y_targ:
+                        if st.button("📈 Построить Bubble с размером = δ", use_container_width=True):
+                            with st.spinner("Построение..."):
                                 fig = viz.plot_bubble_size_delta(x_feat, y_targ)
-                                if fig is not None:
-                                    st.plotly_chart(fig, use_container_width=True)
-                                else:
-                                    st.warning("Недостаточно данных")
-                    
-                    st.subheader("📈 Bubble + Trend Line")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        x_trend = st.selectbox("X (trend):", options=all_descriptors, key="trend_x")
-                    with col2:
-                        y_trend = st.selectbox("Y (trend):", options=[t for t in TARGET_VARIABLES if t in df.columns], key="trend_y")
-                    
-                    if x_trend and y_trend:
-                        if st.button("📈 Построить Bubble + Trend", use_container_width=True):
-                            with st.spinner("Построение..."):
-                                fig = viz.plot_bubble_with_trend(x_trend, y_trend)
-                                if fig is not None:
-                                    st.plotly_chart(fig, use_container_width=True)
-                                else:
-                                    st.warning("Недостаточно данных")
-                    
-                    st.subheader("📊 Bubble с фильтрацией по pH₂O")
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        x_ph = st.selectbox("X (pH2O):", options=all_descriptors, key="ph_x")
-                    with col2:
-                        y_ph = st.selectbox("Y (pH2O):", options=[t for t in TARGET_VARIABLES if t in df.columns], key="ph_y")
-                    
-                    if x_ph and y_ph:
-                        if st.button("📊 Построить Bubble с pH₂O", use_container_width=True):
-                            with st.spinner("Построение..."):
-                                fig = viz.plot_bubble_filtered_by_ph2o(x_ph, y_ph)
                                 if fig is not None:
                                     st.plotly_chart(fig, use_container_width=True)
                                 else:
@@ -4119,8 +4392,39 @@ def main():
                             else:
                                 st.warning("Недостаточно данных для построения графика")
                 
-                elif plot_category == "Pairplot (отдельный раздел)":
-                    st.subheader("🎨 Pairplot с многоцветным исполнением")
+                elif plot_category == "Радарные диаграммы":
+                    st.subheader("📊 Радарная диаграмма для сравнения групп")
+                    
+                    radar_features = st.multiselect(
+                        "Выберите признаки (минимум 3):",
+                        options=all_descriptors,
+                        default=all_descriptors[:3] if len(all_descriptors) >= 3 else all_descriptors
+                    )
+                    
+                    group_by = st.selectbox(
+                        "Группировка по:",
+                        options=['method', 'B', 'A'],
+                        index=0
+                    )
+                    
+                    if len(radar_features) >= 3:
+                        if st.button("📊 Построить радарную диаграмму", use_container_width=True):
+                            with st.spinner("Построение..."):
+                                fig = viz.plot_radar_chart(radar_features, group_by)
+                                if fig is not None:
+                                    st.pyplot(fig)
+                                else:
+                                    st.warning("Недостаточно данных")
+                    else:
+                        st.warning("Выберите как минимум 3 признака")
+                
+                elif plot_category == "Pairplot":
+                    st.header("🎨 Настраиваемый Pairplot")
+                    
+                    st.markdown("""
+                    Настройте параметры Pairplot для визуализации взаимосвязей между признаками.
+                    Цвет позволяет выделить группы по выбранному критерию.
+                    """)
                     
                     # Выбор признаков
                     features = st.multiselect(
@@ -4129,65 +4433,55 @@ def main():
                         default=all_descriptors[:3] if len(all_descriptors) >= 3 else all_descriptors
                     )
                     
+                    # Настройки цвета
+                    hue_options = ['method', 'B', 'A'] + [t for t in TARGET_VARIABLES if t in df.columns]
                     hue_by = st.selectbox(
-                        "Цвет по:",
-                        options=['method', 'B', 'A'] + [t for t in TARGET_VARIABLES if t in df.columns],
+                        "Цвет по (hue):",
+                        options=hue_options,
                         index=0
                     )
                     
-                    # Дополнительные настройки
-                    col1, col2 = st.columns(2)
+                    # Настройки отображения
+                    col1, col2, col3 = st.columns(3)
                     with col1:
-                        diag_kind = st.selectbox("Диагональные графики:", ['kde', 'hist'], index=0)
+                        diag_kind = st.selectbox(
+                            "Тип диагональных графиков:",
+                            options=['kde', 'hist', 'None'],
+                            index=0
+                        )
                     with col2:
-                        plot_size = st.slider("Размер точек:", 10, 50, 30)
+                        alpha = st.slider(
+                            "Прозрачность точек:",
+                            min_value=0.1,
+                            max_value=1.0,
+                            value=0.6,
+                            step=0.1
+                        )
+                    with col3:
+                        marker_size = st.slider(
+                            "Размер точек:",
+                            min_value=10,
+                            max_value=100,
+                            value=30,
+                            step=5
+                        )
                     
                     if len(features) >= 2:
                         if st.button("🎨 Построить Pairplot", use_container_width=True):
-                            with st.spinner("Построение..."):
-                                # Создаем pairplot с настройками
-                                valid_features = []
-                                for feature in features:
-                                    if feature in df.columns:
-                                        non_na = df[feature].dropna()
-                                        if len(non_na) > 5:
-                                            valid_features.append(feature)
-                                
-                                if len(valid_features) >= 2:
-                                    plot_cols = valid_features + [hue_by]
-                                    plot_cols = [c for c in plot_cols if c in df.columns]
-                                    data = df[plot_cols].dropna()
-                                    
-                                    if len(data) > 5:
-                                        if hue_by == 'method':
-                                            palette = COLOR_PALETTES['method']
-                                        elif hue_by == 'B':
-                                            palette = COLOR_PALETTES['B_cation']
-                                        elif hue_by == 'A':
-                                            palette = COLOR_PALETTES['A_cation']
-                                        else:
-                                            palette = 'viridis'
-                                        
-                                        g = sns.pairplot(
-                                            data,
-                                            vars=valid_features,
-                                            hue=hue_by,
-                                            palette=palette,
-                                            diag_kind=diag_kind,
-                                            plot_kws={'alpha': 0.6, 's': plot_size},
-                                            diag_kws={'alpha': 0.6}
-                                        )
-                                        
-                                        g.fig.suptitle(f'Pairplot (colored by {hue_by})', 
-                                                      fontsize=14, fontweight='bold', y=1.02)
-                                        g.fig.set_size_inches(12, 10)
-                                        st.pyplot(g.fig)
-                                    else:
-                                        st.warning("Недостаточно данных")
+                            with st.spinner("Построение Pairplot..."):
+                                fig = viz.plot_pairplot_with_params(
+                                    features=features,
+                                    hue=hue_by,
+                                    diag_kind=diag_kind if diag_kind != 'None' else None,
+                                    alpha=alpha,
+                                    marker_size=marker_size
+                                )
+                                if fig is not None:
+                                    st.pyplot(fig)
                                 else:
-                                    st.warning("Выберите признаки с достаточным количеством данных")
+                                    st.warning("Недостаточно данных для построения Pairplot")
                     else:
-                        st.warning("Выберите как минимум 2 признака")
+                        st.warning("Выберите как минимум 2 признака для Pairplot")
             
             # --- TAB 6: Экспорт ---
             with tabs[5]:
@@ -4208,7 +4502,6 @@ def main():
                 
                 st.subheader("🖼️ Экспорт графиков")
                 
-                # Выбор графиков для экспорта
                 export_plots = st.multiselect(
                     "Выберите графики для экспорта:",
                     options=[
@@ -4266,12 +4559,14 @@ def main():
         ### 🚀 Возможности приложения
         
         - 📊 Расчёт 63+ дескрипторов
-        - 📈 Расширенный корреляционный анализ (включая новые целевые переменные)
+        - 📈 Расширенный корреляционный анализ (7 целевых переменных)
         - 🗺️ Концентрационные карты и кластеризация
-        - 🎯 35 типов интерактивных графиков
+        - 📐 Advanced Ternary Plot (4 типа визуализации)
+        - 🎯 36 типов интерактивных графиков
         - 🔍 Фильтрация по составу и условиям эксперимента
-        - 📊 Новые целевые переменные: α/β, αav_LT/α, αav_HT/α
+        - 🎨 Настраиваемый Pairplot с отдельным разделом
         """)
+
 
 # ============================================================================
 # 6. ЗАПУСК ПРИЛОЖЕНИЯ

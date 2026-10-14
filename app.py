@@ -4089,14 +4089,21 @@ def main():
                                     st.warning("Недостаточно данных для построения")
                     
                     st.subheader("📊 Compositional Bubble")
+                    
+                    target_comp = st.selectbox(
+                        "Целевая переменная:",
+                        options=[t for t in TARGET_VARIABLES if t in df.columns],
+                        key="comp_target"
+                    )
+                    
                     if st.button("📊 Построить Compositional Bubble", use_container_width=True):
                         with st.spinner("Построение..."):
-                            target_comp = st.selectbox("Целевая переменная:", [t for t in TARGET_VARIABLES if t in df.columns], key="comp_target")
                             fig = viz.plot_compositional_bubble(target=target_comp)
-                            if fig is not None:
-                                st.pyplot(fig)
-                            else:
-                                st.warning("Недостаточно данных")
+                            st.session_state['compositional_bubble_fig'] = fig  # сохраняем
+                    
+                    # Показываем сохранённый график (если есть)
+                    if st.session_state.get('compositional_bubble_fig') is not None:
+                        st.pyplot(st.session_state['compositional_bubble_fig'])
                     
                     st.subheader("📈 Bubble с размером = δ")
                     col1, col2 = st.columns(2)

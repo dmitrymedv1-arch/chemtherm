@@ -2261,22 +2261,26 @@ class VisualizationEngine:
         if target not in self.df.columns:
             return None
         
-        # Фильтруем только по целевой переменной (X и Y могут содержать NaN)
+        # Фильтруем только по целевой переменной
         data = self.df[[x_feature, y_feature, target]].dropna(subset=[target])
         
         if len(data) < 3:
             return None
         
-        # Выводим информацию о количестве точек
         st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
         if len(data) < len(self.df):
             st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
         
-        # Создаём сетку для интерполяции
+        # ⚠️ ДИАГНОСТИКА: выводим реальные диапазоны
         x = data[x_feature].values
         y = data[y_feature].values
         z = data[target].values
         
+        # Реальный диапазон целевой переменной
+        z_min, z_max = z.min(), z.max()
+        st.caption(f"🔎 Реальный диапазон {target}: [{z_min:.3f}, {z_max:.3f}]")
+        
+        # Создаём сетку для интерполяции
         xi = np.linspace(x.min(), x.max(), grid_resolution)
         yi = np.linspace(y.min(), y.max(), grid_resolution)
         xi_grid, yi_grid = np.meshgrid(xi, yi)
@@ -2290,10 +2294,15 @@ class VisualizationEngine:
             except:
                 return None
         
+        # ⚠️ КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ: обрезаем экстраполяцию реальным диапазоном
+        zi = np.clip(zi, z_min, z_max)
+        
         fig, ax = plt.subplots(figsize=(10, 8))
         
-        # Тепловая карта
-        im = ax.contourf(xi, yi, zi, levels=20, cmap='viridis')
+        # Тепловая карта — фиксируем уровни в реальном диапазоне
+        levels = np.linspace(z_min, z_max, 21)
+        im = ax.contourf(xi, yi, zi, levels=levels, cmap='viridis', 
+                         vmin=z_min, vmax=z_max, extend='both')
         
         # Точки данных
         ax.scatter(x, y, c='red', s=20, alpha=0.5, edgecolors='black', linewidth=0.5)

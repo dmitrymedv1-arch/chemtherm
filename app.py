@@ -2784,16 +2784,25 @@ class VisualizationEngine:
         plt.tight_layout()
         return fig
     
-    def plot_compositional_bubble(self, target='α·106 (K-1)'):
-        """22. Compositional Bubble ([B'] vs α) - Matplotlib с научным стилем"""
+    def plot_compositional_bubble(self, x_feature='[B\']', target='α·106 (K-1)'):
+        """22. Compositional Bubble (x_feature vs target, size = δ, color = B-cation)"""
         if target not in self.df.columns:
             return None
         
-        if '[B\']' not in self.df.columns:
+        if x_feature not in self.df.columns:
+            return None
+        
+        if 'δ' not in self.df.columns:
             return None
         
         # Фильтруем только по целевой переменной
-        data = self.df[['[B\']', target, 'B', 'δ']].dropna(subset=[target])
+        data = self.df[[x_feature, target, 'B', 'δ']].dropna(subset=[target])
+        
+        if len(data) < 3:
+            return None
+        
+        # Также выкидываем строки с NaN в x_feature и δ (для корректного scatter)
+        data = data.dropna(subset=[x_feature, 'δ'])
         
         if len(data) < 3:
             return None
@@ -2801,14 +2810,15 @@ class VisualizationEngine:
         # Выводим информацию о количестве точек
         st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
         if len(data) < len(self.df):
-            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенной целевой переменной")
+            st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенными данными")
         
         fig, ax = plt.subplots(figsize=(10, 8))
         
         # Нормализация размера по δ
         delta_min = data['δ'].min()
         delta_max = data['δ'].max()
-        delta_norm = (data['δ'] - delta_min) / (delta_max - delta_min + 1e-10)
+        delta_range = delta_max - delta_min if delta_max > delta_min else 1.0
+        delta_norm = (data['δ'] - delta_min) / delta_range
         size_scaled = 20 + delta_norm * 60
         
         # Цвета по B-катиону
@@ -2818,7 +2828,7 @@ class VisualizationEngine:
         
         # Scatter plot
         scatter = ax.scatter(
-            data['[B\']'],
+            data[x_feature],       # ← теперь гибко
             data[target],
             s=size_scaled,
             c=colors,
@@ -2841,7 +2851,7 @@ class VisualizationEngine:
             ax, data, 'δ', delta_min, delta_max, data['δ'].mean(), position='lower right'
         )
         
-        # Добавляем легенду для B-катионов
+        # Легенда B-катионов
         ax.legend(
             handles=legend_elements,
             title='B-cation',
@@ -2857,9 +2867,10 @@ class VisualizationEngine:
         ax.add_artist(size_legend)
         
         # Оформление
-        ax.set_xlabel('[B\'] Concentration', fontsize=12, fontweight='bold')
+        ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')
         ax.set_ylabel(target, fontsize=12, fontweight='bold')
-        ax.set_title(f'{target} vs [B\'] (Size = δ)', fontsize=14, fontweight='bold')
+        ax.set_title(f'{target} vs {x_feature} (Size = δ, Color = B-cation)', 
+                     fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
@@ -4090,36 +4101,31 @@ def main():
                     
                     st.subheader("📊 Compositional Bubble")
                     
-                    target_comp = st.selectbox(
-                        "Целевая переменная:",
-                        options=[t for t in TARGET_VARIABLES if t in df.columns],
-                        key="comp_target"
-                    )
-                    
-                    if st.button("📊 Построить Compositional Bubble", use_container_width=True):
-                        with st.spinner("Построение..."):
-                            fig = viz.plot_compositional_bubble(target=target_comp)
-                            st.session_state['compositional_bubble_fig'] = fig  # сохраняем
-                    
-                    # Показываем сохранённый график (если есть)
-                    if st.session_state.get('compositional_bubble_fig') is not None:
-                        st.pyplot(st.session_state['compositional_bubble_fig'])
-                    
-                    st.subheader("📈 Bubble с размером = δ")
+                    # ✅ Виджеты — СНАРУЖИ кнопки
                     col1, col2 = st.columns(2)
                     with col1:
-                        x_feat = st.selectbox("X:", options=all_descriptors, key="bubble_delta_x")
+                        x_comp = st.selectbox(
+                            "X-дескриптор:",
+                            options=[d for d in all_descriptors if d in df.columns],
+                            index=0,
+                            key="comp_x"
+                        )
                     with col2:
-                        y_targ = st.selectbox("Y (целевая):", options=[t for t in TARGET_VARIABLES if t in df.columns], key="bubble_delta_y")
+                        target_comp = st.selectbox(
+                            "Целевая переменная:",
+                            options=[t for t in TARGET_VARIABLES if t in df.columns],
+                            index=0,
+                            key="comp_target"
+                        )
                     
-                    if x_feat and y_targ:
-                        if st.button("📈 Построить Bubble с размером = δ", use_container_width=True):
-                            with st.spinner("Построение..."):
-                                fig = viz.plot_bubble_size_delta(x_feat, y_targ)
-                                if fig is not None:
-                                    st.pyplot(fig)
-                                else:
-                                    st.warning("Недостаточно данных")
+                    # ✅ Кнопка — только запуск построения
+                    if st.button("📊 Построить Compositional Bubble", use_container_width=True):
+                        with st.spinner("Построение..."):
+                            fig = viz.plot_compositional_bubble(x_feature=x_comp, target=target_comp)
+                            if fig is not None:
+                                st.pyplot(fig)
+                            else:
+                                st.warning("Недостаточно данных")
                 
                 elif plot_category == "Специализированные графики":
                     st.subheader("🎯 Специализированные графики")

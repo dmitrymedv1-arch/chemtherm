@@ -2835,26 +2835,19 @@ class VisualizationEngine:
         """22. Compositional Bubble (x_feature vs target, size = size_feature, color = B-cation)"""
         if target not in self.df.columns:
             return None
-        
         if x_feature not in self.df.columns:
             return None
-        
         if size_feature not in self.df.columns:
             return None
-        
         if color_feature not in self.df.columns:
             return None
         
-        # Фильтруем только по целевой переменной
         data = self.df[[x_feature, target, color_feature, size_feature]].dropna(subset=[target])
-        
-        # Также выкидываем строки с NaN в x и size (для корректного scatter)
         data = data.dropna(subset=[x_feature, size_feature])
         
         if len(data) < 3:
             return None
         
-        # Выводим информацию о количестве точек
         st.info(f"📊 Участвует в построении: {len(data)} точек из {len(self.df)}")
         if len(data) < len(self.df):
             st.warning(f"⚠️ Исключено {len(self.df) - len(data)} точек с пропущенными данными")
@@ -2868,21 +2861,14 @@ class VisualizationEngine:
         size_norm = (data[size_feature] - size_min) / size_range
         size_scaled = 20 + size_norm * 60
         
-        # Проверяем тип color_feature
         is_numeric_color = pd.api.types.is_numeric_dtype(data[color_feature]) and \
                            data[color_feature].nunique() > 5
         
         if is_numeric_color:
-            # Числовой цвет через cmap
             scatter = ax.scatter(
-                data[x_feature],
-                data[target],
-                s=size_scaled,
-                c=data[color_feature],
-                cmap='viridis',
-                alpha=0.7,
-                edgecolors='black',
-                linewidth=0.8
+                data[x_feature], data[target],
+                s=size_scaled, c=data[color_feature], cmap='viridis',
+                alpha=0.7, edgecolors='black', linewidth=0.8
             )
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(color_feature, fontsize=11, fontweight='bold')
@@ -2893,42 +2879,32 @@ class VisualizationEngine:
                 position='lower right'
             )
             ax.add_artist(size_legend)
+        
         else:
-            # Категориальный цвет (например, B-катион)
+            # Категориальный цвет
             categories = data[color_feature].unique()
             
-            # Пытаемся взять палитру из COLOR_PALETTES
-            palette_key = None
-            for key in COLOR_PALETTES:
-                if isinstance(COLOR_PALETTES[key], dict) and color_feature in COLOR_PALETTES[key]:
-                    palette_key = key
-                    break
-                # Специальные случаи: 'B_cation', 'A_cation', 'method'
-                if key == f'{color_feature}_cation':
-                    palette_key = key
-                    break
-            
-            if palette_key and isinstance(COLOR_PALETTES[palette_key], dict):
-                color_map = COLOR_PALETTES[palette_key]
-            else:
-                # Автоматическая палитра
-                auto_colors = COLOR_PALETTES['qualitative']
-                color_map = {cat: auto_colors[i % len(auto_colors)] 
-                             for i, cat in enumerate(categories)}
+            # Автоматическая палитра (или из COLOR_PALETTES)
+            auto_colors = COLOR_PALETTES['qualitative']
+            color_map = {cat: auto_colors[i % len(auto_colors)] 
+                         for i, cat in enumerate(categories)}
             
             colors = [color_map.get(b, '#2C3E50') for b in data[color_feature]]
             
             scatter = ax.scatter(
-                data[x_feature],
-                data[target],
-                s=size_scaled,
-                c=colors,
-                alpha=0.7,
-                edgecolors='black',
-                linewidth=0.8
+                data[x_feature], data[target],
+                s=size_scaled, c=colors,
+                alpha=0.7, edgecolors='black', linewidth=0.8
             )
             
-            # Легенда категорий
+            # ✅ ШАГ 1: сначала создаём легенду РАЗМЕРА и защищаем её через add_artist
+            size_legend = create_bubble_legend(
+                ax, data, size_feature, size_min, size_max, data[size_feature].mean(),
+                position='lower right'
+            )
+            ax.add_artist(size_legend)
+            
+            # ✅ ШАГ 2: теперь создаём легенду КАТЕГОРИЙ — она станет основной
             legend_elements = []
             for cat in categories:
                 color = color_map.get(cat, '#2C3E50')
@@ -2937,7 +2913,7 @@ class VisualizationEngine:
                            markersize=8, markerfacecolor=color, linestyle='None')
                 )
             
-            ax.legend(
+            cat_legend = ax.legend(
                 handles=legend_elements,
                 title=color_feature,
                 loc='upper left',
@@ -2947,13 +2923,8 @@ class VisualizationEngine:
                 fontsize=10,
                 title_fontsize=10
             )
-            
-            # Легенда размера
-            size_legend = create_bubble_legend(
-                ax, data, size_feature, size_min, size_max, data[size_feature].mean(),
-                position='lower right'
-            )
-            ax.add_artist(size_legend)
+            # ✅ ШАГ 3: защищаем и её
+            ax.add_artist(cat_legend)
         
         # Оформление
         ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')

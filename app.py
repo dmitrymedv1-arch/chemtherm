@@ -1490,46 +1490,92 @@ class VisualizationEngine:
         plt.tight_layout()
         return fig
     
-    def plot_violin_by_B(self, target=None):
-        """4. Violin plot по B-катиону"""
+    def plot_violin_by_B(self, target=None, group_feature='B', show_stats=True):
+        """4. Violin plot по B-катиону (обобщённый) с опциональной статистикой"""
         if target is None:
             target = 'α·106 (K-1)'
         
-        if target not in self.df.columns or 'B' not in self.df.columns:
+        if target not in self.df.columns or group_feature not in self.df.columns:
             return None
         
-        fig, ax = plt.subplots(figsize=(8, 6))
+        fig, ax = plt.subplots(figsize=(10, 8))
         
         # Группируем данные
-        data = self.df[['B', target]].dropna()
+        data = self.df[[group_feature, target]].dropna()
         
-        if len(data) == 0:
+        if len(data) < 3:
+            return None
+        
+        # Группы с достаточным количеством точек
+        groups = []
+        group_labels = []
+        group_stats = []
+        for g in data[group_feature].unique():
+            vals = data[data[group_feature] == g][target].values
+            if len(vals) >= 2:  # violin требует минимум 2 точки
+                groups.append(vals)
+                group_labels.append(str(g))
+                group_stats.append({
+                    'label': str(g),
+                    'n': len(vals),
+                    'mean': np.mean(vals),
+                    'median': np.median(vals),
+                    'std': np.std(vals, ddof=1) if len(vals) > 1 else 0
+                })
+        
+        if len(groups) == 0:
             return None
         
         # Создаём violin plot
-        b_cations = data['B'].unique()
         parts = ax.violinplot(
-            [data[data['B'] == b][target].values for b in b_cations],
-            positions=range(len(b_cations)),
+            groups,
+            positions=range(len(groups)),
             showmeans=True,
             showmedians=True,
             showextrema=True
         )
         
-        # Оформление
-        for pc in parts['bodies']:
-            pc.set_facecolor('#3498DB')
+        # Оформление violin-ов
+        for i, pc in enumerate(parts['bodies']):
+            pc.set_facecolor(COLOR_PALETTES['qualitative'][i % len(COLOR_PALETTES['qualitative'])])
             pc.set_alpha(0.7)
             pc.set_edgecolor('black')
         
         parts['cmeans'].set_color('red')
         parts['cmedians'].set_color('black')
+        parts['cmaxes'].set_color('gray')
+        parts['cmins'].set_color('gray')
+        parts['cbars'].set_color('gray')
         
-        ax.set_xticks(range(len(b_cations)))
-        ax.set_xticklabels(b_cations, fontsize=10)
-        ax.set_xlabel('B-cation', fontsize=12, fontweight='bold')
+        # Опционально: точки поверх
+        for i, vals in enumerate(groups):
+            # Jitter
+            x_jitter = np.random.normal(i, 0.04, size=len(vals))
+            ax.scatter(x_jitter, vals, alpha=0.3, s=15, color='black', zorder=1)
+        
+        # Статистика в подписях
+        if show_stats:
+            y_min = data[target].min()
+            y_max = data[target].max()
+            y_offset = (y_max - y_min) * 0.03
+            
+            for i, st in enumerate(group_stats):
+                ax.text(
+                    i, y_max + y_offset,
+                    f'n={st["n"]}\nμ={st["mean"]:.2f}\nσ={st["std"]:.2f}',
+                    ha='center', va='bottom',
+                    fontsize=8,
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                              edgecolor='gray', alpha=0.8)
+                )
+        
+        ax.set_xticks(range(len(group_labels)))
+        ax.set_xticklabels(group_labels, fontsize=10)
+        ax.set_xlabel(f'{group_feature}-cation', fontsize=12, fontweight='bold')
         ax.set_ylabel(target, fontsize=12, fontweight='bold')
-        ax.grid(True, alpha=0.3)
+        ax.set_title(f'Distribution of {target} by {group_feature}-cation', 
+                     fontsize=14, fontweight='bold')
+        ax.grid(True, alpha=0.3, axis='y')
         
         plt.tight_layout()
         return fig
@@ -2784,25 +2830,26 @@ class VisualizationEngine:
         plt.tight_layout()
         return fig
     
-    def plot_compositional_bubble(self, x_feature='[B\']', target='α·106 (K-1)'):
-        """22. Compositional Bubble (x_feature vs target, size = δ, color = B-cation)"""
+    def plot_compositional_bubble(self, x_feature='[B\']', target='α·106 (K-1)', 
+                                  size_feature='δ', color_feature='B'):
+        """22. Compositional Bubble (x_feature vs target, size = size_feature, color = B-cation)"""
         if target not in self.df.columns:
             return None
         
         if x_feature not in self.df.columns:
             return None
         
-        if 'δ' not in self.df.columns:
+        if size_feature not in self.df.columns:
+            return None
+        
+        if color_feature not in self.df.columns:
             return None
         
         # Фильтруем только по целевой переменной
-        data = self.df[[x_feature, target, 'B', 'δ']].dropna(subset=[target])
+        data = self.df[[x_feature, target, color_feature, size_feature]].dropna(subset=[target])
         
-        if len(data) < 3:
-            return None
-        
-        # Также выкидываем строки с NaN в x_feature и δ (для корректного scatter)
-        data = data.dropna(subset=[x_feature, 'δ'])
+        # Также выкидываем строки с NaN в x и size (для корректного scatter)
+        data = data.dropna(subset=[x_feature, size_feature])
         
         if len(data) < 3:
             return None
@@ -2814,63 +2861,107 @@ class VisualizationEngine:
         
         fig, ax = plt.subplots(figsize=(10, 8))
         
-        # Нормализация размера по δ
-        delta_min = data['δ'].min()
-        delta_max = data['δ'].max()
-        delta_range = delta_max - delta_min if delta_max > delta_min else 1.0
-        delta_norm = (data['δ'] - delta_min) / delta_range
-        size_scaled = 20 + delta_norm * 60
+        # Нормализация размера
+        size_min = data[size_feature].min()
+        size_max = data[size_feature].max()
+        size_range = size_max - size_min if size_max > size_min else 1.0
+        size_norm = (data[size_feature] - size_min) / size_range
+        size_scaled = 20 + size_norm * 60
         
-        # Цвета по B-катиону
-        b_cations = data['B'].unique()
-        color_map = COLOR_PALETTES['B_cation']
-        colors = [color_map.get(b, '#2C3E50') for b in data['B']]
+        # Проверяем тип color_feature
+        is_numeric_color = pd.api.types.is_numeric_dtype(data[color_feature]) and \
+                           data[color_feature].nunique() > 5
         
-        # Scatter plot
-        scatter = ax.scatter(
-            data[x_feature],       # ← теперь гибко
-            data[target],
-            s=size_scaled,
-            c=colors,
-            alpha=0.7,
-            edgecolors='black',
-            linewidth=0.8
-        )
-        
-        # Легенда для B-катионов
-        legend_elements = []
-        for b_cation in b_cations:
-            color = color_map.get(b_cation, '#2C3E50')
-            legend_elements.append(
-                Line2D([0], [0], marker='o', color='black', label=b_cation,
-                       markersize=8, markerfacecolor=color, linestyle='None')
+        if is_numeric_color:
+            # Числовой цвет через cmap
+            scatter = ax.scatter(
+                data[x_feature],
+                data[target],
+                s=size_scaled,
+                c=data[color_feature],
+                cmap='viridis',
+                alpha=0.7,
+                edgecolors='black',
+                linewidth=0.8
             )
-        
-        # Легенда размера
-        size_legend = create_bubble_legend(
-            ax, data, 'δ', delta_min, delta_max, data['δ'].mean(), position='lower right'
-        )
-        
-        # Легенда B-катионов
-        ax.legend(
-            handles=legend_elements,
-            title='B-cation',
-            loc='upper left',
-            frameon=True,
-            framealpha=0.9,
-            edgecolor='black',
-            fontsize=10,
-            title_fontsize=10
-        )
-        
-        # Добавляем размерную легенду
-        ax.add_artist(size_legend)
+            cbar = plt.colorbar(scatter, ax=ax)
+            cbar.set_label(color_feature, fontsize=11, fontweight='bold')
+            
+            # Легенда размера
+            size_legend = create_bubble_legend(
+                ax, data, size_feature, size_min, size_max, data[size_feature].mean(),
+                position='lower right'
+            )
+            ax.add_artist(size_legend)
+        else:
+            # Категориальный цвет (например, B-катион)
+            categories = data[color_feature].unique()
+            
+            # Пытаемся взять палитру из COLOR_PALETTES
+            palette_key = None
+            for key in COLOR_PALETTES:
+                if isinstance(COLOR_PALETTES[key], dict) and color_feature in COLOR_PALETTES[key]:
+                    palette_key = key
+                    break
+                # Специальные случаи: 'B_cation', 'A_cation', 'method'
+                if key == f'{color_feature}_cation':
+                    palette_key = key
+                    break
+            
+            if palette_key and isinstance(COLOR_PALETTES[palette_key], dict):
+                color_map = COLOR_PALETTES[palette_key]
+            else:
+                # Автоматическая палитра
+                auto_colors = COLOR_PALETTES['qualitative']
+                color_map = {cat: auto_colors[i % len(auto_colors)] 
+                             for i, cat in enumerate(categories)}
+            
+            colors = [color_map.get(b, '#2C3E50') for b in data[color_feature]]
+            
+            scatter = ax.scatter(
+                data[x_feature],
+                data[target],
+                s=size_scaled,
+                c=colors,
+                alpha=0.7,
+                edgecolors='black',
+                linewidth=0.8
+            )
+            
+            # Легенда категорий
+            legend_elements = []
+            for cat in categories:
+                color = color_map.get(cat, '#2C3E50')
+                legend_elements.append(
+                    Line2D([0], [0], marker='o', color='black', label=str(cat),
+                           markersize=8, markerfacecolor=color, linestyle='None')
+                )
+            
+            ax.legend(
+                handles=legend_elements,
+                title=color_feature,
+                loc='upper left',
+                frameon=True,
+                framealpha=0.9,
+                edgecolor='black',
+                fontsize=10,
+                title_fontsize=10
+            )
+            
+            # Легенда размера
+            size_legend = create_bubble_legend(
+                ax, data, size_feature, size_min, size_max, data[size_feature].mean(),
+                position='lower right'
+            )
+            ax.add_artist(size_legend)
         
         # Оформление
         ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')
         ax.set_ylabel(target, fontsize=12, fontweight='bold')
-        ax.set_title(f'{target} vs {x_feature} (Size = δ, Color = B-cation)', 
-                     fontsize=14, fontweight='bold')
+        ax.set_title(
+            f'{target} vs {x_feature} (Size = {size_feature}, Color = {color_feature})',
+            fontsize=13, fontweight='bold'
+        )
         ax.grid(True, alpha=0.3)
         
         plt.tight_layout()
@@ -4099,10 +4190,10 @@ def main():
                                 else:
                                     st.warning("Недостаточно данных для построения")
                     
-                    st.subheader("📊 Compositional Bubble")
+                    st.subheader("📊 Compositional Bubble + Violin plot")
                     
                     # ✅ Виджеты — СНАРУЖИ кнопки
-                    col1, col2 = st.columns(2)
+                    col1, col2, col3 = st.columns(3)
                     with col1:
                         x_comp = st.selectbox(
                             "X-дескриптор:",
@@ -4111,6 +4202,13 @@ def main():
                             key="comp_x"
                         )
                     with col2:
+                        size_comp = st.selectbox(
+                            "Размер пузырьков:",
+                            options=[d for d in all_descriptors if d in df.columns],
+                            index=0,
+                            key="comp_size"
+                        )
+                    with col3:
                         target_comp = st.selectbox(
                             "Целевая переменная:",
                             options=[t for t in TARGET_VARIABLES if t in df.columns],
@@ -4118,14 +4216,61 @@ def main():
                             key="comp_target"
                         )
                     
+                    # Опциональный выбор цвета
+                    color_comp = st.selectbox(
+                        "Цвет (категория):",
+                        options=['B', 'A', 'method'] + [d for d in all_descriptors if d in df.columns and d not in [x_comp, size_comp, target_comp]],
+                        index=0,
+                        key="comp_color"
+                    )
+                    
                     # ✅ Кнопка — только запуск построения
-                    if st.button("📊 Построить Compositional Bubble", use_container_width=True):
+                    if st.button("📊 Построить Bubble + Violin", use_container_width=True):
                         with st.spinner("Построение..."):
-                            fig = viz.plot_compositional_bubble(x_feature=x_comp, target=target_comp)
-                            if fig is not None:
-                                st.pyplot(fig)
+                            fig_bubble = viz.plot_compositional_bubble(
+                                x_feature=x_comp,
+                                target=target_comp,
+                                size_feature=size_comp,
+                                color_feature=color_comp
+                            )
+                            fig_violin = viz.plot_violin_by_B(
+                                target=target_comp,
+                                group_feature='B',
+                                show_stats=True
+                            )
+                            
+                            st.session_state['comp_bubble_fig'] = fig_bubble
+                            st.session_state['comp_violin_fig'] = fig_violin
+                    
+                    # Показываем оба графика рядом
+                    if st.session_state.get('comp_bubble_fig') is not None or \
+                       st.session_state.get('comp_violin_fig') is not None:
+                        
+                        col_left, col_right = st.columns(2)
+                        
+                        with col_left:
+                            st.markdown("**🔵 Compositional Bubble**")
+                            if st.session_state.get('comp_bubble_fig') is not None:
+                                st.pyplot(st.session_state['comp_bubble_fig'])
                             else:
-                                st.warning("Недостаточно данных")
+                                st.warning("Недостаточно данных для Bubble")
+                        
+                        with col_right:
+                            st.markdown("**🎻 Violin plot (статистика по B-катионам)**")
+                            if st.session_state.get('comp_violin_fig') is not None:
+                                st.pyplot(st.session_state['comp_violin_fig'])
+                            else:
+                                st.warning("Недостаточно данных для Violin")
+                        
+                        # Под графиками — сводная таблица статистики
+                        with st.expander("📊 Сводная статистика по группам"):
+                            data_stat = df[[ 'B', target_comp]].dropna()
+                            if len(data_stat) > 0:
+                                stats_df = data_stat.groupby('B')[target_comp].agg(
+                                    ['count', 'mean', 'median', 'std', 'min', 'max']
+                                ).round(3)
+                                stats_df.columns = ['N', 'Mean', 'Median', 'Std', 'Min', 'Max']
+                                st.dataframe(stats_df, use_container_width=True)
                 
                 elif plot_category == "Специализированные графики":
                     st.subheader("🎯 Специализированные графики")

@@ -2818,9 +2818,7 @@ class VisualizationEngine:
         if len(data) < 3:
             return None
 
-        fig, ax = plt.subplots(figsize=(14, 8))
-        # Reserve right-hand space for the two legends BEFORE plotting
-        fig.subplots_adjust(right=0.70)
+        fig, ax = plt.subplots(figsize=(10, 8))
 
         size_min = float(data[size_feature].min())
         size_max = float(data[size_feature].max())
@@ -2849,8 +2847,6 @@ class VisualizationEngine:
         is_numeric_color = (not is_categorical) and \
                            pd.api.types.is_numeric_dtype(data[actual_color_col])
 
-        size_mean = float(data[size_feature].mean())
-
         if is_numeric_color:
             scatter = ax.scatter(
                 data[x_feature], data[target],
@@ -2860,30 +2856,11 @@ class VisualizationEngine:
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(actual_color_name, fontsize=14, fontweight='bold')
 
-            size_legend = Legend(
-                ax,
-                [
-                    Line2D([0], [0], marker='o', color='black', label=f'Min: {size_min:.4f}',
-                           markersize=4, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
-                    Line2D([0], [0], marker='o', color='black', label=f'Mean: {size_mean:.4f}',
-                           markersize=8, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
-                    Line2D([0], [0], marker='o', color='black', label=f'Max: {size_max:.4f}',
-                           markersize=12, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5)
-                ],
-                [f'Min: {size_min:.4f}',
-                 f'Mean: {size_mean:.4f}',
-                 f'Max: {size_max:.4f}'],
-                title=f'Size: {self._label(size_feature)}',
-                loc='upper left',
-                bbox_to_anchor=(1.28, 0.0),
-                frameon=True,
-                framealpha=0.9,
-                edgecolor='black',
-                fontsize=10,
-                title_fontsize=11,
-                borderaxespad=0
+            create_bubble_legend(
+                ax, data, size_feature, size_min, size_max, data[size_feature].mean(),
+                position='lower right',
+                use_entire_terms=self.use_entire_terms
             )
-            ax.add_artist(size_legend)
 
         else:
             if was_binned:
@@ -2902,19 +2879,15 @@ class VisualizationEngine:
                            markersize=8, markerfacecolor=color, linestyle='None')
                 )
 
-            cat_legend = Legend(
-                ax,
-                legend_elements,
-                [str(cat) for cat in categories],
+            cat_legend = ax.legend(
+                handles=legend_elements,
                 title=actual_color_name,
                 loc='upper left',
-                bbox_to_anchor=(1.02, 1.0),
                 frameon=True,
                 framealpha=0.9,
                 edgecolor='black',
                 fontsize=10,
-                title_fontsize=11,
-                borderaxespad=0
+                title_fontsize=11
             )
             ax.add_artist(cat_legend)
 
@@ -2926,36 +2899,22 @@ class VisualizationEngine:
                 alpha=0.7, edgecolors='black', linewidth=0.8
             )
 
-            size_legend = Legend(
-                ax,
-                [
-                    Line2D([0], [0], marker='o', color='black', label=f'Min: {size_min:.4f}',
-                           markersize=4, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
-                    Line2D([0], [0], marker='o', color='black', label=f'Mean: {size_mean:.4f}',
-                           markersize=8, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
-                    Line2D([0], [0], marker='o', color='black', label=f'Max: {size_max:.4f}',
-                           markersize=12, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5)
-                ],
-                [f'Min: {size_min:.4f}',
-                 f'Mean: {size_mean:.4f}',
-                 f'Max: {size_max:.4f}'],
-                title=f'Size: {self._label(size_feature)}',
-                loc='upper left',
-                bbox_to_anchor=(1.02, 0.0),
-                frameon=True,
-                framealpha=0.9,
-                edgecolor='black',
-                fontsize=10,
-                title_fontsize=11,
-                borderaxespad=0
+            create_bubble_legend(
+                ax, data, size_feature, size_min, size_max, data[size_feature].mean(),
+                position='lower right',
+                use_entire_terms=self.use_entire_terms
             )
-            ax.add_artist(size_legend)
 
         ax.set_xlabel(self._label(x_feature), fontsize=14, fontweight='bold')
         ax.set_ylabel(self._label(target), fontsize=14, fontweight='bold')
+        ax.set_title(
+            f'{self._label(target)} vs {self._label(x_feature)} (Size = {self._label(size_feature)}, Color = {actual_color_name})',
+            fontsize=14, fontweight='bold'
+        )
         ax.grid(True, alpha=0.3)
         style_axes(ax)
 
+        plt.tight_layout()
         return fig
 
     def plot_bubble_with_trend(self, x_feature, y_target, color_feature=None):

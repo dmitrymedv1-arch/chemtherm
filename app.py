@@ -1490,8 +1490,9 @@ class VisualizationEngine:
         plt.tight_layout()
         return fig
     
-    def plot_violin_by_B(self, target=None, group_feature='B', show_stats=True):
-        """4. Violin plot по B-катиону (обобщённый) с опциональной статистикой"""
+    def plot_violin_by_B(self, target=None, group_feature='B', show_stats=True, 
+                         sort_by_mass=True):
+        """4. Violin plot по B-катиону с сортировкой по молярной массе"""
         if target is None:
             target = 'α·106 (K-1)'
         
@@ -1506,21 +1507,35 @@ class VisualizationEngine:
         if len(data) < 3:
             return None
         
-        # Группы с достаточным количеством точек
+        # ✅ Определяем порядок групп
+        unique_groups = list(data[group_feature].unique())
+        
+        if sort_by_mass:
+            # Сортируем по молярной массе (элементы без массы — в конец)
+            unique_groups = sorted(
+                unique_groups,
+                key=lambda g: MOLAR_MASS.get(str(g).strip(), float('inf'))
+            )
+        
+        # Собираем данные в этом порядке
         groups = []
         group_labels = []
         group_stats = []
-        for g in data[group_feature].unique():
+        group_masses = []
+        
+        for g in unique_groups:
             vals = data[data[group_feature] == g][target].values
             if len(vals) >= 2:  # violin требует минимум 2 точки
                 groups.append(vals)
                 group_labels.append(str(g))
+                group_masses.append(MOLAR_MASS.get(str(g).strip(), np.nan))
                 group_stats.append({
                     'label': str(g),
                     'n': len(vals),
                     'mean': np.mean(vals),
                     'median': np.median(vals),
-                    'std': np.std(vals, ddof=1) if len(vals) > 1 else 0
+                    'std': np.std(vals, ddof=1) if len(vals) > 1 else 0,
+                    'mass': MOLAR_MASS.get(str(g).strip(), np.nan)
                 })
         
         if len(groups) == 0:
@@ -1547,9 +1562,8 @@ class VisualizationEngine:
         parts['cmins'].set_color('gray')
         parts['cbars'].set_color('gray')
         
-        # Опционально: точки поверх
+        # Jitter-точки поверх
         for i, vals in enumerate(groups):
-            # Jitter
             x_jitter = np.random.normal(i, 0.04, size=len(vals))
             ax.scatter(x_jitter, vals, alpha=0.3, s=15, color='black', zorder=1)
         
@@ -1565,13 +1579,22 @@ class VisualizationEngine:
                     f'n={st["n"]}\nμ={st["mean"]:.2f}\nσ={st["std"]:.2f}',
                     ha='center', va='bottom',
                     fontsize=8,
-                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white', 
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
                               edgecolor='gray', alpha=0.8)
                 )
         
+        # ✅ Подписи оси X с указанием молярной массы
+        xtick_labels = []
+        for label, mass in zip(group_labels, group_masses):
+            if not np.isnan(mass):
+                xtick_labels.append(f'{label}\n({mass:.1f})')
+            else:
+                xtick_labels.append(label)
+        
         ax.set_xticks(range(len(group_labels)))
-        ax.set_xticklabels(group_labels, fontsize=10)
-        ax.set_xlabel(f'{group_feature}-cation', fontsize=12, fontweight='bold')
+        ax.set_xticklabels(xtick_labels, fontsize=10)
+        ax.set_xlabel(f'{group_feature}-cation (sorted by molar mass, g/mol)', 
+                      fontsize=12, fontweight='bold')
         ax.set_ylabel(target, fontsize=12, fontweight='bold')
         ax.set_title(f'Distribution of {target} by {group_feature}-cation', 
                      fontsize=14, fontweight='bold')

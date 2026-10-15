@@ -4039,15 +4039,26 @@ def main():
                             options=target_options
                         )
                         
-                        # Выбор топ-N
-                        n_features = st.slider("Количество топ-дескрипторов:", 5, 30, 20)
+                        # Выбор топ-N (с адаптивным максимумом — не больше, чем реально дескрипторов)
+                        max_available = min(30, len(all_descriptors))
+                        min_available = min(5, max_available)
+                        
+                        n_features = st.slider(
+                            "Количество топ-дескрипторов:",
+                            min_value=min_available,
+                            max_value=max_available,
+                            value=min(20, max_available),
+                            step=1
+                        )
+                        
+                        st.caption(f"ℹ️ Будет отобрано до {n_features} наиболее значимых дескрипторов для {target}")
                         
                         # Анализ корреляций
                         if st.button("🔍 Анализировать корреляции", use_container_width=True):
                             with st.spinner("Анализ корреляций..."):
                                 analyzer = CorrelationAnalyzer(df)
                                 
-                                # Топ-дескрипторы
+                                # Топ-дескрипторы (ровно n_features, если доступно)
                                 top_features = analyzer.get_top_features(target, n=n_features)
                                 
                                 # Показываем отладочную информацию
@@ -4055,30 +4066,46 @@ def main():
                                     st.info(f"ℹ️ {st.session_state['correlation_debug']}")
                                 
                                 if top_features:
-                                    st.success(f"✅ Найдено {len(top_features)} значимых дескрипторов")
+                                    actual_n = len(top_features)
+                                    
+                                    if actual_n < n_features:
+                                        st.warning(
+                                            f"⚠️ Запрошено {n_features} дескрипторов, "
+                                            f"но найдено только {actual_n} (недостаточно валидных данных)."
+                                        )
+                                    else:
+                                        st.success(f"✅ Найдено {actual_n} значимых дескрипторов")
+                                    
+                                    # Сохраняем в session_state для последующих перестроений
+                                    st.session_state['top_features'] = top_features
+                                    st.session_state['top_features_n'] = actual_n
+                                    st.session_state['top_features_target'] = target
                                     
                                     # Таблица топ-дескрипторов
-                                    st.subheader(f"🏆 Топ-{len(top_features)} дескрипторов для {target}")
+                                    st.subheader(f"🏆 Топ-{actual_n} дескрипторов для {target}")
                                     
                                     pearson_results = analyzer.pearson_correlation(target=target)
                                     if pearson_results is not None:
                                         top_df = pearson_results[pearson_results['feature'].isin(top_features)]
-                                        st.dataframe(top_df[['feature', 'correlation', 'p_value', 'significant']], use_container_width=True)
+                                        st.dataframe(
+                                            top_df[['feature', 'correlation', 'p_value', 'significant']],
+                                            use_container_width=True
+                                        )
                                     
                                     # Графики в колонках
                                     col1, col2 = st.columns(2)
                                     
                                     with col1:
-                                        st.subheader("📊 Топ-20 корреляций")
+                                        st.subheader(f"📊 Топ-{actual_n} корреляций")
                                         if pearson_results is not None and len(pearson_results) > 0:
-                                            fig, ax = plt.subplots(figsize=(10, 8))
-                                            top_plot = pearson_results.head(20)
+                                            fig, ax = plt.subplots(figsize=(10, max(6, 0.4 * actual_n)))
+                                            top_plot = pearson_results.head(actual_n)
                                             colors = ['red' if c < 0 else 'blue' for c in top_plot['correlation'].values]
                                             ax.barh(top_plot['feature'], top_plot['correlation'], color=colors, alpha=0.7)
                                             ax.axvline(0, color='black', linewidth=1.5, linestyle='--')
                                             ax.set_xlabel(f'Correlation with {target}', fontsize=12, fontweight='bold')
                                             ax.set_ylabel('Feature', fontsize=12, fontweight='bold')
-                                            ax.set_title(f'Top 20 Correlations with {target}', fontsize=14, fontweight='bold')
+                                            ax.set_title(f'Top {actual_n} Correlations with {target}', fontsize=14, fontweight='bold')
                                             ax.grid(True, alpha=0.3)
                                             plt.tight_layout()
                                             st.pyplot(fig)
@@ -4086,8 +4113,8 @@ def main():
                                             st.warning("Нет корреляций для отображения")
                                     
                                     with col2:
-                                        st.subheader("🔗 Сетевой граф")
-                                        G = analyzer.correlation_network(features=top_features[:15], threshold=0.4)
+                                        st.subheader(f"🔗 Сетевой граф (топ-{actual_n})")
+                                        G = analyzer.correlation_network(features=top_features, threshold=0.4)
                                         if G is not None and len(G.edges()) > 0:
                                             fig, ax = plt.subplots(figsize=(10, 8))
                                             pos = nx.spring_layout(G, k=1, seed=42)
@@ -4095,28 +4122,37 @@ def main():
                                                                   node_size=500, alpha=0.8, ax=ax)
                                             nx.draw_networkx_labels(G, pos, font_size=8, font_weight='bold', ax=ax)
                                             nx.draw_networkx_edges(G, pos, edge_color='gray', alpha=0.5, ax=ax)
-                                            ax.set_title('Correlation Network', fontsize=14, fontweight='bold')
+                                            ax.set_title(f'Correlation Network (top {actual_n})', fontsize=14, fontweight='bold')
                                             ax.axis('off')
                                             plt.tight_layout()
                                             st.pyplot(fig)
                                         else:
                                             st.warning("Недостаточно связей для построения сети")
                                     
-                                    # Матрица корреляций (увеличено до 15 признаков)
-                                    st.subheader("📊 Матрица корреляций топ-дескрипторов")
-                                    corr_fig = viz.plot_correlation_matrix(features=top_features[:15])
+                                    # Матрица корреляций — столько признаков, сколько выбрано
+                                    st.subheader(f"📊 Матрица корреляций топ-{actual_n} дескрипторов")
+                                    if actual_n > 20:
+                                        st.warning(
+                                            f"⚠️ Матрица из {actual_n} признаков может быть трудночитаемой. "
+                                            f"Рекомендуется уменьшить количество топ-дескрипторов."
+                                        )
+                                    corr_fig = viz.plot_correlation_matrix(features=top_features[:actual_n])
                                     if corr_fig is not None:
                                         st.pyplot(corr_fig)
                                     else:
                                         st.warning("Недостаточно данных для матрицы корреляций")
                                     
-                                    # Pairplot
-                                    st.subheader("🎨 Pairplot топ-5 дескрипторов")
-                                    pair_fig = viz.plot_pairplot_top5(features=top_features[:4], target=target)
-                                    if pair_fig is not None:
-                                        st.pyplot(pair_fig)
+                                    # Pairplot — до 5 признаков (больше визуально нечитаемо)
+                                    pairplot_n = min(actual_n, 5)
+                                    st.subheader(f"🎨 Pairplot топ-{pairplot_n} дескрипторов")
+                                    if pairplot_n < 2:
+                                        st.warning("Для Pairplot нужно минимум 2 признака")
                                     else:
-                                        st.warning("Недостаточно данных для Pairplot")
+                                        pair_fig = viz.plot_pairplot_top5(features=top_features[:pairplot_n], target=target)
+                                        if pair_fig is not None:
+                                            st.pyplot(pair_fig)
+                                        else:
+                                            st.warning("Недостаточно данных для Pairplot")
                                 else:
                                     st.warning("Не удалось найти значимые корреляции. Попробуйте выбрать другую целевую переменную или увеличить количество признаков.")
                     else:

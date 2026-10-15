@@ -2818,7 +2818,9 @@ class VisualizationEngine:
         if len(data) < 3:
             return None
 
-        fig, ax = plt.subplots(figsize=(13, 8))
+        fig, ax = plt.subplots(figsize=(14, 8))
+        # Reserve right-hand space for the two legends BEFORE plotting
+        fig.subplots_adjust(right=0.70)
 
         size_min = float(data[size_feature].min())
         size_max = float(data[size_feature].max())
@@ -2847,6 +2849,8 @@ class VisualizationEngine:
         is_numeric_color = (not is_categorical) and \
                            pd.api.types.is_numeric_dtype(data[actual_color_col])
 
+        size_mean = float(data[size_feature].mean())
+
         if is_numeric_color:
             scatter = ax.scatter(
                 data[x_feature], data[target],
@@ -2861,22 +2865,23 @@ class VisualizationEngine:
                 [
                     Line2D([0], [0], marker='o', color='black', label=f'Min: {size_min:.4f}',
                            markersize=4, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
-                    Line2D([0], [0], marker='o', color='black', label=f'Mean: {data[size_feature].mean():.4f}',
+                    Line2D([0], [0], marker='o', color='black', label=f'Mean: {size_mean:.4f}',
                            markersize=8, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
                     Line2D([0], [0], marker='o', color='black', label=f'Max: {size_max:.4f}',
                            markersize=12, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5)
                 ],
                 [f'Min: {size_min:.4f}',
-                 f'Mean: {data[size_feature].mean():.4f}',
+                 f'Mean: {size_mean:.4f}',
                  f'Max: {size_max:.4f}'],
                 title=f'Size: {self._label(size_feature)}',
                 loc='upper left',
-                bbox_to_anchor=(1.25, 0.5),
+                bbox_to_anchor=(1.28, 0.0),
                 frameon=True,
                 framealpha=0.9,
                 edgecolor='black',
                 fontsize=10,
-                title_fontsize=11
+                title_fontsize=11,
+                borderaxespad=0
             )
             ax.add_artist(size_legend)
 
@@ -2897,8 +2902,10 @@ class VisualizationEngine:
                            markersize=8, markerfacecolor=color, linestyle='None')
                 )
 
-            cat_legend = ax.legend(
-                handles=legend_elements,
+            cat_legend = Legend(
+                ax,
+                legend_elements,
+                [str(cat) for cat in categories],
                 title=actual_color_name,
                 loc='upper left',
                 bbox_to_anchor=(1.02, 1.0),
@@ -2924,13 +2931,13 @@ class VisualizationEngine:
                 [
                     Line2D([0], [0], marker='o', color='black', label=f'Min: {size_min:.4f}',
                            markersize=4, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
-                    Line2D([0], [0], marker='o', color='black', label=f'Mean: {data[size_feature].mean():.4f}',
+                    Line2D([0], [0], marker='o', color='black', label=f'Mean: {size_mean:.4f}',
                            markersize=8, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
                     Line2D([0], [0], marker='o', color='black', label=f'Max: {size_max:.4f}',
                            markersize=12, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5)
                 ],
                 [f'Min: {size_min:.4f}',
-                 f'Mean: {data[size_feature].mean():.4f}',
+                 f'Mean: {size_mean:.4f}',
                  f'Max: {size_max:.4f}'],
                 title=f'Size: {self._label(size_feature)}',
                 loc='upper left',
@@ -2948,8 +2955,6 @@ class VisualizationEngine:
         ax.set_ylabel(self._label(target), fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.3)
         style_axes(ax)
-
-        fig.subplots_adjust(right=0.72)
 
         return fig
 

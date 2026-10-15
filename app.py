@@ -2877,12 +2877,17 @@ class VisualizationEngine:
         
         fig, ax = plt.subplots(figsize=(10, 8))
         
-        # Нормализация размера
-        size_min = data[size_feature].min()
-        size_max = data[size_feature].max()
-        size_range = size_max - size_min if size_max > size_min else 1.0
+        # ✅ Нормализация размера — приводим к float и защищаемся от деления на 0
+        size_min = float(data[size_feature].min())
+        size_max = float(data[size_feature].max())
+        size_range = (size_max - size_min) if (size_max - size_min) > 1e-12 else 1.0
         size_norm = (data[size_feature] - size_min) / size_range
         size_scaled = 20 + size_norm * 60
+        
+        # Если все значения одинаковые — все пузырьки среднего размера
+        if (size_max - size_min) < 1e-12:
+            size_scaled = pd.Series([50.0] * len(data), index=data.index)
+            st.info(f"ℹ️ Все значения '{size_feature}' одинаковы — пузырьки одного размера")
         
         is_numeric_color = pd.api.types.is_numeric_dtype(data[color_feature]) and \
                            data[color_feature].nunique() > 5

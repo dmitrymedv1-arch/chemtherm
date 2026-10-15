@@ -55,6 +55,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.lines import Line2D
 from matplotlib.patches import Patch
+from matplotlib.legend import Legend
 import seaborn as sns
 
 # Статистика и ML
@@ -324,32 +325,99 @@ def apply_scientific_style():
     })
 
 
+# ============================================================================
+# УТИЛИТЫ ДЛЯ РАБОТЫ С ЦВЕТАМИ И ЛЕГЕНДАМИ
+# ============================================================================
+
+def get_stable_color_map(categories, palette=None):
+    """
+    Формирует УСТОЙЧИВЫЙ словарь {категория: цвет}, независимый от порядка вызова.
+    
+    Категории сортируются, чтобы один и тот же набор всегда давал
+    одинаковый маппинг — это гарантирует синхронизацию цветов между
+    разными графиками (например, Compositional Bubble и Violin plot).
+    
+    Parameters:
+    -----------
+    categories : iterable
+        Список уникальных категорий
+    palette : list, optional
+        Список цветов (по умолчанию — COLOR_PALETTES['qualitative'])
+    
+    Returns:
+    --------
+    dict : {category: color}
+    """
+    if palette is None:
+        palette = COLOR_PALETTES['qualitative']
+    
+    # Убираем NaN/None и преобразуем в строки для устойчивой сортировки
+    clean_categories = sorted(
+        set(str(c) for c in categories if pd.notna(c)),
+        key=lambda x: x  # алфавитный порядок — стабильный
+    )
+    
+    # Если это известные B/A-катионы — используем фиксированные палитры
+    if set(clean_categories).issubset(set(COLOR_PALETTES['B_cation'].keys())):
+        base = COLOR_PALETTES['B_cation']
+    elif set(clean_categories).issubset(set(COLOR_PALETTES['A_cation'].keys())):
+        base = COLOR_PALETTES['A_cation']
+    elif set(clean_categories).issubset(set(COLOR_PALETTES['method'].keys())):
+        base = COLOR_PALETTES['method']
+    else:
+        base = {}
+    
+    color_map = {}
+    for i, cat in enumerate(clean_categories):
+        if cat in base:
+            color_map[cat] = base[cat]
+        else:
+            color_map[cat] = palette[i % len(palette)]
+    
+    return color_map
+
+
+def make_legend_safe(ax, handles, **legend_kwargs):
+    """
+    Создаёт объект Legend вручную и добавляет его через add_artist,
+    НЕ затирая ранее установленную основную легенду.
+    
+    Возвращает объект Legend (он уже добавлен на оси).
+    """
+    legend = Legend(ax, handles, 
+                    [h.get_label() for h in handles] if handles else [],
+                    **legend_kwargs)
+    ax.add_artist(legend)
+    return legend
+
+
 def create_bubble_legend(ax, data, size_feature, min_val, max_val, mean_val, position='upper left'):
     """
-    Создание легенды размера пузырьков для Matplotlib с использованием Line2D
-    
+    Создание легенды размера пузырьков для Matplotlib.
+
+    ВАЖНО: теперь НЕ вызывает ax.legend(...) напрямую — иначе затрёт
+    основную категориальную легенду. Вместо этого создаёт объект Legend
+    и добавляет его через ax.add_artist(...).
+
     Parameters:
     -----------
     ax : matplotlib.axes.Axes
         Ось, на которую добавляется легенда
     data : pandas.DataFrame
-        Данные с размером
+        Данные с размером (не используется, оставлено для совместимости)
     size_feature : str
         Название признака размера
     min_val, max_val, mean_val : float
         Минимальное, максимальное и среднее значения размера
     position : str
         Позиция легенды (по умолчанию 'upper left')
-    
+
     Returns:
     --------
     matplotlib.legend.Legend
-        Объект легенды
+        Объект легенды (уже добавлен на оси)
     """
-    # Нормализация для размера маркеров (от 20 до 80)
-    size_range = max_val - min_val if max_val - min_val > 0 else 1.0
-    
-    # Создаем элементы легенды
+    # Создаём элементы легенды
     legend_elements = [
         Line2D([0], [0], marker='o', color='black', label=f'Min: {min_val:.4f}',
                markersize=4, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5),
@@ -359,9 +427,12 @@ def create_bubble_legend(ax, data, size_feature, min_val, max_val, mean_val, pos
                markersize=12, markerfacecolor='gray', linestyle='None', markeredgewidth=0.5)
     ]
     
-    # Добавляем легенду
-    legend = ax.legend(
-        handles=legend_elements,
+    # Создаём объект Legend напрямую и добавляем через add_artist,
+    # НЕ через ax.legend() — чтобы не затереть основную легенду.
+    legend = Legend(
+        ax,
+        legend_elements,
+        [f'Min: {min_val:.4f}', f'Mean: {mean_val:.4f}', f'Max: {max_val:.4f}'],
         title=f'Size: {size_feature}',
         loc=position,
         frameon=True,
@@ -370,8 +441,64 @@ def create_bubble_legend(ax, data, size_feature, min_val, max_val, mean_val, pos
         fontsize=10,
         title_fontsize=10
     )
+    ax.add_artist(legend)
     
     return legend
+
+
+def _sanitize_for_ml(df, features):
+    """
+    Санитарная обработка данных перед ML (PCA, t-SNE, UMAP, KMeans, DBSCAN, silhouette).
+    
+    Решает проблему: sklearn падает с ValueError, если в матрице есть NaN/inf.
+    Алгоритм:
+      1. Оставляем только переданные признаки.
+      2. Заменяем ±inf → NaN.
+      3. Удаляем признаки, где после замены осталось слишком много NaN
+         (порог: столбец должен иметь минимум 30% валидных значений).
+      4. Удаляем строки с NaN.
+      5. Проверяем минимальные размеры (>= 3 строки, >= 2 признака).
+    
+    Returns:
+    --------
+    (data_clean, valid_features) : tuple
+        data_clean — DataFrame без NaN/inf,
+        valid_features — итоговый список признаков.
+        Оба могут быть None / пустыми, если данных недостаточно.
+    """
+    if df is None or len(df) == 0 or features is None or len(features) < 2:
+        return None, []
+    
+    # Оставляем только те признаки, что реально есть в df
+    existing_features = [f for f in features if f in df.columns]
+    if len(existing_features) < 2:
+        return None, []
+    
+    data = df[existing_features].copy()
+    
+    # 1. Все колонки приводим к числовому типу (на всякий случай)
+    for col in data.columns:
+        if not pd.api.types.is_numeric_dtype(data[col]):
+            data[col] = pd.to_numeric(data[col], errors='coerce')
+    
+    # 2. Заменяем ±inf → NaN
+    data = data.replace([np.inf, -np.inf], np.nan)
+    
+    # 3. Удаляем признаки с более чем 70% NaN (оставляем те, где >= 30% валидных)
+    min_valid_count = max(3, int(0.3 * len(data)))
+    data = data.dropna(axis=1, thresh=min_valid_count)
+    
+    if data.shape[1] < 2:
+        return None, []
+    
+    # 4. Удаляем строки с NaN
+    data = data.dropna()
+    
+    # 5. Финальные проверки
+    if data.shape[0] < 3 or data.shape[1] < 2:
+        return None, []
+    
+    return data, list(data.columns)
 
 
 # ============================================================================
@@ -754,8 +881,13 @@ class DescriptorEngine:
         # Используем rO_est, который создан в начале метода
         self.df['V_cell'] = (2 * (self.df['rBav'] + self.df['rO_est']))**3
         
-        # 11. Отношение радиусов rA/rB
-        self.df['r_ratio_AB'] = self.df['rAav'] / self.df['rBav']
+        # 11. Отношение радиусов rA/rB (ЗАЩИТА ОТ ДЕЛЕНИЯ НА НОЛЬ)
+        denom = self.df['rBav']
+        self.df['r_ratio_AB'] = np.where(
+            (denom.notna()) & (np.abs(denom) > 1e-12),
+            self.df['rAav'] / denom,
+            np.nan
+        )
     
     def calculate_electronegativity(self):
         """Расчёт электроотрицательных дескрипторов"""
@@ -827,8 +959,13 @@ class DescriptorEngine:
         # 3. Разница электроотрицательностей
         self.df['Δχ_AB'] = np.abs(self.df['χAav'] - self.df['χBav'])
         
-        # 4. Отношение электроотрицательностей
-        self.df['χ_ratio_AB'] = self.df['χAav'] / self.df['χBav']
+        # 4. Отношение электроотрицательностей (ЗАЩИТА ОТ ДЕЛЕНИЯ НА НОЛЬ)
+        denom = self.df['χBav']
+        self.df['χ_ratio_AB'] = np.where(
+            (denom.notna()) & (np.abs(denom) > 1e-12),
+            self.df['χAav'] / denom,
+            np.nan
+        )
         
         # 5. Ионность связи A-O
         chiO = self.electronegativity['O']
@@ -837,11 +974,21 @@ class DescriptorEngine:
         # 6. Ионность связи B-O
         self.df['ionicity_BO'] = 1 - np.exp(-0.25 * (self.df['χBav'] - chiO)**2)
         
-        # 7. Кислотность A-O (обратная электроотрицательность)
-        self.df['acidity_AO'] = 1 / self.df['χAav']
+        # 7. Кислотность A-O (обратная электроотрицательность) - защита от нуля
+        denom = self.df['χAav']
+        self.df['acidity_AO'] = np.where(
+            (denom.notna()) & (np.abs(denom) > 1e-12),
+            1 / denom,
+            np.nan
+        )
         
-        # 8. Кислотность B-O
-        self.df['acidity_BO'] = 1 / self.df['χBav']
+        # 8. Кислотность B-O - защита от нуля
+        denom = self.df['χBav']
+        self.df['acidity_BO'] = np.where(
+            (denom.notna()) & (np.abs(denom) > 1e-12),
+            1 / denom,
+            np.nan
+        )
         
         # 9. Разница кислотностей
         self.df['Δacidity'] = self.df['acidity_BO'] - self.df['acidity_AO']
@@ -1020,8 +1167,13 @@ class DescriptorEngine:
         # 3. Общая молярная масса (ABO3)
         self.df['M_total'] = self.df['M_Aav'] + self.df['M_Bav'] + 3 * self.molar_mass['O']
         
-        # 4. Отношение масс A/B
-        self.df['M_ratio_AB'] = self.df['M_Aav'] / self.df['M_Bav']
+        # 4. Отношение масс A/B (ЗАЩИТА ОТ ДЕЛЕНИЯ НА НОЛЬ)
+        denom = self.df['M_Bav']
+        self.df['M_ratio_AB'] = np.where(
+            (denom.notna()) & (np.abs(denom) > 1e-12),
+            self.df['M_Aav'] / denom,
+            np.nan
+        )
         
         # 5. Произведение массы и радиуса A
         self.df['M_rA'] = self.df['M_Aav'] * self.df['rAav']
@@ -1030,7 +1182,13 @@ class DescriptorEngine:
         self.df['M_χA'] = self.df['M_Aav'] * self.df['χAav']
 
         # 7. Массовая плотность (относительная) - перенесено из calculate_thermodynamic
-        self.df['ρ'] = self.df['M_Bav'] / self.df['V_cell']
+        #    ЗАЩИТА ОТ ДЕЛЕНИЯ НА НОЛЬ
+        denom = self.df['V_cell']
+        self.df['ρ'] = np.where(
+            (denom.notna()) & (np.abs(denom) > 1e-12),
+            self.df['M_Bav'] / denom,
+            np.nan
+        )
     
     def calculate_defect(self):
         """Расчёт дефектных дескрипторов"""
@@ -1046,8 +1204,13 @@ class DescriptorEngine:
         # 2. Эффективный заряд B-site
         self.df['Z_eff_B'] = 4 - 2 * self.df['δ_actual']
         
-        # 3. Сродство к протону
-        self.df['proton_affinity'] = 1 / ((self.df['rBav'] + 0.1) * self.df['χBav'])
+        # 3. Сродство к протону (ЗАЩИТА ОТ ДЕЛЕНИЯ НА НОЛЬ)
+        denom = (self.df['rBav'] + 0.1) * self.df['χBav']
+        self.df['proton_affinity'] = np.where(
+            (denom.notna()) & (np.abs(denom) > 1e-12),
+            1 / denom,
+            np.nan
+        )
         
         # 4. Энергия образования вакансии
         chiO = self.electronegativity['O']
@@ -1056,8 +1219,14 @@ class DescriptorEngine:
     def calculate_specific(self):
         """Расчёт специфических дескрипторов для T(bends)"""
         
-        # 1. Отношение α/β (если есть оба)
-        self.df['alpha_beta_ratio'] = self.df['α·106 (K-1)'] / self.df['β']
+        # 1. Отношение α/β (ЗАЩИТА ОТ ДЕЛЕНИЯ НА НОЛЬ)
+        if 'α·106 (K-1)' in self.df.columns and 'β' in self.df.columns:
+            denom = self.df['β']
+            self.df['alpha_beta_ratio'] = np.where(
+                (denom.notna()) & (np.abs(denom) > 1e-12),
+                self.df['α·106 (K-1)'] / denom,
+                np.nan
+            )
         
         # 2. Температурная стабильность протона
         R = 8.314
@@ -1078,8 +1247,14 @@ class DescriptorEngine:
         # 2. Суммарная концентрация акцепторов D1 + D2
         self.df['D_total'] = self.df['[D1]'] + self.df['[D2]']
         
-        # 3. Отношение D_total к B'
-        self.df['D_B_ratio'] = self.df['D_total'] / (self.df['B\'_conc'] + 0.001)
+        # 3. Отношение D_total к B' (уже с +0.001 в знаменателе — оставляем как было,
+        #    но добавим ещё защиту от деления на 0 на всякий случай)
+        denom = self.df['B\'_conc'] + 0.001
+        self.df['D_B_ratio'] = np.where(
+            np.abs(denom) > 1e-12,
+            self.df['D_total'] / denom,
+            np.nan
+        )
         
         # 4. Суммарная концентрация всех допантов на B-site
         self.df['total_dopant'] = self.df['[B\']'] + self.df['[D1]'] + self.df['[D2]']
@@ -1491,8 +1666,25 @@ class VisualizationEngine:
         return fig
     
     def plot_violin_by_B(self, target=None, group_feature='B', show_stats=True, 
-                         sort_by_mass=True):
-        """4. Violin plot по B-катиону с сортировкой по молярной массе"""
+                         sort_by_mass=True, color_map=None):
+        """4. Violin plot по B-катиону с сортировкой по молярной массе.
+
+        Параметры:
+        -----------
+        target : str
+            Целевая переменная (например, 'α·106 (K-1)')
+        group_feature : str
+            Признак группировки. По умолчанию 'B'. Может быть 'A', 'method'
+            или любой категориальный дескриптор.
+        show_stats : bool
+            Показывать ли статистику над каждым violin (n, μ, σ)
+        sort_by_mass : bool
+            Сортировать ли группы по молярной массе (только для катионов).
+        color_map : dict, optional
+            Устойчивый словарь {категория: цвет}. Если не задан —
+            вычисляется автоматически. Позволяет синхронизировать цвета
+            с другими графиками (например, с Compositional Bubble).
+        """
         if target is None:
             target = 'α·106 (K-1)'
         
@@ -1541,6 +1733,11 @@ class VisualizationEngine:
         if len(groups) == 0:
             return None
         
+        # ✅ Единый цветовой маппинг — синхронизация с bubble.
+        # Если пользователь не передал color_map — строим сами.
+        if color_map is None:
+            color_map = get_stable_color_map(group_labels)
+        
         # Создаём violin plot
         parts = ax.violinplot(
             groups,
@@ -1550,9 +1747,11 @@ class VisualizationEngine:
             showextrema=True
         )
         
-        # Оформление violin-ов
+        # Оформление violin-ов — используем ЕДИНЫЙ color_map,
+        # а не порядковый enumerate(...) — иначе цвета не совпадут с bubble.
         for i, pc in enumerate(parts['bodies']):
-            pc.set_facecolor(COLOR_PALETTES['qualitative'][i % len(COLOR_PALETTES['qualitative'])])
+            label = group_labels[i]
+            pc.set_facecolor(color_map.get(label, COLOR_PALETTES['qualitative'][i % len(COLOR_PALETTES['qualitative'])]))
             pc.set_alpha(0.7)
             pc.set_edgecolor('black')
         
@@ -1593,10 +1792,17 @@ class VisualizationEngine:
         
         ax.set_xticks(range(len(group_labels)))
         ax.set_xticklabels(xtick_labels, fontsize=10)
-        ax.set_xlabel(f'{group_feature}-cation (sorted by molar mass, g/mol)', 
-                      fontsize=12, fontweight='bold')
+        
+        # Заголовок оси X меняется в зависимости от group_feature
+        if group_feature in ('B', 'A'):
+            xlabel = f'{group_feature}-cation (sorted by molar mass, g/mol)' if sort_by_mass \
+                     else f'{group_feature}-cation'
+        else:
+            xlabel = group_feature
+        
+        ax.set_xlabel(xlabel, fontsize=12, fontweight='bold')
         ax.set_ylabel(target, fontsize=12, fontweight='bold')
-        ax.set_title(f'Distribution of {target} by {group_feature}-cation', 
+        ax.set_title(f'Distribution of {target} by {group_feature}', 
                      fontsize=14, fontweight='bold')
         ax.grid(True, alpha=0.3, axis='y')
         
@@ -2044,22 +2250,12 @@ class VisualizationEngine:
         if features is None:
             features = self.all_features
         
-        if len(features) < 2:
+        if features is None or len(features) < 2:
             return None
         
-        # Фильтруем признаки
-        valid_features = []
-        for feature in features:
-            if feature in self.df.columns:
-                non_na = self.df[feature].dropna()
-                if len(non_na) > 10:
-                    valid_features.append(feature)
-        
-        if len(valid_features) < 2:
-            return None
-        
-        data = self.df[valid_features].dropna()
-        if len(data) < 5:
+        # ✅ Санитарная обработка: убираем NaN/inf
+        data, valid_features = _sanitize_for_ml(self.df, features)
+        if data is None or len(valid_features) < 2 or len(data) < 5:
             return None
         
         # Стандартизация
@@ -2100,22 +2296,12 @@ class VisualizationEngine:
         if features is None:
             features = self.all_features
         
-        if len(features) < 2:
+        if features is None or len(features) < 2:
             return None
         
-        # Фильтруем признаки
-        valid_features = []
-        for feature in features:
-            if feature in self.df.columns:
-                non_na = self.df[feature].dropna()
-                if len(non_na) > 10:
-                    valid_features.append(feature)
-        
-        if len(valid_features) < 2:
-            return None
-        
-        data = self.df[valid_features].dropna()
-        if len(data) < 5:
+        # ✅ Санитарная обработка: убираем NaN/inf
+        data, valid_features = _sanitize_for_ml(self.df, features)
+        if data is None or len(valid_features) < 2 or len(data) < 5:
             return None
         
         # Стандартизация
@@ -2155,22 +2341,12 @@ class VisualizationEngine:
         if features is None:
             features = self.all_features
         
-        if len(features) < 2:
+        if features is None or len(features) < 2:
             return None
         
-        # Фильтруем признаки
-        valid_features = []
-        for feature in features:
-            if feature in self.df.columns:
-                non_na = self.df[feature].dropna()
-                if len(non_na) > 10:
-                    valid_features.append(feature)
-        
-        if len(valid_features) < 2:
-            return None
-        
-        data = self.df[valid_features].dropna()
-        if len(data) < 10:
+        # ✅ Санитарная обработка: убираем NaN/inf
+        data, valid_features = _sanitize_for_ml(self.df, features)
+        if data is None or len(valid_features) < 2 or len(data) < 10:
             return None
         
         # Стандартизация
@@ -2228,22 +2404,12 @@ class VisualizationEngine:
         if features is None:
             features = self.all_features
         
-        if len(features) < 2:
+        if features is None or len(features) < 2:
             return None
         
-        # Фильтруем признаки
-        valid_features = []
-        for feature in features:
-            if feature in self.df.columns:
-                non_na = self.df[feature].dropna()
-                if len(non_na) > 10:
-                    valid_features.append(feature)
-        
-        if len(valid_features) < 2:
-            return None
-        
-        data = self.df[valid_features].dropna()
-        if len(data) < 10:
+        # ✅ Санитарная обработка: убираем NaN/inf
+        data, valid_features = _sanitize_for_ml(self.df, features)
+        if data is None or len(valid_features) < 2 or len(data) < 10:
             return None
         
         # Стандартизация
@@ -2854,8 +3020,17 @@ class VisualizationEngine:
         return fig
     
     def plot_compositional_bubble(self, x_feature='[B\']', target='α·106 (K-1)', 
-                                  size_feature='δ', color_feature='B'):
-        """22. Compositional Bubble (x_feature vs target, size = size_feature, color = B-cation)"""
+                                  size_feature='δ', color_feature='B',
+                                  color_map=None):
+        """22. Compositional Bubble (x_feature vs target, size = size_feature, color = B-cation)
+
+        Параметры:
+        -----------
+        color_map : dict, optional
+            Устойчивый словарь {категория: цвет}. Если задан — используется
+            как единый маппинг (для синхронизации с Violin plot).
+            Если не задан — вычисляется автоматически через get_stable_color_map.
+        """
         if target not in self.df.columns:
             return None
         if x_feature not in self.df.columns:
@@ -2889,10 +3064,26 @@ class VisualizationEngine:
             size_scaled = pd.Series([50.0] * len(data), index=data.index)
             st.info(f"ℹ️ Все значения '{size_feature}' одинаковы — пузырьки одного размера")
         
-        is_numeric_color = pd.api.types.is_numeric_dtype(data[color_feature]) and \
-                           data[color_feature].nunique() > 5
+        # ✅ ВАЖНО: определяем категориальность по dtype, а не по nunique().
+        # Это гарантирует, что 'B', 'A', 'method' и любые строки пойдут в
+        # категориальную ветку — и легенда будет создана.
+        is_categorical = (
+            data[color_feature].dtype == object or
+            isinstance(data[color_feature].dtype, pd.CategoricalDtype) or
+            str(data[color_feature].dtype) == 'string'
+        )
+        
+        # Если dtype числовой — но уникальных мало, тоже категориальный
+        if not is_categorical:
+            if pd.api.types.is_numeric_dtype(data[color_feature]):
+                if data[color_feature].nunique() <= 5:
+                    is_categorical = True
+        
+        is_numeric_color = (not is_categorical) and \
+                           pd.api.types.is_numeric_dtype(data[color_feature])
         
         if is_numeric_color:
+            # ---------------- ЧИСЛОВОЙ ЦВЕТ ----------------
             scatter = ax.scatter(
                 data[x_feature], data[target],
                 s=size_scaled, c=data[color_feature], cmap='viridis',
@@ -2901,46 +3092,32 @@ class VisualizationEngine:
             cbar = plt.colorbar(scatter, ax=ax)
             cbar.set_label(color_feature, fontsize=11, fontweight='bold')
             
-            # Легенда размера
+            # Легенда размера — она здесь единственная, добавляем безопасно
             size_legend = create_bubble_legend(
                 ax, data, size_feature, size_min, size_max, data[size_feature].mean(),
                 position='lower right'
             )
-            ax.add_artist(size_legend)
         
         else:
-            # Категориальный цвет
-            categories = data[color_feature].unique()
+            # ---------------- КАТЕГОРИАЛЬНЫЙ ЦВЕТ ----------------
+            categories = [str(c) for c in data[color_feature].dropna().unique()]
             
-            # Автоматическая палитра (или из COLOR_PALETTES)
-            auto_colors = COLOR_PALETTES['qualitative']
-            color_map = {cat: auto_colors[i % len(auto_colors)] 
-                         for i, cat in enumerate(categories)}
+            # ✅ Используем устойчивый маппинг:
+            # если пользователь передал color_map — берём его,
+            # иначе строим сами через get_stable_color_map.
+            if color_map is None:
+                color_map = get_stable_color_map(categories)
             
-            colors = [color_map.get(b, '#2C3E50') for b in data[color_feature]]
-            
-            scatter = ax.scatter(
-                data[x_feature], data[target],
-                s=size_scaled, c=colors,
-                alpha=0.7, edgecolors='black', linewidth=0.8
-            )
-            
-            # ✅ ШАГ 1: сначала создаём легенду РАЗМЕРА и защищаем её через add_artist
-            size_legend = create_bubble_legend(
-                ax, data, size_feature, size_min, size_max, data[size_feature].mean(),
-                position='lower right'
-            )
-            ax.add_artist(size_legend)
-            
-            # ✅ ШАГ 2: теперь создаём легенду КАТЕГОРИЙ — она станет основной
+            # ✅ Создаём категориальную легенду через ax.legend() — она станет ОСНОВНОЙ.
             legend_elements = []
             for cat in categories:
-                color = color_map.get(cat, '#2C3E50')
+                color = color_map.get(str(cat), '#2C3E50')
                 legend_elements.append(
                     Line2D([0], [0], marker='o', color='black', label=str(cat),
                            markersize=8, markerfacecolor=color, linestyle='None')
                 )
             
+            # Сначала устанавливаем категориальную легенду как основную
             cat_legend = ax.legend(
                 handles=legend_elements,
                 title=color_feature,
@@ -2951,8 +3128,24 @@ class VisualizationEngine:
                 fontsize=10,
                 title_fontsize=10
             )
-            # ✅ ШАГ 3: защищаем и её
+            # Защищаем её, чтобы последующие add_artist её не затёрли
             ax.add_artist(cat_legend)
+            
+            # Мапим цвета каждой точке
+            colors = [color_map.get(str(b), '#2C3E50') for b in data[color_feature]]
+            
+            scatter = ax.scatter(
+                data[x_feature], data[target],
+                s=size_scaled, c=colors,
+                alpha=0.7, edgecolors='black', linewidth=0.8
+            )
+            
+            # ✅ Теперь добавляем size-легенду через add_artist —
+            # она не затрёт категориальную, т.к. та уже защищена add_artist.
+            size_legend = create_bubble_legend(
+                ax, data, size_feature, size_min, size_max, data[size_feature].mean(),
+                position='lower right'
+            )
         
         # Оформление
         ax.set_xlabel(x_feature, fontsize=12, fontweight='bold')
@@ -4062,40 +4255,34 @@ def main():
                         if st.button("🔍 Кластеризовать (K-means)", use_container_width=True):
                             with st.spinner("Выполнение K-means кластеризации..."):
                                 features = all_descriptors[:20]
-                                valid_features = []
-                                for feat in features:
-                                    if feat in df.columns and df[feat].isna().sum() / len(df) < 0.3:
-                                        valid_features.append(feat)
+                                # ✅ Санитарная обработка вместо dropna()
+                                data, valid_features = _sanitize_for_ml(df, features)
                                 
-                                if len(valid_features) > 1:
-                                    data = df[valid_features].dropna()
-                                    if len(data) > 10:
-                                        scaler = StandardScaler()
-                                        data_scaled = scaler.fit_transform(data)
-                                        
-                                        kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
-                                        labels = kmeans.fit_predict(data_scaled)
-                                        
-                                        score = silhouette_score(data_scaled, labels)
-                                        st.success(f"✅ Silhouette Score: {score:.3f}")
-                                        
-                                        pca = PCA(n_components=2)
-                                        pca_result = pca.fit_transform(data_scaled)
-                                        
-                                        fig, ax = plt.subplots(figsize=(10, 8))
-                                        scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], 
-                                                           c=labels, cmap='viridis', s=50, alpha=0.7)
-                                        ax.set_xlabel('PC1', fontsize=12, fontweight='bold')
-                                        ax.set_ylabel('PC2', fontsize=12, fontweight='bold')
-                                        ax.set_title(f'K-means Clustering (K={n_clusters})', fontsize=14, fontweight='bold')
-                                        plt.colorbar(scatter, ax=ax, label='Cluster')
-                                        ax.grid(True, alpha=0.3)
-                                        plt.tight_layout()
-                                        st.pyplot(fig)
-                                    else:
-                                        st.warning("Недостаточно данных для кластеризации")
+                                if data is not None and len(valid_features) > 1 and len(data) > 10:
+                                    scaler = StandardScaler()
+                                    data_scaled = scaler.fit_transform(data)
+                                    
+                                    kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+                                    labels = kmeans.fit_predict(data_scaled)
+                                    
+                                    score = silhouette_score(data_scaled, labels)
+                                    st.success(f"✅ Silhouette Score: {score:.3f}")
+                                    
+                                    pca = PCA(n_components=2)
+                                    pca_result = pca.fit_transform(data_scaled)
+                                    
+                                    fig, ax = plt.subplots(figsize=(10, 8))
+                                    scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], 
+                                                       c=labels, cmap='viridis', s=50, alpha=0.7)
+                                    ax.set_xlabel('PC1', fontsize=12, fontweight='bold')
+                                    ax.set_ylabel('PC2', fontsize=12, fontweight='bold')
+                                    ax.set_title(f'K-means Clustering (K={n_clusters})', fontsize=14, fontweight='bold')
+                                    plt.colorbar(scatter, ax=ax, label='Cluster')
+                                    ax.grid(True, alpha=0.3)
+                                    plt.tight_layout()
+                                    st.pyplot(fig)
                                 else:
-                                    st.warning("Недостаточно признаков для кластеризации")
+                                    st.warning("Недостаточно данных для кластеризации (после удаления NaN/inf)")
                     
                     elif algo == 'DBSCAN':
                         eps = st.slider("eps (максимальное расстояние):", 0.1, 5.0, 0.5, 0.1)
@@ -4103,43 +4290,37 @@ def main():
                         if st.button("🔍 Кластеризовать (DBSCAN)", use_container_width=True):
                             with st.spinner("Выполнение DBSCAN кластеризации..."):
                                 features = all_descriptors[:20]
-                                valid_features = []
-                                for feat in features:
-                                    if feat in df.columns and df[feat].isna().sum() / len(df) < 0.3:
-                                        valid_features.append(feat)
+                                # ✅ Санитарная обработка вместо dropna()
+                                data, valid_features = _sanitize_for_ml(df, features)
                                 
-                                if len(valid_features) > 1:
-                                    data = df[valid_features].dropna()
-                                    if len(data) > 10:
-                                        scaler = StandardScaler()
-                                        data_scaled = scaler.fit_transform(data)
-                                        
-                                        dbscan = DBSCAN(eps=eps, min_samples=min_samples)
-                                        labels = dbscan.fit_predict(data_scaled)
-                                        
-                                        n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-                                        n_noise = list(labels).count(-1)
-                                        
-                                        st.info(f"📊 Найдено кластеров: {n_clusters}, Шумовых точек: {n_noise}")
-                                        
-                                        pca = PCA(n_components=2)
-                                        pca_result = pca.fit_transform(data_scaled)
-                                        
-                                        fig, ax = plt.subplots(figsize=(10, 8))
-                                        scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], 
-                                                           c=labels, cmap='viridis', s=50, alpha=0.7)
-                                        ax.set_xlabel('PC1', fontsize=12, fontweight='bold')
-                                        ax.set_ylabel('PC2', fontsize=12, fontweight='bold')
-                                        ax.set_title(f'DBSCAN Clustering (eps={eps}, min_samples={min_samples})', 
-                                                    fontsize=14, fontweight='bold')
-                                        plt.colorbar(scatter, ax=ax, label='Cluster')
-                                        ax.grid(True, alpha=0.3)
-                                        plt.tight_layout()
-                                        st.pyplot(fig)
-                                    else:
-                                        st.warning("Недостаточно данных для кластеризации")
+                                if data is not None and len(valid_features) > 1 and len(data) > 10:
+                                    scaler = StandardScaler()
+                                    data_scaled = scaler.fit_transform(data)
+                                    
+                                    dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+                                    labels = dbscan.fit_predict(data_scaled)
+                                    
+                                    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
+                                    n_noise = list(labels).count(-1)
+                                    
+                                    st.info(f"📊 Найдено кластеров: {n_clusters}, Шумовых точек: {n_noise}")
+                                    
+                                    pca = PCA(n_components=2)
+                                    pca_result = pca.fit_transform(data_scaled)
+                                    
+                                    fig, ax = plt.subplots(figsize=(10, 8))
+                                    scatter = ax.scatter(pca_result[:, 0], pca_result[:, 1], 
+                                                       c=labels, cmap='viridis', s=50, alpha=0.7)
+                                    ax.set_xlabel('PC1', fontsize=12, fontweight='bold')
+                                    ax.set_ylabel('PC2', fontsize=12, fontweight='bold')
+                                    ax.set_title(f'DBSCAN Clustering (eps={eps}, min_samples={min_samples})', 
+                                                fontsize=14, fontweight='bold')
+                                    plt.colorbar(scatter, ax=ax, label='Cluster')
+                                    ax.grid(True, alpha=0.3)
+                                    plt.tight_layout()
+                                    st.pyplot(fig)
                                 else:
-                                    st.warning("Недостаточно признаков для кластеризации")
+                                    st.warning("Недостаточно данных для кластеризации (после удаления NaN/inf)")
                     
                     else:  # Иерархическая
                         if st.button("🔍 Кластеризовать (Иерархическая)", use_container_width=True):
@@ -4215,7 +4396,7 @@ def main():
                             key="comp_target"
                         )
                     
-                    # Опциональный выбор цвета
+                    # Опциональный выбор цвета (категория для группировки)
                     color_comp = st.selectbox(
                         "Цвет (категория):",
                         options=['B', 'A', 'method'] + [d for d in all_descriptors if d in df.columns and d not in [x_comp, size_comp, target_comp]],
@@ -4226,20 +4407,39 @@ def main():
                     # ✅ Кнопка — только запуск построения
                     if st.button("📊 Построить Bubble + Violin", use_container_width=True):
                         with st.spinner("Построение..."):
+                            # ✅ СИНХРОНИЗАЦИЯ ЦВЕТОВ:
+                            # 1) Сначала строим общий color_map на основе выбранной категории
+                            #    по тем же данным, что увидит violin (группировка по color_comp).
+                            #    Это гарантирует, что обе функции используют одинаковые цвета.
+                            try:
+                                color_categories = df[color_comp].dropna().unique().tolist()
+                            except Exception:
+                                color_categories = []
+                            
+                            shared_color_map = get_stable_color_map([str(c) for c in color_categories])
+                            
+                            # 2) Передаём единый color_map и в bubble, и в violin.
                             fig_bubble = viz.plot_compositional_bubble(
                                 x_feature=x_comp,
                                 target=target_comp,
                                 size_feature=size_comp,
-                                color_feature=color_comp
+                                color_feature=color_comp,
+                                color_map=shared_color_map
                             )
+                            
+                            # ✅ Violin группируется по ТОЙ ЖЕ переменной, что и цвет в bubble —
+                            #    иначе пользователь видит несогласованную картинку.
                             fig_violin = viz.plot_violin_by_B(
                                 target=target_comp,
-                                group_feature='B',
-                                show_stats=True
+                                group_feature=color_comp,
+                                show_stats=True,
+                                sort_by_mass=(color_comp in ('B', 'A')),
+                                color_map=shared_color_map
                             )
                             
                             st.session_state['comp_bubble_fig'] = fig_bubble
                             st.session_state['comp_violin_fig'] = fig_violin
+                            st.session_state['comp_violin_group'] = color_comp
                     
                     # Показываем оба графика рядом
                     if st.session_state.get('comp_bubble_fig') is not None or \
@@ -4255,7 +4455,9 @@ def main():
                                 st.warning("Недостаточно данных для Bubble")
                         
                         with col_right:
-                            st.markdown("**🎻 Violin plot (статистика по B-катионам)**")
+                            # Заголовок отражает фактическую группировку Violin
+                            violin_group = st.session_state.get('comp_violin_group', 'B')
+                            st.markdown(f"**🎻 Violin plot (статистика по {violin_group})**")
                             if st.session_state.get('comp_violin_fig') is not None:
                                 st.pyplot(st.session_state['comp_violin_fig'])
                             else:
@@ -4263,13 +4465,15 @@ def main():
                         
                         # Под графиками — сводная таблица статистики
                         with st.expander("📊 Сводная статистика по группам"):
-                            data_stat = df[[ 'B', target_comp]].dropna()
-                            if len(data_stat) > 0:
-                                stats_df = data_stat.groupby('B')[target_comp].agg(
-                                    ['count', 'mean', 'median', 'std', 'min', 'max']
-                                ).round(3)
-                                stats_df.columns = ['N', 'Mean', 'Median', 'Std', 'Min', 'Max']
-                                st.dataframe(stats_df, use_container_width=True)
+                            violin_group = st.session_state.get('comp_violin_group', 'B')
+                            if violin_group in df.columns:
+                                data_stat = df[[violin_group, target_comp]].dropna()
+                                if len(data_stat) > 0:
+                                    stats_df = data_stat.groupby(violin_group)[target_comp].agg(
+                                        ['count', 'mean', 'median', 'std', 'min', 'max']
+                                    ).round(3)
+                                    stats_df.columns = ['N', 'Mean', 'Median', 'Std', 'Min', 'Max']
+                                    st.dataframe(stats_df, use_container_width=True)
                 
                 elif plot_category == "Специализированные графики":
                     st.subheader("🎯 Специализированные графики")
